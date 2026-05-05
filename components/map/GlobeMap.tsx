@@ -21,10 +21,22 @@ const LABEL_SPHERE_RADIUS = GLOBE_RADIUS * 1.0018;
 const CAPITAL_LABEL_SPHERE_RADIUS = GLOBE_RADIUS * 1.0024;
 const CAMERA_FOV = 34;
 const CONTROL_ZOOM_DELTA = 0.34;
-const CAPITAL_LABEL_SHOW_ZOOM = 5.15;
+const CAPITAL_LABEL_SHOW_ZOOM_STEP_FROM_CENTRAL_VIEW = 13;
+// Central View is monitor-home zoom 2.16; 13 control zoom-in steps at 0.34 first show capitals at 6.58.
+const CAPITAL_LABEL_SHOW_ZOOM =
+  cameraForMode("monitor-home").zoom + CAPITAL_LABEL_SHOW_ZOOM_STEP_FROM_CENTRAL_VIEW * CONTROL_ZOOM_DELTA;
 const LABEL_TEXTURE_LOGICAL_WIDTH = 4096;
 const LABEL_TEXTURE_LOGICAL_HEIGHT = 2048;
 const LABEL_TEXTURE_PREFERRED_SCALE = 2;
+const DEBUG_HIDE_LABEL_OVERLAY = false;
+const DEBUG_HIDE_ATMOSPHERE = false;
+const DEBUG_HIDE_GLOBE_GLOW = false;
+const DEBUG_HIDE_BORDER_OVERLAY = false;
+const DEBUG_HIDE_TRANSPARENT_LAYERS = false;
+const DEBUG_DISABLE_GLOBE_LIGHTING = false;
+const DEBUG_DISABLE_TEXTURE_GRADIENTS = false;
+const DEBUG_SHOW_BASE_TEXTURE_ONLY = false;
+const DEBUG_SHOW_LABEL_TEXTURE_ONLY = false;
 const MIN_LATITUDE = -72;
 const MAX_LATITUDE = 78;
 const AUTO_ROTATE_IDLE_RESUME_MS = 1600;
@@ -51,8 +63,9 @@ const BORDER_LINE_COLOR = "#B6BCB5";
 const COASTLINE_LINE_COLOR = "#D8DED7";
 const BASE_MAP_COUNTRY_LABEL_COLOR = "rgba(245, 247, 245, 0.92)";
 const BASE_MAP_SECONDARY_LABEL_COLOR = "rgba(232, 236, 233, 0.82)";
-const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(158, 165, 162, 0.52)";
+const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(226, 232, 228, 0.74)";
 const BASE_MAP_LABEL_HALO = "rgba(0, 0, 0, 0.72)";
+const BASE_MAP_CAPITAL_LABEL_HALO = "rgba(0, 0, 0, 0.58)";
 const SIGNAL_MARKER_RADIUS = 86.4;
 const EVENT_MARKER_RADIUS = 85.7;
 const ATMOSPHERE_INNER_RADIUS = 85.8;
@@ -70,6 +83,54 @@ const WATER_LABELS = [
   { name: "Arabian Sea", coordinates: [61.5, 18.2], minZoom: 2.5 },
   { name: "Caspian Sea", coordinates: [51.2, 41.2], minZoom: 2.55 },
 ] as const;
+
+const COUNTRY_LABEL_COVERAGE_UPGRADES = new Set<string>([
+  "Albania",
+  "Armenia",
+  "Austria",
+  "Azerbaijan",
+  "Bangladesh",
+  "Belarus",
+  "Bosnia and Herzegovina",
+  "Cambodia",
+  "Cameroon",
+  "Croatia",
+  "Czechia",
+  "Ecuador",
+  "Estonia",
+  "Georgia",
+  "Ghana",
+  "Hungary",
+  "Ireland",
+  "Laos",
+  "Lithuania",
+  "Malaysia",
+  "Moldova",
+  "Nepal",
+  "Netherlands",
+  "Oman",
+  "Paraguay",
+  "Portugal",
+  "Serbia",
+  "Slovakia",
+  "Somalia",
+  "South Korea",
+  "Switzerland",
+  "Tunisia",
+  "Vietnam",
+  "Yemen",
+  "Zimbabwe",
+]);
+
+const COUNTRY_LABEL_FALLBACK_OFFSETS: [number, number][] = [
+  [0, 0],
+  [0, -18],
+  [0, 18],
+  [-24, 0],
+  [24, 0],
+  [-18, -14],
+  [18, 14],
+];
 
 const COUNTRY_CAPITAL_COORDINATES: { match: string[]; coordinates: [number, number] }[] = [
   { match: ["syria"], coordinates: [36.2765, 33.5138] },
@@ -264,7 +325,7 @@ const LABEL_DEFINITIONS: LabelDefinition[] = [
 
 const DISPLAY_LABEL_DEFINITIONS = LABEL_DEFINITIONS.filter((label) => {
   if (label.kind === "country") {
-    return label.priority <= 2;
+    return label.priority <= 2 || COUNTRY_LABEL_COVERAGE_UPGRADES.has(label.text);
   }
 
   if (label.kind === "capital") {
@@ -633,7 +694,7 @@ function labelFontSize(label: LabelDefinition) {
     return label.priority === 1 ? 14 : 11;
   }
 
-  return 17;
+  return 9;
 }
 
 function labelFontWeight(label: LabelDefinition) {
@@ -641,7 +702,7 @@ function labelFontWeight(label: LabelDefinition) {
     return label.priority === 1 ? 470 : 420;
   }
 
-  return 410;
+  return 390;
 }
 
 function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
@@ -665,8 +726,14 @@ function drawTextureLabel(
   const weight = labelFontWeight(label);
   context.font = `${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   const metrics = context.measureText(text);
-  const paddingX = (label.kind === "capital" ? 10 : 16) * textureScale;
-  const paddingY = (label.kind === "capital" ? 6 : 8) * textureScale;
+  const paddingX =
+    label.kind === "capital"
+      ? 10 * textureScale
+      : (label.priority === 1 ? 16 : label.priority === 2 ? 14 : 10) * textureScale;
+  const paddingY =
+    label.kind === "capital"
+      ? 6 * textureScale
+      : (label.priority === 1 ? 8 : label.priority === 2 ? 7 : 6) * textureScale;
   const rect = {
     left: x - metrics.width / 2 - paddingX,
     top: y - fontSize / 2 - paddingY,
@@ -683,8 +750,11 @@ function drawTextureLabel(
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.lineJoin = "round";
-  context.strokeStyle = BASE_MAP_LABEL_HALO;
-  context.lineWidth = Math.max(1.8, labelFontSize(label) * 0.11) * textureScale;
+  context.strokeStyle = label.kind === "capital" ? BASE_MAP_CAPITAL_LABEL_HALO : BASE_MAP_LABEL_HALO;
+  context.lineWidth =
+    label.kind === "capital"
+      ? Math.max(1.15, labelFontSize(label) * 0.08) * textureScale
+      : Math.max(1.8, labelFontSize(label) * 0.11) * textureScale;
   context.fillStyle =
     label.kind === "country"
       ? label.priority === 1
@@ -712,15 +782,22 @@ function drawLabelSet(
     .sort((a, b) => a.priority - b.priority || a.text.localeCompare(b.text))
     .forEach((label) => {
       const point = texturePointForCoordinates(label.coordinates, width, height);
-      drawTextureLabel(
-        context,
-        label,
-        displayTextForLabel(label),
-        point.x,
-        point.y + (label.kind === "capital" ? 24 * textureScale : 0),
-        textureScale,
-        occupied,
-      );
+      const text = displayTextForLabel(label);
+      const offsets = label.kind === "country" && label.priority > 1 ? COUNTRY_LABEL_FALLBACK_OFFSETS : [[0, 0]];
+
+      for (const [offsetX, offsetY] of offsets) {
+        const drawn = drawTextureLabel(
+          context,
+          label,
+          text,
+          point.x + offsetX * textureScale,
+          point.y + (label.kind === "capital" ? 24 * textureScale : 0) + offsetY * textureScale,
+          textureScale,
+          occupied,
+        );
+
+        if (drawn) break;
+      }
     });
 }
 
@@ -781,7 +858,7 @@ function createLandTexture() {
   waterGradient.addColorStop(0, MAP_WATER_TOP_COLOR);
   waterGradient.addColorStop(0.55, MAP_WATER_COLOR);
   waterGradient.addColorStop(1, MAP_WATER_BOTTOM_COLOR);
-  context.fillStyle = waterGradient;
+  context.fillStyle = DEBUG_DISABLE_TEXTURE_GRADIENTS ? MAP_WATER_COLOR : waterGradient;
   context.fillRect(0, 0, width, height);
 
   const landFeature = feature(landTopology as never, (landTopology.objects as { land: unknown }).land as never);
@@ -797,43 +874,45 @@ function createLandTexture() {
   context.fillStyle = MAP_LAND_COLOR;
   context.fill();
 
-  context.globalCompositeOperation = "source-atop";
-  const landGradient = context.createLinearGradient(0, height * 0.06, 0, height);
-  landGradient.addColorStop(0, "rgba(255,255,255,0.08)");
-  landGradient.addColorStop(0.36, MAP_LAND_HIGHLIGHT);
-  landGradient.addColorStop(0.62, MAP_LAND_MIDTONE);
-  landGradient.addColorStop(1, MAP_LAND_SHADE);
-  context.fillStyle = landGradient;
-  context.fillRect(0, 0, width, height);
+  if (!DEBUG_DISABLE_TEXTURE_GRADIENTS) {
+    context.globalCompositeOperation = "source-atop";
+    const landGradient = context.createLinearGradient(0, height * 0.06, 0, height);
+    landGradient.addColorStop(0, "rgba(255,255,255,0.08)");
+    landGradient.addColorStop(0.36, MAP_LAND_HIGHLIGHT);
+    landGradient.addColorStop(0.62, MAP_LAND_MIDTONE);
+    landGradient.addColorStop(1, MAP_LAND_SHADE);
+    context.fillStyle = landGradient;
+    context.fillRect(0, 0, width, height);
 
-  const landSheen = context.createRadialGradient(
-    width * 0.5,
-    height * 0.32,
-    width * 0.08,
-    width * 0.5,
-    height * 0.42,
-    width * 0.46,
-  );
-  landSheen.addColorStop(0, "rgba(255,255,255,0.042)");
-  landSheen.addColorStop(0.5, "rgba(255,255,255,0.012)");
-  landSheen.addColorStop(1, "rgba(255,255,255,0)");
-  context.fillStyle = landSheen;
-  context.fillRect(0, 0, width, height);
+    const landSheen = context.createRadialGradient(
+      width * 0.5,
+      height * 0.32,
+      width * 0.08,
+      width * 0.5,
+      height * 0.42,
+      width * 0.46,
+    );
+    landSheen.addColorStop(0, "rgba(255,255,255,0.042)");
+    landSheen.addColorStop(0.5, "rgba(255,255,255,0.012)");
+    landSheen.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = landSheen;
+    context.fillRect(0, 0, width, height);
 
-  const oceanLift = context.createRadialGradient(
-    width * 0.5,
-    height * 0.48,
-    width * 0.06,
-    width * 0.5,
-    height * 0.5,
-    width * 0.52,
-  );
-  oceanLift.addColorStop(0, "rgba(255,255,255,0.026)");
-  oceanLift.addColorStop(0.55, "rgba(255,255,255,0.008)");
-  oceanLift.addColorStop(1, "rgba(255,255,255,0)");
-  context.globalCompositeOperation = "source-over";
-  context.fillStyle = oceanLift;
-  context.fillRect(0, 0, width, height);
+    const oceanLift = context.createRadialGradient(
+      width * 0.5,
+      height * 0.48,
+      width * 0.06,
+      width * 0.5,
+      height * 0.5,
+      width * 0.52,
+    );
+    oceanLift.addColorStop(0, "rgba(255,255,255,0.026)");
+    oceanLift.addColorStop(0.55, "rgba(255,255,255,0.008)");
+    oceanLift.addColorStop(1, "rgba(255,255,255,0)");
+    context.globalCompositeOperation = "source-over";
+    context.fillStyle = oceanLift;
+    context.fillRect(0, 0, width, height);
+  }
 
   context.save();
   context.beginPath();
@@ -1246,14 +1325,19 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
     (countriesTopology.objects as { countries: unknown }).countries as never,
     (a, b) => a !== b,
   );
-  const globeMaterial = new THREE.MeshStandardMaterial({
-    map: texture ?? undefined,
-    color: "#43484A",
-    roughness: 0.84,
-    metalness: 0.045,
-    emissive: "#111416",
-    emissiveIntensity: 0.24,
-  });
+  const globeMaterial = DEBUG_DISABLE_GLOBE_LIGHTING
+    ? new THREE.MeshBasicMaterial({
+        map: texture ?? undefined,
+        color: "#FFFFFF",
+      })
+    : new THREE.MeshStandardMaterial({
+        map: DEBUG_SHOW_LABEL_TEXTURE_ONLY ? undefined : texture ?? undefined,
+        color: "#43484A",
+        roughness: 0.84,
+        metalness: 0.045,
+        emissive: "#111416",
+        emissiveIntensity: DEBUG_HIDE_GLOBE_GLOW ? 0 : 0.24,
+      });
 
   const globeMesh = new THREE.Mesh(
     new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96),
@@ -1262,7 +1346,7 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
   globeGroup.add(globeMesh);
 
   let countryLabelMesh: THREE.Mesh | null = null;
-  if (countryTexture) {
+  if (countryTexture && !DEBUG_HIDE_LABEL_OVERLAY && !DEBUG_HIDE_TRANSPARENT_LAYERS && !DEBUG_SHOW_BASE_TEXTURE_ONLY) {
     countryLabelMesh = new THREE.Mesh(
       new THREE.SphereGeometry(LABEL_SPHERE_RADIUS, 96, 96),
       new THREE.MeshBasicMaterial({
@@ -1279,7 +1363,7 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
   }
 
   let capitalLabelMesh: THREE.Mesh | null = null;
-  if (capitalTexture) {
+  if (capitalTexture && !DEBUG_HIDE_LABEL_OVERLAY && !DEBUG_HIDE_TRANSPARENT_LAYERS && !DEBUG_SHOW_BASE_TEXTURE_ONLY) {
     capitalLabelMesh = new THREE.Mesh(
       new THREE.SphereGeometry(CAPITAL_LABEL_SPHERE_RADIUS, 96, 96),
       new THREE.MeshBasicMaterial({
@@ -1316,13 +1400,17 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
     false,
     5,
   );
-  globeGroup.add(coastlineLines, borderLines);
+  if (!DEBUG_HIDE_BORDER_OVERLAY && !DEBUG_SHOW_LABEL_TEXTURE_ONLY) {
+    globeGroup.add(coastlineLines, borderLines);
+  }
 
-  const atmosphereInner = new THREE.Mesh(
-    new THREE.SphereGeometry(ATMOSPHERE_INNER_RADIUS, 72, 72),
-    createAtmosphereMaterial(0.044, 0.68, THREE.FrontSide),
-  );
-  scene.add(atmosphereInner);
+  if (!DEBUG_HIDE_ATMOSPHERE && !DEBUG_HIDE_TRANSPARENT_LAYERS && !DEBUG_SHOW_BASE_TEXTURE_ONLY && !DEBUG_SHOW_LABEL_TEXTURE_ONLY) {
+    const atmosphereInner = new THREE.Mesh(
+      new THREE.SphereGeometry(ATMOSPHERE_INNER_RADIUS, 72, 72),
+      createAtmosphereMaterial(0.044, 0.68, THREE.FrontSide),
+    );
+    scene.add(atmosphereInner);
+  }
 
   const ambient = new THREE.AmbientLight("#b2b8b1", 1.1);
   const hemi = new THREE.HemisphereLight("#d8ddd7", "#1c2123", 1.08);
@@ -1387,6 +1475,8 @@ function syncEventMarkers(
   engine.markerEntries = engine.markerEntries.filter((entry) => entry.kind !== "event");
   engine.raycastTargets = engine.raycastTargets.filter((target) => target.userData.kind !== "event");
 
+  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY) return;
+
   events.forEach((event) => {
     const coordinates = resolveEventCoordinates(event);
     if (!coordinates) return;
@@ -1426,6 +1516,8 @@ function syncSignalMarkers(
   clearGroup(engine.signalGroup);
   engine.markerEntries = engine.markerEntries.filter((entry) => entry.kind !== "signal");
   engine.raycastTargets = engine.raycastTargets.filter((target) => target.userData.kind !== "signal");
+
+  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY) return;
 
   signals.forEach((signal) => {
     const source = socmintMarkerSourceFor(signal);
