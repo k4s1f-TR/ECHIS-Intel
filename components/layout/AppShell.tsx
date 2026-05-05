@@ -26,7 +26,7 @@ type SignalCoverage = RegionKey | "global";
 
 export function AppShell() {
   const globeMapRef = useRef<GlobeMapHandle | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>("1");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);

@@ -16,17 +16,24 @@ export interface MapPadding {
 
 const BASE_HOME_CAMERA: CameraPreset = {
   center: [39.0, 27.4],
-  zoom: 2.2,
+  zoom: 2.16,
   bearing: 0,
   pitch: 0,
 };
 
 export const MONITOR_HOME_CAMERA: CameraPreset = { ...BASE_HOME_CAMERA };
-export const GLOBAL_VIEW_CAMERA: CameraPreset = { ...BASE_HOME_CAMERA };
-export const SOCMINT_WATCH_CAMERA: CameraPreset = { ...BASE_HOME_CAMERA };
+export const GLOBAL_VIEW_CAMERA: CameraPreset = {
+  ...BASE_HOME_CAMERA,
+  zoom: 2.06,
+};
+export const SOCMINT_WATCH_CAMERA: CameraPreset = {
+  ...BASE_HOME_CAMERA,
+  zoom: 2.08,
+};
 
 export const ZERO_PADDING: MapPadding = { top: 0, right: 0, bottom: 0, left: 0 };
-const RIGHT_PANEL_PADDING: MapPadding = { top: 0, right: 300, bottom: 0, left: 0 };
+const GLOBAL_VIEW_PADDING: MapPadding = { top: 0, right: 390, bottom: 0, left: 238 };
+const SOCMINT_WATCH_PADDING: MapPadding = { top: 0, right: 372, bottom: 0, left: 246 };
 
 export const CAMERA_TOLERANCE = {
   lng: 0.015,
@@ -50,8 +57,9 @@ export function cameraForMode(mode: MapMode): CameraPreset {
 export function paddingForMode(mode: MapMode): MapPadding {
   switch (mode) {
     case "global":
+      return GLOBAL_VIEW_PADDING;
     case "socmint":
-      return RIGHT_PANEL_PADDING;
+      return SOCMINT_WATCH_PADDING;
     default:
       return ZERO_PADDING;
   }

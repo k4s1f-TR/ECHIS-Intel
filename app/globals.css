@@ -94,3 +94,24 @@ body {
 .sources-registry-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(96, 165, 250, 0.32);
 }
+
+@keyframes ui-fade-in-kf {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ui-fade-in {
+  animation: ui-fade-in-kf 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-fade-in {
+    animation: none;
+  }
+}
