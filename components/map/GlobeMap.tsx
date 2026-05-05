@@ -17,8 +17,14 @@ import {
 } from "./cameraPresets";
 
 const GLOBE_RADIUS = 84;
+const LABEL_SPHERE_RADIUS = 84.14;
+const CAPITAL_LABEL_SPHERE_RADIUS = 84.18;
 const CAMERA_FOV = 34;
 const CONTROL_ZOOM_DELTA = 0.34;
+const CAPITAL_LABEL_SHOW_ZOOM = 5.15;
+const LABEL_TEXTURE_SCALE = 2;
+const LABEL_TEXTURE_WIDTH = 4096 * LABEL_TEXTURE_SCALE;
+const LABEL_TEXTURE_HEIGHT = 2048 * LABEL_TEXTURE_SCALE;
 const MIN_LATITUDE = -72;
 const MAX_LATITUDE = 78;
 const AUTO_ROTATE_IDLE_RESUME_MS = 1600;
@@ -43,14 +49,9 @@ const MAP_COASTLINE_COLOR = "rgba(238, 241, 235, 0.36)";
 const MAP_ATMOSPHERE_COLOR = new THREE.Color("#d4dad4");
 const BORDER_LINE_COLOR = "#B6BCB5";
 const COASTLINE_LINE_COLOR = "#D8DED7";
-const BASE_MAP_COUNTRY_LABEL_COLOR = "rgba(245, 247, 245, 0.92)";
-const BASE_MAP_SECONDARY_LABEL_COLOR = "rgba(232, 236, 233, 0.82)";
-const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(158, 165, 162, 0.52)";
-const BASE_MAP_LABEL_HALO = "rgba(0, 0, 0, 0.72)";
 const COUNTRY_LABEL_COLOR = "rgba(206, 211, 207, 0.8)";
 const COUNTRY_LABEL_HALO = "rgba(0, 0, 0, 0.92)";
-const CAPITAL_LABEL_COLOR = "rgba(194, 200, 196, 0.82)";
-const WATER_LABEL_COLOR = "rgba(128, 133, 131, 0.46)";
+const CAPITAL_LABEL_COLOR = "rgba(216, 228, 240, 0.9)";
 const SIGNAL_MARKER_RADIUS = 86.4;
 const EVENT_MARKER_RADIUS = 85.7;
 const ATMOSPHERE_INNER_RADIUS = 85.8;
@@ -108,8 +109,8 @@ type LabelDefinition = {
 type LabelRuntimeState = {
   visible: boolean;
   lastVisibleAt: number;
-  lastLeft: number;
-  lastTop: number;
+  lastX: number;
+  lastY: number;
 };
 
 type CountryLabelSelectionAnchor = {
@@ -157,6 +158,8 @@ type GlobeEngine = {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   globeGroup: THREE.Group;
+  countryLabelMesh: THREE.Mesh | null;
+  capitalLabelMesh: THREE.Mesh | null;
   countryLabelGroup: THREE.Group;
   countryLabelEntries: CountryLabelSpriteEntry[];
   eventGroup: THREE.Group;
@@ -257,6 +260,18 @@ const LABEL_DEFINITIONS: LabelDefinition[] = [
     priority: 3,
   })),
 ];
+
+const DISPLAY_LABEL_DEFINITIONS = LABEL_DEFINITIONS.filter((label) => {
+  if (label.kind === "country") {
+    return label.priority <= 2;
+  }
+
+  if (label.kind === "capital") {
+    return label.priority === 1;
+  }
+
+  return false;
+});
 
 const eventTextureCache = new Map<string, THREE.CanvasTexture>();
 const signalTextureCache = new Map<SocmintMarkerSource, THREE.CanvasTexture>();
@@ -594,14 +609,6 @@ function createGeoLineSegments(
   return lines;
 }
 
-function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
-  const [lng, lat] = coordinates;
-  return {
-    x: ((lng + 180) / 360) * width,
-    y: ((90 - lat) / 180) * height,
-  };
-}
-
 function baseMapCountryText(name: string) {
   const replacements: Record<string, string> = {
     "Bosnia and Herzegovina": "Bosnia",
@@ -616,21 +623,48 @@ function baseMapCountryText(name: string) {
   return replacements[name] ?? name;
 }
 
+function displayTextForLabel(label: LabelDefinition) {
+  return label.kind === "country" ? baseMapCountryText(label.text) : label.text;
+}
+
+function labelFontSize(label: LabelDefinition) {
+  if (label.kind === "country") {
+    return label.priority === 1 ? 14 : 11;
+  }
+
+  return 9;
+}
+
+function labelFontWeight(label: LabelDefinition) {
+  if (label.kind === "country") {
+    return label.priority === 1 ? 520 : 460;
+  }
+
+  return 430;
+}
+
+function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
+  const [lng, lat] = coordinates;
+  return {
+    x: ((lng + 180) / 360) * width,
+    y: ((90 - lat) / 180) * height,
+  };
+}
+
 function drawTextureLabel(
   context: CanvasRenderingContext2D,
+  label: LabelDefinition,
   text: string,
   x: number,
   y: number,
-  fontSize: number,
-  weight: number,
-  fillStyle: string,
   occupied: { left: number; top: number; right: number; bottom: number }[],
-  options?: { italic?: boolean; paddingX?: number; paddingY?: number },
 ) {
-  context.font = `${options?.italic ? "italic " : ""}${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+  const fontSize = labelFontSize(label) * LABEL_TEXTURE_SCALE;
+  const weight = labelFontWeight(label);
+  context.font = `${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   const metrics = context.measureText(text);
-  const paddingX = options?.paddingX ?? 16;
-  const paddingY = options?.paddingY ?? 8;
+  const paddingX = (label.kind === "capital" ? 8 : label.priority === 1 ? 12 : 10) * LABEL_TEXTURE_SCALE;
+  const paddingY = (label.kind === "capital" ? 5 : 7) * LABEL_TEXTURE_SCALE;
   const rect = {
     left: x - metrics.width / 2 - paddingX,
     top: y - fontSize / 2 - paddingY,
@@ -647,9 +681,10 @@ function drawTextureLabel(
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.lineJoin = "round";
-  context.strokeStyle = BASE_MAP_LABEL_HALO;
-  context.lineWidth = Math.max(1.8, fontSize * 0.11);
-  context.fillStyle = fillStyle;
+  context.strokeStyle = COUNTRY_LABEL_HALO;
+  context.lineWidth = (label.kind === "country" ? (label.priority === 1 ? 2 : 1.75) : 1.55) * LABEL_TEXTURE_SCALE;
+  context.fillStyle = label.kind === "country" ? COUNTRY_LABEL_COLOR : CAPITAL_LABEL_COLOR;
+  context.globalAlpha = label.kind === "country" ? 0.96 : 0.92;
   context.strokeText(text, x, y);
   context.fillText(text, x, y);
   context.restore();
@@ -658,39 +693,63 @@ function drawTextureLabel(
   return true;
 }
 
-function drawBaseMapLabels(context: CanvasRenderingContext2D, width: number, height: number) {
+function drawLabelSet(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  kind: "country" | "capital",
+  occupied: { left: number; top: number; right: number; bottom: number }[],
+) {
+  DISPLAY_LABEL_DEFINITIONS
+    .filter((label) => label.kind === kind)
+    .sort((a, b) => a.priority - b.priority || a.text.localeCompare(b.text))
+    .forEach((label) => {
+      const point = texturePointForCoordinates(label.coordinates, width, height);
+      drawTextureLabel(
+        context,
+        label,
+        displayTextForLabel(label),
+        point.x,
+        point.y + (label.kind === "capital" ? 10 * LABEL_TEXTURE_SCALE : 0),
+        occupied,
+      );
+    });
+}
+
+function finalizeLabelTexture(canvas: HTMLCanvasElement) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 16;
+  return texture;
+}
+
+function createLabelTextures() {
+  const countryCanvas = document.createElement("canvas");
+  countryCanvas.width = LABEL_TEXTURE_WIDTH;
+  countryCanvas.height = LABEL_TEXTURE_HEIGHT;
+  const capitalCanvas = document.createElement("canvas");
+  capitalCanvas.width = LABEL_TEXTURE_WIDTH;
+  capitalCanvas.height = LABEL_TEXTURE_HEIGHT;
+
+  const countryContext = countryCanvas.getContext("2d");
+  const capitalContext = capitalCanvas.getContext("2d");
+  if (!countryContext || !capitalContext) {
+    return { countryTexture: null, capitalTexture: null };
+  }
+
   const occupied: { left: number; top: number; right: number; bottom: number }[] = [];
+  drawLabelSet(countryContext, countryCanvas.width, countryCanvas.height, "country", occupied);
+  drawLabelSet(capitalContext, capitalCanvas.width, capitalCanvas.height, "capital", occupied);
 
-  const countries = countryLabels
-    .filter((label) => label.priority <= 2)
-    .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-
-  countries.forEach((label) => {
-    const point = texturePointForCoordinates(label.coordinates, width, height);
-    const text = baseMapCountryText(label.name);
-    const fontSize = label.priority === 1 ? 14 : 11;
-    const color = label.priority === 1 ? BASE_MAP_COUNTRY_LABEL_COLOR : BASE_MAP_SECONDARY_LABEL_COLOR;
-    drawTextureLabel(context, text, point.x, point.y, fontSize, label.priority === 1 ? 470 : 420, color, occupied);
-  });
-
-  const capitals = worldCapitals
-    .filter((capital) => capital.priority === 1)
-    .sort((a, b) => a.capital.localeCompare(b.capital));
-
-  capitals.forEach((capital) => {
-    const point = texturePointForCoordinates(capital.coordinates, width, height);
-    drawTextureLabel(
-      context,
-      capital.capital,
-      point.x,
-      point.y + 24,
-      17,
-      410,
-      BASE_MAP_CAPITAL_LABEL_COLOR,
-      occupied,
-      { paddingX: 10, paddingY: 6 },
-    );
-  });
+  return {
+    countryTexture: finalizeLabelTexture(countryCanvas),
+    capitalTexture: finalizeLabelTexture(capitalCanvas),
+  };
 }
 
 function createLandTexture() {
@@ -810,8 +869,6 @@ function createLandTexture() {
   context.lineWidth = 0.92;
   context.stroke();
   context.restore();
-
-  drawBaseMapLabels(context, width, height);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -1165,6 +1222,7 @@ function createGlobeScene() {
   scene.add(globeGroup);
 
   const texture = createLandTexture();
+  const { countryTexture, capitalTexture } = createLabelTextures();
   const landFeature = feature(landTopology as never, (landTopology.objects as { land: unknown }).land as never);
   const bordersMesh = mesh(
     countriesTopology as never,
@@ -1185,6 +1243,39 @@ function createGlobeScene() {
     globeMaterial,
   );
   globeGroup.add(globeMesh);
+
+  let countryLabelMesh: THREE.Mesh | null = null;
+  if (countryTexture) {
+    countryLabelMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(LABEL_SPHERE_RADIUS, 96, 96),
+      new THREE.MeshBasicMaterial({
+        map: countryTexture,
+        transparent: true,
+        alphaTest: 0.08,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    countryLabelMesh.renderOrder = 3;
+    globeGroup.add(countryLabelMesh);
+  }
+
+  let capitalLabelMesh: THREE.Mesh | null = null;
+  if (capitalTexture) {
+    capitalLabelMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(CAPITAL_LABEL_SPHERE_RADIUS, 96, 96),
+      new THREE.MeshBasicMaterial({
+        map: capitalTexture,
+        transparent: true,
+        alphaTest: 0.08,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    capitalLabelMesh.renderOrder = 4;
+    capitalLabelMesh.visible = false;
+    globeGroup.add(capitalLabelMesh);
+  }
 
   const countryLabelGroup = new THREE.Group();
   countryLabelGroup.renderOrder = 6;
@@ -1224,7 +1315,13 @@ function createGlobeScene() {
 
   scene.add(ambient, hemi, keyLight, fillLight);
 
-  return { scene, globeGroup, countryLabelGroup };
+  return {
+    scene,
+    globeGroup,
+    countryLabelMesh,
+    capitalLabelMesh,
+    countryLabelGroup,
+  };
 }
 
 function applyView(engine: GlobeEngine) {
@@ -1347,23 +1444,13 @@ function updateMarkerVisibility(engine: GlobeEngine) {
 
 function updateCountryLabelSprites(engine: GlobeEngine, _mode: MapMode) {
   void _mode;
+  if (engine.capitalLabelMesh) {
+    engine.capitalLabelMesh.visible = engine.currentView.zoom >= CAPITAL_LABEL_SHOW_ZOOM;
+  }
+
   engine.countryLabelGroup.visible = false;
   engine.countryLabelEntries.forEach((entry) => {
     entry.sprite.visible = false;
-  });
-}
-
-function updateLabelElements(
-  engine: GlobeEngine,
-  labelRefs: Record<string, HTMLSpanElement | null>,
-  _mode: MapMode,
-) {
-  void engine;
-  void _mode;
-  Object.values(labelRefs).forEach((element) => {
-    if (element) {
-      element.style.display = "none";
-    }
   });
 }
 
@@ -1436,7 +1523,6 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
   const selectedSignalIdRef = useRef(selectedSignalId);
   const onSelectEventRef = useRef(onSelectEvent);
   const onSelectSignalRef = useRef(onSelectSignal);
-  const labelRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -1509,7 +1595,13 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
     const stage = stageRef.current;
     if (!host || !stage) return;
 
-    const { scene, globeGroup, countryLabelGroup } = createGlobeScene();
+    const {
+      scene,
+      globeGroup,
+      countryLabelMesh,
+      capitalLabelMesh,
+      countryLabelGroup,
+    } = createGlobeScene();
 
     const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({
@@ -1538,6 +1630,8 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
       scene,
       camera,
       globeGroup,
+      countryLabelMesh,
+      capitalLabelMesh,
       countryLabelGroup,
       countryLabelEntries: [],
       eventGroup,
@@ -1652,7 +1746,6 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
       }
       updateCountryLabelSprites(live, modeRef.current);
       updateMarkerVisibility(live);
-      updateLabelElements(live, labelRefs.current, modeRef.current);
       stage.style.transform = `translate3d(${live.currentView.stageOffset}px, 0, 0)`;
       renderer.render(scene, camera);
 
@@ -1813,41 +1906,6 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
         }}
       >
         <div ref={canvasHostRef} className="absolute inset-0" />
-        <div className="pointer-events-none absolute inset-0">
-          {LABEL_DEFINITIONS.map((label) => (
-            <span
-              key={label.key}
-              ref={(element) => {
-                labelRefs.current[label.key] = element;
-              }}
-              className="absolute left-0 top-0 whitespace-nowrap"
-              style={{
-                display: "none",
-                transform: "translate3d(-9999px, -9999px, 0)",
-                fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                fontSize:
-                  label.kind === "country" ? "11px" : label.kind === "capital" ? "9.5px" : "10.5px",
-                fontWeight: label.kind === "country" ? 440 : 400,
-                color:
-                  label.kind === "country"
-                    ? COUNTRY_LABEL_COLOR
-                    : label.kind === "capital"
-                      ? CAPITAL_LABEL_COLOR
-                      : WATER_LABEL_COLOR,
-                fontStyle: label.kind === "water" ? "italic" : "normal",
-                letterSpacing: "0",
-                textShadow:
-                  label.kind === "country"
-                    ? `0 0 4px ${COUNTRY_LABEL_HALO}, 0 0 10px ${COUNTRY_LABEL_HALO}`
-                    : "0 0 6px rgba(0,0,0,0.9)",
-                userSelect: "none",
-                textTransform: "none",
-              }}
-            >
-              {label.text}
-            </span>
-          ))}
-        </div>
       </div>
     </div>
   );
