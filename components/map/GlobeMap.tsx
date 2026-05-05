@@ -22,24 +22,7 @@ const CONTROL_ZOOM_DELTA = 0.34;
 const MIN_LATITUDE = -72;
 const MAX_LATITUDE = 78;
 const AUTO_ROTATE_IDLE_RESUME_MS = 1600;
-const LABEL_EDGE_MARGIN = 18;
-const LABEL_VIEWPORT_MARGIN = 10;
-const LABEL_DENSITY_BUCKET_WIDTH = 210;
-const LABEL_DENSITY_BUCKET_HEIGHT = 138;
 const LABEL_INTERACTION_FREEZE_MS = 220;
-const COUNTRY_LABEL_RECOMPUTE_THRESHOLD = {
-  lng: 18,
-  lat: 8,
-  bearing: 12,
-} as const;
-const COUNTRY_LABEL_FACE_THRESHOLD = {
-  show: 0.075,
-  hide: -0.03,
-} as const;
-const COUNTRY_LABEL_EDGE_HYSTERESIS = {
-  show: LABEL_EDGE_MARGIN,
-  hide: 4,
-} as const;
 const CENTER_TOLERANCE = {
   lng: 0.12,
   lat: 0.12,
@@ -60,13 +43,16 @@ const MAP_COASTLINE_COLOR = "rgba(238, 241, 235, 0.36)";
 const MAP_ATMOSPHERE_COLOR = new THREE.Color("#d4dad4");
 const BORDER_LINE_COLOR = "#B6BCB5";
 const COASTLINE_LINE_COLOR = "#D8DED7";
+const BASE_MAP_COUNTRY_LABEL_COLOR = "rgba(245, 247, 245, 0.92)";
+const BASE_MAP_SECONDARY_LABEL_COLOR = "rgba(232, 236, 233, 0.82)";
+const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(158, 165, 162, 0.52)";
+const BASE_MAP_LABEL_HALO = "rgba(0, 0, 0, 0.72)";
 const COUNTRY_LABEL_COLOR = "rgba(206, 211, 207, 0.8)";
 const COUNTRY_LABEL_HALO = "rgba(0, 0, 0, 0.92)";
 const CAPITAL_LABEL_COLOR = "rgba(194, 200, 196, 0.82)";
 const WATER_LABEL_COLOR = "rgba(128, 133, 131, 0.46)";
 const SIGNAL_MARKER_RADIUS = 86.4;
 const EVENT_MARKER_RADIUS = 85.7;
-const LABEL_RADIUS = 85.1;
 const ATMOSPHERE_INNER_RADIUS = 85.8;
 const BORDER_LINE_RADIUS = 84.28;
 const COASTLINE_LINE_RADIUS = 84.38;
@@ -272,84 +258,8 @@ const LABEL_DEFINITIONS: LabelDefinition[] = [
   })),
 ];
 
-const LABEL_ZOOM_HYSTERESIS = {
-  country: { show: 0.02, hide: 0.12 },
-  capital: { show: 0.08, hide: 0.2 },
-  water: { show: 0.04, hide: 0.1 },
-} as const;
-
-const LABEL_VISIBILITY_STICK_MS = 360;
-const LABEL_RECENT_VISIBLE_MS = 900;
-const MONITOR_HOME_CAPITAL_ZOOM_BONUS = 0.9;
-const MONITOR_HOME_WATER_ZOOM_BONUS = 0.12;
-const MONITOR_HOME_CAPITAL_MIN_ZOOM = 6.0;
-
-const GLOBAL_LABEL_MIN_ZOOM_OVERRIDES: Partial<Record<string, number>> = {
-  "country-Democratic Republic of the Congo": 5.56,
-};
-
-const MONITOR_HOME_LABEL_MIN_ZOOM_OVERRIDES: Partial<Record<string, number>> = {
-  "country-Belgium": 3.2,
-  "country-Switzerland": 3.28,
-  "country-Austria": 3.28,
-  "country-Czechia": 3.36,
-  "country-Slovakia": 3.34,
-  "country-Slovenia": 3.44,
-  "country-Croatia": 3.44,
-  "country-Bosnia and Herzegovina": 3.7,
-  "country-Serbia": 3.5,
-  "country-Montenegro": 3.76,
-  "country-Albania": 3.68,
-  "country-North Macedonia": 3.74,
-  "country-Bulgaria": 3.34,
-  "country-Romania": 3.08,
-  "country-Latvia": 3.48,
-  "country-Lithuania": 3.42,
-  "country-Estonia": 3.54,
-  "country-Belarus": 3.12,
-  "country-Georgia": 3.18,
-  "country-Armenia": 3.34,
-  "country-Azerbaijan": 3.3,
-  "country-Cyprus": 3.56,
-  "country-Lebanon": 3.72,
-  "country-Israel": 3.46,
-  "country-Jordan": 3.52,
-  "country-Qatar": 3.86,
-  "country-United Arab Emirates": 3.94,
-  "country-Kuwait": 3.72,
-  "country-Oman": 3.18,
-  "country-Djibouti": 3.9,
-  "country-Eritrea": 3.44,
-  "country-Uganda": 3.22,
-  "country-Kenya": 3.18,
-  "country-Equatorial Guinea": 3.7,
-  "country-Cameroon": 3.42,
-  "country-Central African Republic": 3.58,
-  "country-Republic of the Congo": 3.62,
-  "country-South Sudan": 3.42,
-  "country-Tunisia": 3.08,
-};
-
-const MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM = {
-  primary: 1.18,
-  secondary: 1.42,
-  tertiary: 2.34,
-} as const;
-
-const MONITOR_HOME_COUNTRY_SHORT_TEXT: Partial<Record<string, string>> = {
-  "country-Democratic Republic of the Congo": "DR Congo",
-  "country-Republic of the Congo": "Congo",
-  "country-United Arab Emirates": "UAE",
-  "country-Bosnia and Herzegovina": "Bosnia",
-  "country-North Macedonia": "N. Macedonia",
-  "country-Central African Republic": "CAR",
-};
-const ONLY_VISIBLE_GLOBE_LABEL_KEY = "country-Turkey";
-const ONLY_VISIBLE_GLOBE_LABEL_TEXT = "TÜRKİYE";
-
 const eventTextureCache = new Map<string, THREE.CanvasTexture>();
 const signalTextureCache = new Map<SocmintMarkerSource, THREE.CanvasTexture>();
-const countryLabelTextureCache = new Map<string, THREE.CanvasTexture>();
 
 const countriesTopology = countriesAtlas as unknown as { objects: Record<string, unknown> };
 const landTopology = landAtlas as unknown as { objects: Record<string, unknown> };
@@ -419,140 +329,6 @@ function distanceFromZoom(zoom: number) {
 function zoomFromDistance(distance: number) {
   const zoom = 1 + Math.log(distance / 420) / Math.log(0.8);
   return clamp(zoom, 0.55, 7.2);
-}
-
-function effectiveLabelMinZoom(label: LabelDefinition, mode: MapMode) {
-  const globalOverride = GLOBAL_LABEL_MIN_ZOOM_OVERRIDES[label.key];
-  let minZoom = globalOverride !== undefined ? Math.max(label.minZoom, globalOverride) : label.minZoom;
-
-  if (mode === "monitor-home") {
-    const modeOverride = MONITOR_HOME_LABEL_MIN_ZOOM_OVERRIDES[label.key];
-    if (modeOverride !== undefined) {
-      minZoom = Math.max(minZoom, modeOverride);
-    }
-
-    if (label.kind === "capital") {
-      return Math.max(minZoom + MONITOR_HOME_CAPITAL_ZOOM_BONUS, MONITOR_HOME_CAPITAL_MIN_ZOOM);
-    }
-    if (label.kind === "water") {
-      return minZoom + MONITOR_HOME_WATER_ZOOM_BONUS;
-    }
-    if (label.kind === "country") {
-      if (label.priority === 1) return Math.max(minZoom, MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM.primary);
-      if (label.priority === 2) return Math.max(minZoom, MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM.secondary);
-      return Math.max(minZoom, MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM.tertiary);
-    }
-  }
-
-  return minZoom;
-}
-
-function displayTextForLabel(label: LabelDefinition, mode: MapMode, zoom: number) {
-  if (mode === "monitor-home" && label.kind === "country" && zoom < 4.3) {
-    return MONITOR_HOME_COUNTRY_SHORT_TEXT[label.key] ?? label.text;
-  }
-  return label.text;
-}
-
-function monitorHomeCountryZoomTier(zoom: number) {
-  if (zoom < MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM.secondary) return 1;
-  if (zoom < MONITOR_HOME_STABLE_COUNTRY_MIN_ZOOM.tertiary) return 2;
-  return 3;
-}
-
-function shouldRecomputeMonitorHomeCountrySelection(engine: GlobeEngine) {
-  const anchor = engine.countryLabelSelectionAnchor;
-  const nextTier = monitorHomeCountryZoomTier(engine.currentView.zoom);
-  if (!anchor || anchor.mode !== "monitor-home") return true;
-  if (anchor.zoomTier !== nextTier) return true;
-  if (Math.abs(angleDelta(engine.currentView.centerLng, anchor.centerLng)) >= COUNTRY_LABEL_RECOMPUTE_THRESHOLD.lng) return true;
-  if (Math.abs(engine.currentView.centerLat - anchor.centerLat) >= COUNTRY_LABEL_RECOMPUTE_THRESHOLD.lat) return true;
-  if (Math.abs(angleDelta(engine.currentView.bearing, anchor.bearing)) >= COUNTRY_LABEL_RECOMPUTE_THRESHOLD.bearing) return true;
-  return false;
-}
-
-function recomputeMonitorHomeCountrySelection(engine: GlobeEngine) {
-  const frame = getGlobeScreenFrame(engine);
-  const viewportWidth = engine.renderer.domElement.clientWidth;
-  const viewportHeight = engine.renderer.domElement.clientHeight;
-  const occupied: { left: number; top: number; right: number; bottom: number }[] = [];
-  const candidates: {
-    key: string;
-    rect: { left: number; top: number; right: number; bottom: number };
-    minZoom: number;
-    priority: number;
-    distanceFromCenter: number;
-    text: string;
-  }[] = [];
-
-  for (const label of LABEL_DEFINITIONS) {
-    if (label.kind !== "country") continue;
-    const text = displayTextForLabel(label, "monitor-home", engine.currentView.zoom);
-    const minZoom = effectiveLabelMinZoom(label, "monitor-home");
-    if (engine.currentView.zoom < minZoom) continue;
-
-    const localPosition = latLngToVector3(label.coordinates[0], label.coordinates[1], LABEL_RADIUS);
-    const worldNormal = localPosition.clone().applyQuaternion(engine.globeGroup.quaternion).normalize();
-    const cameraDirection = engine.camera.position.clone().normalize();
-    const faceDot = worldNormal.dot(cameraDirection);
-    if (faceDot <= COUNTRY_LABEL_FACE_THRESHOLD.show) continue;
-
-    const worldPosition = worldNormal.clone().multiplyScalar(LABEL_RADIUS);
-    const screen = worldToScreen(engine, worldPosition);
-    const distanceFromCenter = Math.hypot(screen.x - frame.centerX, screen.y - frame.centerY);
-    if (screen.z > 1 || distanceFromCenter > frame.radius - COUNTRY_LABEL_EDGE_HYSTERESIS.show) continue;
-
-    const metrics = countryLabelPixelMetrics(text, label.priority);
-    const width = metrics.width;
-    const height = metrics.height;
-    const left = screen.x - width / 2;
-    const top = screen.y - height / 2 - 1;
-    const rect = {
-      left: left - 5,
-      top: top - 3,
-      right: left + width + 5,
-      bottom: top + height + 3,
-    };
-
-    if (!rectFitsViewport(rect, viewportWidth, viewportHeight) || !rectFitsGlobeFrame(rect, frame)) {
-      continue;
-    }
-
-    candidates.push({
-      key: label.key,
-      rect,
-      minZoom,
-      priority: label.priority,
-      distanceFromCenter,
-      text,
-    });
-  }
-
-  candidates.sort((a, b) => {
-    if (a.minZoom !== b.minZoom) return a.minZoom - b.minZoom;
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    if (a.distanceFromCenter !== b.distanceFromCenter) return a.distanceFromCenter - b.distanceFromCenter;
-    return a.text.localeCompare(b.text);
-  });
-
-  const selected = new Set<string>();
-  for (const candidate of candidates) {
-    const overlaps = occupied.some((item) =>
-      !(candidate.rect.right < item.left || candidate.rect.left > item.right || candidate.rect.bottom < item.top || candidate.rect.top > item.bottom)
-    );
-    if (overlaps) continue;
-    selected.add(candidate.key);
-    occupied.push(candidate.rect);
-  }
-
-  engine.countryLabelSelection = selected;
-  engine.countryLabelSelectionAnchor = {
-    mode: "monitor-home",
-    zoomTier: monitorHomeCountryZoomTier(engine.currentView.zoom),
-    centerLng: engine.currentView.centerLng,
-    centerLat: engine.currentView.centerLat,
-    bearing: engine.currentView.bearing,
-  };
 }
 
 function stageOffsetForMode(mode: MapMode) {
@@ -818,6 +594,105 @@ function createGeoLineSegments(
   return lines;
 }
 
+function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
+  const [lng, lat] = coordinates;
+  return {
+    x: ((lng + 180) / 360) * width,
+    y: ((90 - lat) / 180) * height,
+  };
+}
+
+function baseMapCountryText(name: string) {
+  const replacements: Record<string, string> = {
+    "Bosnia and Herzegovina": "Bosnia",
+    "Central African Republic": "CAR",
+    "Democratic Republic of the Congo": "DR Congo",
+    "North Macedonia": "N. Macedonia",
+    "United Arab Emirates": "UAE",
+    "United Kingdom": "UK",
+    "United States": "USA",
+    "CÃ´te d'Ivoire": "Côte d'Ivoire",
+  };
+  return replacements[name] ?? name;
+}
+
+function drawTextureLabel(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  weight: number,
+  fillStyle: string,
+  occupied: { left: number; top: number; right: number; bottom: number }[],
+  options?: { italic?: boolean; paddingX?: number; paddingY?: number },
+) {
+  context.font = `${options?.italic ? "italic " : ""}${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+  const metrics = context.measureText(text);
+  const paddingX = options?.paddingX ?? 16;
+  const paddingY = options?.paddingY ?? 8;
+  const rect = {
+    left: x - metrics.width / 2 - paddingX,
+    top: y - fontSize / 2 - paddingY,
+    right: x + metrics.width / 2 + paddingX,
+    bottom: y + fontSize / 2 + paddingY,
+  };
+
+  const overlaps = occupied.some((item) =>
+    !(rect.right < item.left || rect.left > item.right || rect.bottom < item.top || rect.top > item.bottom)
+  );
+  if (overlaps) return false;
+
+  context.save();
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.lineJoin = "round";
+  context.strokeStyle = BASE_MAP_LABEL_HALO;
+  context.lineWidth = Math.max(1.8, fontSize * 0.11);
+  context.fillStyle = fillStyle;
+  context.strokeText(text, x, y);
+  context.fillText(text, x, y);
+  context.restore();
+
+  occupied.push(rect);
+  return true;
+}
+
+function drawBaseMapLabels(context: CanvasRenderingContext2D, width: number, height: number) {
+  const occupied: { left: number; top: number; right: number; bottom: number }[] = [];
+
+  const countries = countryLabels
+    .filter((label) => label.priority <= 2)
+    .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+
+  countries.forEach((label) => {
+    const point = texturePointForCoordinates(label.coordinates, width, height);
+    const text = baseMapCountryText(label.name);
+    const fontSize = label.priority === 1 ? 14 : 11;
+    const color = label.priority === 1 ? BASE_MAP_COUNTRY_LABEL_COLOR : BASE_MAP_SECONDARY_LABEL_COLOR;
+    drawTextureLabel(context, text, point.x, point.y, fontSize, label.priority === 1 ? 470 : 420, color, occupied);
+  });
+
+  const capitals = worldCapitals
+    .filter((capital) => capital.priority === 1)
+    .sort((a, b) => a.capital.localeCompare(b.capital));
+
+  capitals.forEach((capital) => {
+    const point = texturePointForCoordinates(capital.coordinates, width, height);
+    drawTextureLabel(
+      context,
+      capital.capital,
+      point.x,
+      point.y + 24,
+      17,
+      410,
+      BASE_MAP_CAPITAL_LABEL_COLOR,
+      occupied,
+      { paddingX: 10, paddingY: 6 },
+    );
+  });
+}
+
 function createLandTexture() {
   const canvas = document.createElement("canvas");
   canvas.width = 3072;
@@ -936,68 +811,14 @@ function createLandTexture() {
   context.stroke();
   context.restore();
 
+  drawBaseMapLabels(context, width, height);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.anisotropy = 12;
 
-  return texture;
-}
-
-function countryLabelFontSize(priority: number) {
-  return priority === 1 ? 34 : priority === 2 ? 28 : 24;
-}
-
-function countryLabelWeight(priority: number) {
-  return priority === 1 ? 500 : 430;
-}
-
-function countryLabelPixelMetrics(text: string, priority: number) {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return { width: text.length * 12, height: countryLabelFontSize(priority) };
-  }
-  const fontSize = countryLabelFontSize(priority);
-  context.font = `${countryLabelWeight(priority)} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-  const width = context.measureText(text).width;
-  return { width, height: fontSize };
-}
-
-function countryLabelWorldHeight(priority: number) {
-  return priority === 1 ? 5.6 : priority === 2 ? 4.8 : 4.1;
-}
-
-function createCountryLabelSpriteTexture(text: string, priority: number) {
-  const cacheKey = `${priority}:${text}`;
-  const cached = countryLabelTextureCache.get(cacheKey);
-  if (cached) return cached;
-
-  const { width: textWidth, height: textHeight } = countryLabelPixelMetrics(text, priority);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(256, Math.ceil(textWidth + 56));
-  canvas.height = Math.max(96, Math.ceil(textHeight + 38));
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("Failed to create country label sprite texture context.");
-  }
-
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.lineJoin = "round";
-  context.font = `${countryLabelWeight(priority)} ${countryLabelFontSize(priority)}px ui-sans-serif, system-ui, sans-serif`;
-  context.strokeStyle = "rgba(0,0,0,0.82)";
-  context.lineWidth = priority === 1 ? 5 : 4;
-  context.fillStyle = priority === 1 ? "rgba(206,211,207,0.82)" : priority === 2 ? "rgba(196,201,198,0.74)" : "rgba(178,184,181,0.64)";
-  context.strokeText(text, canvas.width / 2, canvas.height / 2);
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  countryLabelTextureCache.set(cacheKey, texture);
   return texture;
 }
 
@@ -1416,71 +1237,6 @@ function applyView(engine: GlobeEngine) {
   controls.update();
 }
 
-function worldToScreen(engine: GlobeEngine, point: THREE.Vector3) {
-  const projected = point.clone().project(engine.camera);
-  const width = engine.renderer.domElement.clientWidth;
-  const height = engine.renderer.domElement.clientHeight;
-
-  return {
-    x: (projected.x * 0.5 + 0.5) * width,
-    y: (-projected.y * 0.5 + 0.5) * height,
-    z: projected.z,
-  };
-}
-
-function getGlobeScreenFrame(engine: GlobeEngine) {
-  const center = worldToScreen(engine, new THREE.Vector3(0, 0, 0));
-  const edge = worldToScreen(engine, new THREE.Vector3(GLOBE_RADIUS, 0, 0));
-
-  return {
-    centerX: center.x,
-    centerY: center.y,
-    radius: Math.hypot(edge.x - center.x, edge.y - center.y),
-  };
-}
-
-function rectFitsViewport(
-  rect: { left: number; top: number; right: number; bottom: number },
-  width: number,
-  height: number,
-) {
-  return (
-    rect.left >= LABEL_VIEWPORT_MARGIN &&
-    rect.top >= LABEL_VIEWPORT_MARGIN &&
-    rect.right <= width - LABEL_VIEWPORT_MARGIN &&
-    rect.bottom <= height - LABEL_VIEWPORT_MARGIN
-  );
-}
-
-function pointInsideGlobeFrame(
-  x: number,
-  y: number,
-  frame: { centerX: number; centerY: number; radius: number },
-  margin: number,
-) {
-  return Math.hypot(x - frame.centerX, y - frame.centerY) <= frame.radius - margin;
-}
-
-function rectFitsGlobeFrame(
-  rect: { left: number; top: number; right: number; bottom: number },
-  frame: { centerX: number; centerY: number; radius: number },
-) {
-  return (
-    pointInsideGlobeFrame(rect.left, rect.top, frame, LABEL_EDGE_MARGIN) &&
-    pointInsideGlobeFrame(rect.right, rect.top, frame, LABEL_EDGE_MARGIN) &&
-    pointInsideGlobeFrame(rect.left, rect.bottom, frame, LABEL_EDGE_MARGIN) &&
-    pointInsideGlobeFrame(rect.right, rect.bottom, frame, LABEL_EDGE_MARGIN)
-  );
-}
-
-function densityBucketKey(rect: { left: number; top: number; right: number; bottom: number }) {
-  const centerX = (rect.left + rect.right) / 2;
-  const centerY = (rect.top + rect.bottom) / 2;
-  const bucketX = Math.floor(centerX / LABEL_DENSITY_BUCKET_WIDTH);
-  const bucketY = Math.floor(centerY / LABEL_DENSITY_BUCKET_HEIGHT);
-  return `${bucketX}:${bucketY}`;
-}
-
 function pointFacesCamera(
   camera: THREE.PerspectiveCamera,
   globeGroup: THREE.Group,
@@ -1589,287 +1345,25 @@ function updateMarkerVisibility(engine: GlobeEngine) {
   });
 }
 
-function clearCountryLabelSprites(engine: GlobeEngine) {
+function updateCountryLabelSprites(engine: GlobeEngine, _mode: MapMode) {
+  void _mode;
+  engine.countryLabelGroup.visible = false;
   engine.countryLabelEntries.forEach((entry) => {
-    engine.countryLabelGroup.remove(entry.sprite);
-    if (entry.sprite.material instanceof THREE.SpriteMaterial) {
-      entry.sprite.material.dispose();
-    }
-  });
-  engine.countryLabelEntries = [];
-}
-
-function syncMonitorHomeCountrySprites(engine: GlobeEngine) {
-  clearCountryLabelSprites(engine);
-
-  const selectedCountryLabels = LABEL_DEFINITIONS.filter(
-    (label) => label.kind === "country" && engine.countryLabelSelection.has(label.key),
-  );
-
-  selectedCountryLabels.forEach((label) => {
-    const text = displayTextForLabel(label, "monitor-home", engine.currentView.zoom);
-    const texture = createCountryLabelSpriteTexture(text, label.priority);
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      opacity: 1,
-      sizeAttenuation: true,
-    });
-    const sprite = new THREE.Sprite(material);
-    const metrics = countryLabelPixelMetrics(text, label.priority);
-    const worldHeight = countryLabelWorldHeight(label.priority);
-    const aspect = metrics.width / Math.max(metrics.height, 1);
-    sprite.scale.set(worldHeight * aspect, worldHeight, 1);
-    const localPosition = latLngToVector3(label.coordinates[0], label.coordinates[1], LABEL_RADIUS + 0.26);
-    sprite.position.copy(localPosition);
-    sprite.renderOrder = 7;
-    engine.countryLabelGroup.add(sprite);
-    engine.countryLabelEntries.push({
-      key: label.key,
-      sprite,
-      localPosition,
-      priority: label.priority,
-      text,
-    });
-  });
-}
-
-function updateCountryLabelSprites(engine: GlobeEngine, mode: MapMode) {
-  const visibleInMode = mode === "monitor-home";
-  engine.countryLabelGroup.visible = visibleInMode;
-  if (!visibleInMode) return;
-
-  const freezeDuringInteraction = (engine.labelVisibilityFrozenUntil ?? 0) > engine.lastFrameTime;
-  const frame = getGlobeScreenFrame(engine);
-  engine.countryLabelEntries.forEach((entry) => {
-    if (freezeDuringInteraction && entry.sprite.visible) {
-      return;
-    }
-
-    const worldNormal = entry.localPosition.clone().applyQuaternion(engine.globeGroup.quaternion).normalize();
-    const cameraDirection = engine.camera.position.clone().normalize();
-    const faceDot = worldNormal.dot(cameraDirection);
-    if (faceDot <= COUNTRY_LABEL_FACE_THRESHOLD.hide) {
-      entry.sprite.visible = false;
-      return;
-    }
-
-    const worldPosition = worldNormal.clone().multiplyScalar(LABEL_RADIUS + 0.26);
-    const screen = worldToScreen(engine, worldPosition);
-    const distanceFromCenter = Math.hypot(screen.x - frame.centerX, screen.y - frame.centerY);
-    if (screen.z > 1 || distanceFromCenter > frame.radius - 2) {
-      entry.sprite.visible = false;
-      return;
-    }
-
-    const metrics = countryLabelPixelMetrics(entry.text, entry.priority);
-    const rect = {
-      left: screen.x - metrics.width / 2 - 6,
-      top: screen.y - metrics.height / 2 - 4,
-      right: screen.x + metrics.width / 2 + 6,
-      bottom: screen.y + metrics.height / 2 + 4,
-    };
-    entry.sprite.visible = rectFitsViewport(rect, engine.renderer.domElement.clientWidth, engine.renderer.domElement.clientHeight)
-      && rectFitsGlobeFrame(rect, frame);
+    entry.sprite.visible = false;
   });
 }
 
 function updateLabelElements(
   engine: GlobeEngine,
   labelRefs: Record<string, HTMLSpanElement | null>,
-  mode: MapMode,
+  _mode: MapMode,
 ) {
-  const frame = getGlobeScreenFrame(engine);
-  const viewportWidth = engine.renderer.domElement.clientWidth;
-  const viewportHeight = engine.renderer.domElement.clientHeight;
-  const occupied: {
-    left: number;
-    top: number;
-    right: number;
-    bottom: number;
-    kind: LabelKind;
-    key: string;
-  }[] = [];
-  const now = engine.lastFrameTime;
-  const bucketUsage = new Map<string, { country: number; capital: number; water: number }>();
-  const freezeCountryVisibility = mode === "monitor-home" && (engine.labelVisibilityFrozenUntil ?? 0) > now;
-
-  if (mode === "monitor-home" && !freezeCountryVisibility && shouldRecomputeMonitorHomeCountrySelection(engine)) {
-    recomputeMonitorHomeCountrySelection(engine);
-    syncMonitorHomeCountrySprites(engine);
-  }
-  if (mode !== "monitor-home") {
-    if (engine.countryLabelSelection.size > 0) {
-      engine.countryLabelSelection.clear();
-      engine.countryLabelSelectionAnchor = null;
-      clearCountryLabelSprites(engine);
-    }
-  }
-
-  const sortedLabels = [...LABEL_DEFINITIONS].sort((a, b) => {
-    const kindWeight = { country: 0, capital: 1, water: 2 };
-    if (kindWeight[a.kind] !== kindWeight[b.kind]) {
-      return kindWeight[a.kind] - kindWeight[b.kind];
-    }
-    if (a.kind === "country" && b.kind === "country") {
-      const aMinZoom = effectiveLabelMinZoom(a, mode);
-      const bMinZoom = effectiveLabelMinZoom(b, mode);
-      if (aMinZoom !== bMinZoom) {
-        return aMinZoom - bMinZoom;
-      }
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
-      }
-      return a.text.localeCompare(b.text);
-    }
-    const aWasVisible = engine.labelRuntime[a.key]?.visible ? 0 : 1;
-    const bWasVisible = engine.labelRuntime[b.key]?.visible ? 0 : 1;
-    if (aWasVisible !== bWasVisible) {
-      return aWasVisible - bWasVisible;
-    }
-    const aRecent = now - (engine.labelRuntime[a.key]?.lastVisibleAt ?? 0) <= LABEL_RECENT_VISIBLE_MS ? 0 : 1;
-    const bRecent = now - (engine.labelRuntime[b.key]?.lastVisibleAt ?? 0) <= LABEL_RECENT_VISIBLE_MS ? 0 : 1;
-    if (aRecent !== bRecent) {
-      return aRecent - bRecent;
-    }
-    const aTime = engine.labelRuntime[a.key]?.lastVisibleAt ?? 0;
-    const bTime = engine.labelRuntime[b.key]?.lastVisibleAt ?? 0;
-    if (aTime !== bTime) {
-      return bTime - aTime;
-    }
-    return a.priority - b.priority;
-  });
-
-  sortedLabels.forEach((label) => {
-    const element = labelRefs[label.key];
-    if (!element) return;
-    const runtime = (engine.labelRuntime[label.key] ??= {
-      visible: false,
-      lastVisibleAt: 0,
-      lastLeft: 0,
-      lastTop: 0,
-    });
-
-    if (label.kind === "country") {
-      runtime.visible = false;
+  void engine;
+  void _mode;
+  Object.values(labelRefs).forEach((element) => {
+    if (element) {
       element.style.display = "none";
-      return;
     }
-
-    if (freezeCountryVisibility && label.kind === "country" && !runtime.visible) {
-      element.style.display = "none";
-      return;
-    }
-    const preserveCountryDuringInteraction = freezeCountryVisibility && label.kind === "country" && runtime.visible;
-
-    const displayText = displayTextForLabel(label, mode, engine.currentView.zoom);
-    if (element.textContent !== displayText) {
-      element.textContent = displayText;
-    }
-
-    const minZoom = effectiveLabelMinZoom(label, mode);
-    const zoomThreshold = LABEL_ZOOM_HYSTERESIS[label.kind];
-    const zoomVisible = preserveCountryDuringInteraction
-      ? true
-      : runtime.visible
-      ? engine.currentView.zoom >= minZoom - zoomThreshold.hide
-      : engine.currentView.zoom >= minZoom + zoomThreshold.show;
-
-    if (!zoomVisible) {
-      runtime.visible = false;
-      element.style.display = "none";
-      return;
-    }
-
-    const localPosition = latLngToVector3(label.coordinates[0], label.coordinates[1], LABEL_RADIUS);
-    const worldNormal = localPosition.clone().applyQuaternion(engine.globeGroup.quaternion).normalize();
-    const cameraDirection = engine.camera.position.clone().normalize();
-    const faceDot = worldNormal.dot(cameraDirection);
-    const faceThreshold =
-      label.kind === "country"
-        ? runtime.visible
-          ? COUNTRY_LABEL_FACE_THRESHOLD.hide
-          : COUNTRY_LABEL_FACE_THRESHOLD.show
-        : 0.06;
-    if (!preserveCountryDuringInteraction && faceDot <= faceThreshold) {
-      runtime.visible = false;
-      element.style.display = "none";
-      return;
-    }
-
-    const worldPosition = worldNormal.clone().multiplyScalar(LABEL_RADIUS);
-    const screen = worldToScreen(engine, worldPosition);
-    const distanceFromCenter = Math.hypot(screen.x - frame.centerX, screen.y - frame.centerY);
-    const edgeMargin =
-      label.kind === "country"
-        ? runtime.visible
-          ? COUNTRY_LABEL_EDGE_HYSTERESIS.hide
-          : COUNTRY_LABEL_EDGE_HYSTERESIS.show
-        : LABEL_EDGE_MARGIN;
-    if (!preserveCountryDuringInteraction && (screen.z > 1 || distanceFromCenter > frame.radius - edgeMargin)) {
-      runtime.visible = false;
-      element.style.display = "none";
-      return;
-    }
-
-    const width = element.offsetWidth || 0;
-    const height = element.offsetHeight || 0;
-    const offsetX = label.kind === "capital" ? 0 : 0;
-    const offsetY = label.kind === "country" ? -1 : label.kind === "capital" ? 9 : 0;
-    const rawLeft = screen.x - width / 2 + offsetX;
-    const rawTop = screen.y - height / 2 + offsetY;
-    const left =
-      runtime.visible && Math.abs(rawLeft - runtime.lastLeft) < 10
-        ? lerp(runtime.lastLeft, rawLeft, 0.45)
-        : rawLeft;
-    const top =
-      runtime.visible && Math.abs(rawTop - runtime.lastTop) < 10
-        ? lerp(runtime.lastTop, rawTop, 0.45)
-        : rawTop;
-    const rect = {
-      left: left - (label.kind === "country" ? 5 : label.kind === "capital" ? 3 : 3),
-      top: top - (label.kind === "country" ? 3 : label.kind === "capital" ? 2 : 2),
-      right: left + width + (label.kind === "country" ? 5 : label.kind === "capital" ? 3 : 3),
-      bottom: top + height + (label.kind === "country" ? 3 : label.kind === "capital" ? 2 : 2),
-    };
-
-    const fitsViewport = rectFitsViewport(rect, viewportWidth, viewportHeight);
-    const fitsGlobeFrame = rectFitsGlobeFrame(rect, frame);
-    if (!fitsViewport || (!preserveCountryDuringInteraction && !fitsGlobeFrame)) {
-      runtime.visible = false;
-      element.style.display = "none";
-      return;
-    }
-
-    const bucketKey = densityBucketKey(rect);
-    const bucketState = bucketUsage.get(bucketKey) ?? { country: 0, capital: 0, water: 0 };
-    if (label.kind !== "country") {
-      const overlaps = occupied.some((item) =>
-        !(rect.right < item.left || rect.left > item.right || rect.bottom < item.top || rect.top > item.bottom)
-      );
-
-      const shouldHoldVisibility =
-        runtime.visible && now - runtime.lastVisibleAt <= LABEL_VISIBILITY_STICK_MS && label.kind !== "water";
-
-      if (overlaps && !shouldHoldVisibility) {
-        runtime.visible = false;
-        element.style.display = "none";
-        return;
-      }
-    }
-
-    occupied.push({ ...rect, kind: label.kind, key: label.key });
-    bucketState[label.kind] += 1;
-    bucketUsage.set(bucketKey, bucketState);
-    runtime.visible = true;
-    runtime.lastVisibleAt = now;
-    runtime.lastLeft = left;
-    runtime.lastTop = top;
-    element.style.display = "block";
-    element.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-    element.style.opacity = label.kind === "country" ? "0.96" : label.kind === "capital" ? "0.8" : "0.58";
   });
 }
 
@@ -2358,3 +1852,6 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
     </div>
   );
 });
+
+
+
