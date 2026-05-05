@@ -17,14 +17,14 @@ import {
 } from "./cameraPresets";
 
 const GLOBE_RADIUS = 84;
-const LABEL_SPHERE_RADIUS = 84.14;
-const CAPITAL_LABEL_SPHERE_RADIUS = 84.18;
+const LABEL_SPHERE_RADIUS = GLOBE_RADIUS * 1.0018;
+const CAPITAL_LABEL_SPHERE_RADIUS = GLOBE_RADIUS * 1.0024;
 const CAMERA_FOV = 34;
 const CONTROL_ZOOM_DELTA = 0.34;
 const CAPITAL_LABEL_SHOW_ZOOM = 5.15;
-const LABEL_TEXTURE_SCALE = 2;
-const LABEL_TEXTURE_WIDTH = 4096 * LABEL_TEXTURE_SCALE;
-const LABEL_TEXTURE_HEIGHT = 2048 * LABEL_TEXTURE_SCALE;
+const LABEL_TEXTURE_LOGICAL_WIDTH = 4096;
+const LABEL_TEXTURE_LOGICAL_HEIGHT = 2048;
+const LABEL_TEXTURE_PREFERRED_SCALE = 2;
 const MIN_LATITUDE = -72;
 const MAX_LATITUDE = 78;
 const AUTO_ROTATE_IDLE_RESUME_MS = 1600;
@@ -49,9 +49,10 @@ const MAP_COASTLINE_COLOR = "rgba(238, 241, 235, 0.36)";
 const MAP_ATMOSPHERE_COLOR = new THREE.Color("#d4dad4");
 const BORDER_LINE_COLOR = "#B6BCB5";
 const COASTLINE_LINE_COLOR = "#D8DED7";
-const COUNTRY_LABEL_COLOR = "rgba(206, 211, 207, 0.8)";
-const COUNTRY_LABEL_HALO = "rgba(0, 0, 0, 0.92)";
-const CAPITAL_LABEL_COLOR = "rgba(216, 228, 240, 0.9)";
+const BASE_MAP_COUNTRY_LABEL_COLOR = "rgba(245, 247, 245, 0.92)";
+const BASE_MAP_SECONDARY_LABEL_COLOR = "rgba(232, 236, 233, 0.82)";
+const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(158, 165, 162, 0.52)";
+const BASE_MAP_LABEL_HALO = "rgba(0, 0, 0, 0.72)";
 const SIGNAL_MARKER_RADIUS = 86.4;
 const EVENT_MARKER_RADIUS = 85.7;
 const ATMOSPHERE_INNER_RADIUS = 85.8;
@@ -632,15 +633,15 @@ function labelFontSize(label: LabelDefinition) {
     return label.priority === 1 ? 14 : 11;
   }
 
-  return 9;
+  return 17;
 }
 
 function labelFontWeight(label: LabelDefinition) {
   if (label.kind === "country") {
-    return label.priority === 1 ? 520 : 460;
+    return label.priority === 1 ? 470 : 420;
   }
 
-  return 430;
+  return 410;
 }
 
 function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
@@ -657,14 +658,15 @@ function drawTextureLabel(
   text: string,
   x: number,
   y: number,
+  textureScale: number,
   occupied: { left: number; top: number; right: number; bottom: number }[],
 ) {
-  const fontSize = labelFontSize(label) * LABEL_TEXTURE_SCALE;
+  const fontSize = labelFontSize(label) * textureScale;
   const weight = labelFontWeight(label);
   context.font = `${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   const metrics = context.measureText(text);
-  const paddingX = (label.kind === "capital" ? 8 : label.priority === 1 ? 12 : 10) * LABEL_TEXTURE_SCALE;
-  const paddingY = (label.kind === "capital" ? 5 : 7) * LABEL_TEXTURE_SCALE;
+  const paddingX = (label.kind === "capital" ? 10 : 16) * textureScale;
+  const paddingY = (label.kind === "capital" ? 6 : 8) * textureScale;
   const rect = {
     left: x - metrics.width / 2 - paddingX,
     top: y - fontSize / 2 - paddingY,
@@ -681,10 +683,14 @@ function drawTextureLabel(
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.lineJoin = "round";
-  context.strokeStyle = COUNTRY_LABEL_HALO;
-  context.lineWidth = (label.kind === "country" ? (label.priority === 1 ? 2 : 1.75) : 1.55) * LABEL_TEXTURE_SCALE;
-  context.fillStyle = label.kind === "country" ? COUNTRY_LABEL_COLOR : CAPITAL_LABEL_COLOR;
-  context.globalAlpha = label.kind === "country" ? 0.96 : 0.92;
+  context.strokeStyle = BASE_MAP_LABEL_HALO;
+  context.lineWidth = Math.max(1.8, labelFontSize(label) * 0.11) * textureScale;
+  context.fillStyle =
+    label.kind === "country"
+      ? label.priority === 1
+        ? BASE_MAP_COUNTRY_LABEL_COLOR
+        : BASE_MAP_SECONDARY_LABEL_COLOR
+      : BASE_MAP_CAPITAL_LABEL_COLOR;
   context.strokeText(text, x, y);
   context.fillText(text, x, y);
   context.restore();
@@ -698,6 +704,7 @@ function drawLabelSet(
   width: number,
   height: number,
   kind: "country" | "capital",
+  textureScale: number,
   occupied: { left: number; top: number; right: number; bottom: number }[],
 ) {
   DISPLAY_LABEL_DEFINITIONS
@@ -710,31 +717,38 @@ function drawLabelSet(
         label,
         displayTextForLabel(label),
         point.x,
-        point.y + (label.kind === "capital" ? 10 * LABEL_TEXTURE_SCALE : 0),
+        point.y + (label.kind === "capital" ? 24 * textureScale : 0),
+        textureScale,
         occupied,
       );
     });
 }
 
-function finalizeLabelTexture(canvas: HTMLCanvasElement) {
+function finalizeLabelTexture(canvas: HTMLCanvasElement, maxAnisotropy: number) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.generateMipmaps = false;
-  texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
-  texture.anisotropy = 16;
+  texture.anisotropy = Math.max(1, maxAnisotropy);
   return texture;
 }
 
-function createLabelTextures() {
+function createLabelTextures(maxTextureSize: number, maxAnisotropy: number) {
+  const textureScale = Math.max(
+    0.5,
+    Math.min(LABEL_TEXTURE_PREFERRED_SCALE, maxTextureSize / LABEL_TEXTURE_LOGICAL_WIDTH),
+  );
+  const textureWidth = Math.max(1, Math.floor(LABEL_TEXTURE_LOGICAL_WIDTH * textureScale));
+  const textureHeight = Math.max(1, Math.floor(LABEL_TEXTURE_LOGICAL_HEIGHT * textureScale));
   const countryCanvas = document.createElement("canvas");
-  countryCanvas.width = LABEL_TEXTURE_WIDTH;
-  countryCanvas.height = LABEL_TEXTURE_HEIGHT;
+  countryCanvas.width = textureWidth;
+  countryCanvas.height = textureHeight;
   const capitalCanvas = document.createElement("canvas");
-  capitalCanvas.width = LABEL_TEXTURE_WIDTH;
-  capitalCanvas.height = LABEL_TEXTURE_HEIGHT;
+  capitalCanvas.width = textureWidth;
+  capitalCanvas.height = textureHeight;
 
   const countryContext = countryCanvas.getContext("2d");
   const capitalContext = capitalCanvas.getContext("2d");
@@ -743,12 +757,12 @@ function createLabelTextures() {
   }
 
   const occupied: { left: number; top: number; right: number; bottom: number }[] = [];
-  drawLabelSet(countryContext, countryCanvas.width, countryCanvas.height, "country", occupied);
-  drawLabelSet(capitalContext, capitalCanvas.width, capitalCanvas.height, "capital", occupied);
+  drawLabelSet(countryContext, countryCanvas.width, countryCanvas.height, "country", textureScale, occupied);
+  drawLabelSet(capitalContext, capitalCanvas.width, capitalCanvas.height, "capital", textureScale, occupied);
 
   return {
-    countryTexture: finalizeLabelTexture(countryCanvas),
-    capitalTexture: finalizeLabelTexture(capitalCanvas),
+    countryTexture: finalizeLabelTexture(countryCanvas, maxAnisotropy),
+    capitalTexture: finalizeLabelTexture(capitalCanvas, maxAnisotropy),
   };
 }
 
@@ -1214,7 +1228,7 @@ function socmintMarkerSourceFor(report: SocmintReport): SocmintMarkerSource {
   return "website";
 }
 
-function createGlobeScene() {
+function createGlobeScene(renderer: THREE.WebGLRenderer) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(MAP_OUTER_BACKGROUND_COLOR);
 
@@ -1222,7 +1236,10 @@ function createGlobeScene() {
   scene.add(globeGroup);
 
   const texture = createLandTexture();
-  const { countryTexture, capitalTexture } = createLabelTextures();
+  const { countryTexture, capitalTexture } = createLabelTextures(
+    renderer.capabilities.maxTextureSize,
+    renderer.capabilities.getMaxAnisotropy(),
+  );
   const landFeature = feature(landTopology as never, (landTopology.objects as { land: unknown }).land as never);
   const bordersMesh = mesh(
     countriesTopology as never,
@@ -1252,6 +1269,7 @@ function createGlobeScene() {
         map: countryTexture,
         transparent: true,
         alphaTest: 0.08,
+        depthTest: true,
         depthWrite: false,
         toneMapped: false,
       }),
@@ -1268,6 +1286,7 @@ function createGlobeScene() {
         map: capitalTexture,
         transparent: true,
         alphaTest: 0.08,
+        depthTest: true,
         depthWrite: false,
         toneMapped: false,
       }),
@@ -1595,14 +1614,6 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
     const stage = stageRef.current;
     if (!host || !stage) return;
 
-    const {
-      scene,
-      globeGroup,
-      countryLabelMesh,
-      capitalLabelMesh,
-      countryLabelGroup,
-    } = createGlobeScene();
-
     const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -1617,6 +1628,14 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.cursor = "grab";
     host.appendChild(renderer.domElement);
+
+    const {
+      scene,
+      globeGroup,
+      countryLabelMesh,
+      capitalLabelMesh,
+      countryLabelGroup,
+    } = createGlobeScene(renderer);
 
     const eventGroup = new THREE.Group();
     const signalGroup = new THREE.Group();
