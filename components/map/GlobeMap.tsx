@@ -22,24 +22,36 @@ const CAPITAL_LABEL_SPHERE_RADIUS = GLOBE_RADIUS * 1.0024;
 const CAMERA_FOV = 34;
 const CONTROL_ZOOM_DELTA = 0.34;
 const CAPITAL_LABEL_SHOW_ZOOM_STEP_FROM_CENTRAL_VIEW = 13;
-// Central View is monitor-home zoom 2.16; 13 control zoom-in steps at 0.34 first show capitals at 6.58.
-const CAPITAL_LABEL_SHOW_ZOOM =
-  cameraForMode("monitor-home").zoom + CAPITAL_LABEL_SHOW_ZOOM_STEP_FROM_CENTRAL_VIEW * CONTROL_ZOOM_DELTA;
+const CAPITAL_LABEL_SHOW_ZOOM_EPSILON = 0.0001;
 const LABEL_TEXTURE_LOGICAL_WIDTH = 4096;
 const LABEL_TEXTURE_LOGICAL_HEIGHT = 2048;
 const LABEL_TEXTURE_PREFERRED_SCALE = 2;
+const LAND_TEXTURE_LOGICAL_WIDTH = 4096;
+const LAND_TEXTURE_LOGICAL_HEIGHT = 2048;
+const LAND_TEXTURE_PREFERRED_SCALE = 1;
 const DEBUG_HIDE_LABEL_OVERLAY = false;
 const DEBUG_HIDE_ATMOSPHERE = false;
 const DEBUG_HIDE_GLOBE_GLOW = false;
 const DEBUG_HIDE_BORDER_OVERLAY = false;
+const DEBUG_HIDE_COASTLINE_OVERLAY = false;
+const DEBUG_HIDE_COUNTRY_BORDER_OVERLAY = false;
 const DEBUG_HIDE_TRANSPARENT_LAYERS = false;
 const DEBUG_DISABLE_GLOBE_LIGHTING = false;
+const DEBUG_HIDE_MARKERS = false;
+const DEBUG_DISABLE_AMBIENT_LIGHT = false;
+const DEBUG_DISABLE_HEMISPHERE_LIGHT = false;
 const DEBUG_DISABLE_TEXTURE_GRADIENTS = false;
+const DEBUG_HIDE_GLOBE_MESH = false;
+const DEBUG_SHOW_SOLID_GLOBE = false;
+const DEBUG_SHOW_FLAT_NEUTRAL_TEXTURE = false;
+const DEBUG_SHOW_TEXTURE_PLANE = false;
 const DEBUG_SHOW_BASE_TEXTURE_ONLY = false;
 const DEBUG_SHOW_LABEL_TEXTURE_ONLY = false;
 const MIN_LATITUDE = -72;
 const MAX_LATITUDE = 78;
-const AUTO_ROTATE_IDLE_RESUME_MS = 1600;
+const MONITOR_HOME_AUTO_ROTATE_IDLE_MS = 1600;
+const GLOBAL_VIEW_AUTO_ROTATE_IDLE_MS = 90_000;
+const SOCMINT_AUTO_ROTATE_IDLE_MS = 90_000;
 const LABEL_INTERACTION_FREEZE_MS = 220;
 const CENTER_TOLERANCE = {
   lng: 0.12,
@@ -49,10 +61,10 @@ const CENTER_TOLERANCE = {
   pitch: 0.25,
 };
 const MAP_OUTER_BACKGROUND_COLOR = "#000000";
-const MAP_WATER_COLOR = "#101315";
-const MAP_WATER_TOP_COLOR = "#161A1C";
-const MAP_WATER_BOTTOM_COLOR = "#0B0E10";
-const MAP_LAND_COLOR = "#434749";
+const MAP_WATER_COLOR = "#14181A";
+const MAP_WATER_TOP_COLOR = "#1A1F21";
+const MAP_WATER_BOTTOM_COLOR = "#0E1113";
+const MAP_LAND_COLOR = "#4A4F51";
 const MAP_LAND_HIGHLIGHT = "rgba(255,255,255,0.12)";
 const MAP_LAND_MIDTONE = "rgba(255,255,255,0.028)";
 const MAP_LAND_SHADE = "rgba(0,0,0,0.19)";
@@ -63,11 +75,27 @@ const BORDER_LINE_COLOR = "#B6BCB5";
 const COASTLINE_LINE_COLOR = "#D8DED7";
 const BASE_MAP_COUNTRY_LABEL_COLOR = "rgba(245, 247, 245, 0.92)";
 const BASE_MAP_SECONDARY_LABEL_COLOR = "rgba(232, 236, 233, 0.82)";
-const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(226, 232, 228, 0.74)";
+const BASE_MAP_CAPITAL_LABEL_COLOR = "rgba(231, 236, 232, 0.7)";
 const BASE_MAP_LABEL_HALO = "rgba(0, 0, 0, 0.72)";
-const BASE_MAP_CAPITAL_LABEL_HALO = "rgba(0, 0, 0, 0.58)";
+const BASE_MAP_CAPITAL_LABEL_HALO = "rgba(0, 0, 0, 0.52)";
 const SIGNAL_MARKER_RADIUS = 86.4;
 const EVENT_MARKER_RADIUS = 85.7;
+const EVENT_MARKER_TEXTURE_LOGICAL_SIZE = 128;
+const EVENT_MARKER_TEXTURE_SIZE = 256;
+const SIGNAL_MARKER_TEXTURE_LOGICAL_SIZE = 64;
+const SIGNAL_MARKER_TEXTURE_SIZE = 256;
+const MARKER_TEXTURE_ANISOTROPY = 8;
+const EVENT_MARKER_SCALE = {
+  base: 8.05,
+  selected: 9.35,
+};
+const SIGNAL_MARKER_SCALE = {
+  base: 5.15,
+  selected: 6,
+};
+const MARKER_MIN_DISTANCE = 105;
+const EVENT_MARKER_MIN_ZOOM_SCALE_FACTOR = 0.42;
+const SIGNAL_MARKER_MIN_ZOOM_SCALE_FACTOR = 0.38;
 const ATMOSPHERE_INNER_RADIUS = 85.8;
 const BORDER_LINE_RADIUS = 84.28;
 const COASTLINE_LINE_RADIUS = 84.38;
@@ -131,6 +159,32 @@ const COUNTRY_LABEL_FALLBACK_OFFSETS: [number, number][] = [
   [-18, -14],
   [18, 14],
 ];
+
+const CAPITAL_LABEL_CUSTOM_OFFSETS: Record<string, [number, number]> = {
+  London: [-18, -10],
+  Paris: [-16, 11],
+  Berlin: [17, 9],
+  Rome: [16, 15],
+  Athens: [16, 10],
+  Ankara: [18, 9],
+  Jerusalem: [18, 13],
+  Beirut: [16, 7],
+  Amman: [17, -2],
+  Damascus: [18, 8],
+  Baghdad: [19, 8],
+  "Kuwait City": [18, -3],
+  Riyadh: [18, 8],
+  "Abu Dhabi": [18, 12],
+  Muscat: [18, 10],
+  Kyiv: [18, -7],
+  "Washington, D.C.": [18, 8],
+  Tokyo: [18, 11],
+  Seoul: [18, -5],
+  Bangkok: [18, 10],
+  "New Delhi": [18, 8],
+  Singapore: [18, 10],
+  Canberra: [18, 11],
+};
 
 const COUNTRY_CAPITAL_COORDINATES: { match: string[]; coordinates: [number, number] }[] = [
   { match: ["syria"], coordinates: [36.2765, 33.5138] },
@@ -204,6 +258,8 @@ type GlobeMarkerEntry = {
   object: THREE.Sprite;
   localPosition: THREE.Vector3;
   kind: "event" | "signal";
+  baseScale: number;
+  baseOpacity: number;
 };
 
 type CountryLabelSpriteEntry = {
@@ -403,6 +459,9 @@ function distanceFromZoom(zoom: number) {
   return clamp(420 * Math.pow(0.8, zoom - 1), 105, 520);
 }
 
+const GLOBAL_MARKER_DEFAULT_DISTANCE = distanceFromZoom(cameraForMode("global").zoom);
+const SOCMINT_MARKER_DEFAULT_DISTANCE = distanceFromZoom(cameraForMode("socmint").zoom);
+
 function zoomFromDistance(distance: number) {
   const zoom = 1 + Math.log(distance / 420) / Math.log(0.8);
   return clamp(zoom, 0.55, 7.2);
@@ -425,6 +484,17 @@ function viewStateForMode(mode: MapMode): GlobeViewState {
     stageOffset: stageOffsetForMode(mode),
   };
 }
+
+function zoomThresholdForControlStepsFromMode(mode: MapMode, steps: number) {
+  return cameraForMode(mode).zoom + steps * CONTROL_ZOOM_DELTA;
+}
+
+// Central View maps to the monitor-home preset at zoom 2.16.
+// With the current 0.34-step zoom controls, the 13th zoom-in step lands at 6.58.
+const CAPITAL_LABEL_SHOW_ZOOM = zoomThresholdForControlStepsFromMode(
+  "monitor-home",
+  CAPITAL_LABEL_SHOW_ZOOM_STEP_FROM_CENTRAL_VIEW,
+);
 
 function viewStateMatches(a: GlobeViewState, b: GlobeViewState) {
   return (
@@ -565,6 +635,88 @@ function drawGeoJsonPath(
   }
 }
 
+function collectPolygonRings(geometry: unknown, rings: number[][][]) {
+  if (!geometry || typeof geometry !== "object") return;
+
+  const geo = geometry as {
+    type: string;
+    coordinates?: unknown;
+    geometry?: unknown;
+    geometries?: unknown[];
+    features?: { geometry?: unknown }[];
+  };
+
+  switch (geo.type) {
+    case "FeatureCollection":
+      geo.features?.forEach((featureGeometry) => {
+        collectPolygonRings(featureGeometry.geometry, rings);
+      });
+      break;
+    case "Feature":
+      collectPolygonRings(geo.geometry, rings);
+      break;
+    case "Polygon":
+      (geo.coordinates as number[][][]).forEach((ring) => rings.push(ring));
+      break;
+    case "MultiPolygon":
+      (geo.coordinates as number[][][][]).forEach((polygon) => {
+        polygon.forEach((ring) => rings.push(ring));
+      });
+      break;
+    case "GeometryCollection":
+      geo.geometries?.forEach((item) => {
+        collectPolygonRings(item, rings);
+      });
+      break;
+    default:
+      break;
+  }
+}
+
+function fillSouthPolarLandCaps(
+  context: CanvasRenderingContext2D,
+  geometry: unknown,
+  width: number,
+  height: number,
+) {
+  const rings: number[][][] = [];
+  collectPolygonRings(geometry, rings);
+
+  rings.forEach((ring) => {
+    if (ring.length < 4) return;
+
+    const bounds = ring.reduce(
+      (acc, [lng, lat]) => ({
+        minLng: Math.min(acc.minLng, lng),
+        maxLng: Math.max(acc.maxLng, lng),
+        minLat: Math.min(acc.minLat, lat),
+      }),
+      { minLng: 180, maxLng: -180, minLat: 90 },
+    );
+
+    const spansPoleCap = bounds.minLat < -84 && bounds.minLng <= -170 && bounds.maxLng >= 170;
+    if (!spansPoleCap) return;
+
+    context.beginPath();
+    context.moveTo(0, height);
+
+    ring.forEach(([lng, lat], index) => {
+      const point = projectLonLatToTexture(lng, lat, width, height);
+
+      if (index > 0 && Math.abs(lng - ring[index - 1][0]) > 180) {
+        context.lineTo(width, height);
+        context.lineTo(0, height);
+      }
+
+      context.lineTo(point.x, point.y);
+    });
+
+    context.lineTo(width, height);
+    context.closePath();
+    context.fill();
+  });
+}
+
 function pushRingSegments(
   points: number[],
   ring: number[][],
@@ -685,8 +837,19 @@ function baseMapCountryText(name: string) {
   return replacements[name] ?? name;
 }
 
+function baseMapCapitalText(name: string) {
+  const replacements: Record<string, string> = {
+    "Sri Jayawardenepura Kotte": "Sri J. Kotte",
+    "Bandar Seri Begawan": "Bandar Seri B.",
+    "Guatemala City": "Guatemala City",
+    "Port-au-Prince": "Port-au-Prince",
+    "Port Moresby": "Port Moresby",
+  };
+  return replacements[name] ?? name;
+}
+
 function displayTextForLabel(label: LabelDefinition) {
-  return label.kind === "country" ? baseMapCountryText(label.text) : label.text;
+  return label.kind === "country" ? baseMapCountryText(label.text) : baseMapCapitalText(label.text);
 }
 
 function labelFontSize(label: LabelDefinition) {
@@ -694,7 +857,7 @@ function labelFontSize(label: LabelDefinition) {
     return label.priority === 1 ? 14 : 11;
   }
 
-  return 9;
+  return 7.4;
 }
 
 function labelFontWeight(label: LabelDefinition) {
@@ -702,7 +865,53 @@ function labelFontWeight(label: LabelDefinition) {
     return label.priority === 1 ? 470 : 420;
   }
 
-  return 390;
+  return 420;
+}
+
+function labelPaddingX(label: LabelDefinition) {
+  if (label.kind === "capital") {
+    return 8;
+  }
+
+  return label.priority === 1 ? 16 : label.priority === 2 ? 14 : 10;
+}
+
+function labelPaddingY(label: LabelDefinition) {
+  if (label.kind === "capital") {
+    return 5;
+  }
+
+  return label.priority === 1 ? 8 : label.priority === 2 ? 7 : 6;
+}
+
+function labelHaloColor(label: LabelDefinition) {
+  return label.kind === "capital" ? BASE_MAP_CAPITAL_LABEL_HALO : BASE_MAP_LABEL_HALO;
+}
+
+function labelStrokeWidth(label: LabelDefinition, textureScale: number) {
+  return label.kind === "capital"
+    ? Math.max(0.9, labelFontSize(label) * 0.06) * textureScale
+    : Math.max(1.55, labelFontSize(label) * 0.095) * textureScale;
+}
+
+function labelFillColor(label: LabelDefinition) {
+  if (label.kind === "country") {
+    return label.priority === 1 ? BASE_MAP_COUNTRY_LABEL_COLOR : BASE_MAP_SECONDARY_LABEL_COLOR;
+  }
+
+  return BASE_MAP_CAPITAL_LABEL_COLOR;
+}
+
+function labelVerticalOffset(label: LabelDefinition) {
+  return label.kind === "capital" ? 14 : 0;
+}
+
+function capitalLabelOffset(label: LabelDefinition) {
+  return CAPITAL_LABEL_CUSTOM_OFFSETS[label.text] ?? [0, 0];
+}
+
+function capitalLabelsShouldBeVisible(zoom: number) {
+  return zoom + CAPITAL_LABEL_SHOW_ZOOM_EPSILON >= CAPITAL_LABEL_SHOW_ZOOM;
 }
 
 function texturePointForCoordinates(coordinates: [number, number], width: number, height: number) {
@@ -726,14 +935,8 @@ function drawTextureLabel(
   const weight = labelFontWeight(label);
   context.font = `${weight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   const metrics = context.measureText(text);
-  const paddingX =
-    label.kind === "capital"
-      ? 10 * textureScale
-      : (label.priority === 1 ? 16 : label.priority === 2 ? 14 : 10) * textureScale;
-  const paddingY =
-    label.kind === "capital"
-      ? 6 * textureScale
-      : (label.priority === 1 ? 8 : label.priority === 2 ? 7 : 6) * textureScale;
+  const paddingX = labelPaddingX(label) * textureScale;
+  const paddingY = labelPaddingY(label) * textureScale;
   const rect = {
     left: x - metrics.width / 2 - paddingX,
     top: y - fontSize / 2 - paddingY,
@@ -750,17 +953,9 @@ function drawTextureLabel(
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.lineJoin = "round";
-  context.strokeStyle = label.kind === "capital" ? BASE_MAP_CAPITAL_LABEL_HALO : BASE_MAP_LABEL_HALO;
-  context.lineWidth =
-    label.kind === "capital"
-      ? Math.max(1.15, labelFontSize(label) * 0.08) * textureScale
-      : Math.max(1.8, labelFontSize(label) * 0.11) * textureScale;
-  context.fillStyle =
-    label.kind === "country"
-      ? label.priority === 1
-        ? BASE_MAP_COUNTRY_LABEL_COLOR
-        : BASE_MAP_SECONDARY_LABEL_COLOR
-      : BASE_MAP_CAPITAL_LABEL_COLOR;
+  context.strokeStyle = labelHaloColor(label);
+  context.lineWidth = labelStrokeWidth(label, textureScale);
+  context.fillStyle = labelFillColor(label);
   context.strokeText(text, x, y);
   context.fillText(text, x, y);
   context.restore();
@@ -783,7 +978,12 @@ function drawLabelSet(
     .forEach((label) => {
       const point = texturePointForCoordinates(label.coordinates, width, height);
       const text = displayTextForLabel(label);
-      const offsets = label.kind === "country" && label.priority > 1 ? COUNTRY_LABEL_FALLBACK_OFFSETS : [[0, 0]];
+      const offsets =
+        label.kind === "country" && label.priority > 1
+          ? COUNTRY_LABEL_FALLBACK_OFFSETS
+          : label.kind === "capital"
+            ? [capitalLabelOffset(label), [0, 0]]
+            : [[0, 0]];
 
       for (const [offsetX, offsetY] of offsets) {
         const drawn = drawTextureLabel(
@@ -791,7 +991,7 @@ function drawLabelSet(
           label,
           text,
           point.x + offsetX * textureScale,
-          point.y + (label.kind === "capital" ? 24 * textureScale : 0) + offsetY * textureScale,
+          point.y + labelVerticalOffset(label) * textureScale + offsetY * textureScale,
           textureScale,
           occupied,
         );
@@ -843,16 +1043,35 @@ function createLabelTextures(maxTextureSize: number, maxAnisotropy: number) {
   };
 }
 
-function createLandTexture() {
+function createLandTexture(maxTextureSize: number, maxAnisotropy: number) {
+  const textureScale = Math.max(
+    0.75,
+    Math.min(LAND_TEXTURE_PREFERRED_SCALE, maxTextureSize / LAND_TEXTURE_LOGICAL_WIDTH),
+  );
   const canvas = document.createElement("canvas");
-  canvas.width = 3072;
-  canvas.height = 1536;
+  canvas.width = Math.max(1, Math.floor(LAND_TEXTURE_LOGICAL_WIDTH * textureScale));
+  canvas.height = Math.max(1, Math.floor(LAND_TEXTURE_LOGICAL_HEIGHT * textureScale));
 
   const context = canvas.getContext("2d");
   if (!context) return null;
 
   const width = canvas.width;
   const height = canvas.height;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.lineJoin = "round";
+  context.lineCap = "round";
+
+  if (DEBUG_SHOW_FLAT_NEUTRAL_TEXTURE) {
+    context.fillStyle = MAP_WATER_COLOR;
+    context.fillRect(0, 0, width, height);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.anisotropy = 12;
+    return texture;
+  }
 
   const waterGradient = context.createLinearGradient(0, 0, 0, height);
   waterGradient.addColorStop(0, MAP_WATER_TOP_COLOR);
@@ -873,6 +1092,7 @@ function createLandTexture() {
   drawGeoJsonPath(context, landFeature, width, height, true);
   context.fillStyle = MAP_LAND_COLOR;
   context.fill();
+  fillSouthPolarLandCaps(context, landFeature, width, height);
 
   if (!DEBUG_DISABLE_TEXTURE_GRADIENTS) {
     context.globalCompositeOperation = "source-atop";
@@ -953,13 +1173,18 @@ function createLandTexture() {
   context.beginPath();
   drawGeoJsonPath(context, landFeature, width, height, true);
   context.strokeStyle = MAP_COASTLINE_COLOR;
-  context.lineWidth = 1.2;
+  context.lineWidth = Math.max(1.2, width / 3200);
+  context.stroke();
+  context.beginPath();
+  drawGeoJsonPath(context, landFeature, width, height, true);
+  context.strokeStyle = "rgba(248,250,247,0.2)";
+  context.lineWidth = Math.max(0.8, width / 5400);
   context.stroke();
 
   context.beginPath();
   drawGeoJsonPath(context, bordersMesh, width, height, false);
   context.strokeStyle = MAP_BORDER_COLOR;
-  context.lineWidth = 0.92;
+  context.lineWidth = Math.max(0.85, width / 4200);
   context.stroke();
   context.restore();
 
@@ -967,7 +1192,10 @@ function createLandTexture() {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.anisotropy = 12;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = Math.max(1, maxAnisotropy);
 
   return texture;
 }
@@ -1011,9 +1239,49 @@ function createAtmosphereMaterial(opacity: number, scale: number, side: THREE.Si
   });
 }
 
+function autoRotateIdleMsForMode(mode: MapMode) {
+  if (mode === "monitor-home") return MONITOR_HOME_AUTO_ROTATE_IDLE_MS;
+  if (mode === "global") return GLOBAL_VIEW_AUTO_ROTATE_IDLE_MS;
+  if (mode === "socmint") return SOCMINT_AUTO_ROTATE_IDLE_MS;
+  return null;
+}
+
+function modeUsesAutoRotate(mode: MapMode) {
+  return autoRotateIdleMsForMode(mode) !== null;
+}
+
 function scheduleAutoRotateResume(engine: GlobeEngine, mode: MapMode) {
-  if (mode !== "monitor-home") return;
-  engine.autoRotateResumeAt = performance.now() + AUTO_ROTATE_IDLE_RESUME_MS;
+  const idleMs = autoRotateIdleMsForMode(mode);
+  if (idleMs === null) return;
+  engine.autoRotateResumeAt = performance.now() + idleMs;
+}
+
+function createMarkerCanvas(logicalSize: number, textureSize: number, errorMessage: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = textureSize;
+  canvas.height = textureSize;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error(errorMessage);
+  }
+
+  const scale = textureSize / logicalSize;
+  ctx.scale(scale, scale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  return { canvas, ctx };
+}
+
+function finalizeMarkerTexture(canvas: HTMLCanvasElement) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = MARKER_TEXTURE_ANISOTROPY;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function createEventMarkerTexture(palette: MarkerPalette, isPolitics: boolean) {
@@ -1021,34 +1289,32 @@ function createEventMarkerTexture(palette: MarkerPalette, isPolitics: boolean) {
   const cached = eventTextureCache.get(key);
   if (cached) return cached;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Failed to create event marker texture context.");
-  }
+  const { canvas, ctx } = createMarkerCanvas(
+    EVENT_MARKER_TEXTURE_LOGICAL_SIZE,
+    EVENT_MARKER_TEXTURE_SIZE,
+    "Failed to create event marker texture context.",
+  );
 
   const cx = 64;
   const cy = 64;
 
-  const glowGradient = ctx.createRadialGradient(cx, cy, 12, cx, cy, 48);
+  const glowGradient = ctx.createRadialGradient(cx, cy, 10, cx, cy, 44);
   glowGradient.addColorStop(0, palette.glow);
   glowGradient.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = glowGradient;
   ctx.beginPath();
-  ctx.arc(cx, cy, 48, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 44, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = palette.fill;
   ctx.beginPath();
-  ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 14.5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = palette.border;
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 5.2;
   ctx.beginPath();
-  ctx.arc(cx, cy, 24, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 22.5, 0, Math.PI * 2);
   ctx.stroke();
 
   if (isPolitics) {
@@ -1071,9 +1337,7 @@ function createEventMarkerTexture(palette: MarkerPalette, isPolitics: boolean) {
     ctx.fill();
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  const texture = finalizeMarkerTexture(canvas);
   eventTextureCache.set(key, texture);
 
   return texture;
@@ -1223,15 +1487,13 @@ function createSignalTexture(source: SocmintMarkerSource) {
   const cached = signalTextureCache.get(source);
   if (cached) return cached;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Failed to create SOCMINT marker texture context.");
-  }
+  const { canvas, ctx } = createMarkerCanvas(
+    SIGNAL_MARKER_TEXTURE_LOGICAL_SIZE,
+    SIGNAL_MARKER_TEXTURE_SIZE,
+    "Failed to create SOCMINT marker texture context.",
+  );
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, SIGNAL_MARKER_TEXTURE_LOGICAL_SIZE, SIGNAL_MARKER_TEXTURE_LOGICAL_SIZE);
 
   if (source === "telegram") {
     drawTelegramSocmintIcon(ctx, SOCMINT_MARKER_COLORS.telegram);
@@ -1241,9 +1503,7 @@ function createSignalTexture(source: SocmintMarkerSource) {
     drawWebsiteSocmintIcon(ctx, SOCMINT_MARKER_COLORS.website);
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  const texture = finalizeMarkerTexture(canvas);
   signalTextureCache.set(source, texture);
 
   return texture;
@@ -1310,14 +1570,16 @@ function socmintMarkerSourceFor(report: SocmintReport): SocmintMarkerSource {
 function createGlobeScene(renderer: THREE.WebGLRenderer) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(MAP_OUTER_BACKGROUND_COLOR);
+  const maxTextureSize = renderer.capabilities.maxTextureSize;
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
   const globeGroup = new THREE.Group();
   scene.add(globeGroup);
 
-  const texture = createLandTexture();
+  const texture = createLandTexture(maxTextureSize, maxAnisotropy);
   const { countryTexture, capitalTexture } = createLabelTextures(
-    renderer.capabilities.maxTextureSize,
-    renderer.capabilities.getMaxAnisotropy(),
+    maxTextureSize,
+    maxAnisotropy,
   );
   const landFeature = feature(landTopology as never, (landTopology.objects as { land: unknown }).land as never);
   const bordersMesh = mesh(
@@ -1325,24 +1587,34 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
     (countriesTopology.objects as { countries: unknown }).countries as never,
     (a, b) => a !== b,
   );
-  const globeMaterial = DEBUG_DISABLE_GLOBE_LIGHTING
+  const globeMaterial = DEBUG_SHOW_SOLID_GLOBE
     ? new THREE.MeshBasicMaterial({
-        map: texture ?? undefined,
-        color: "#FFFFFF",
+        color: "#15191A",
+        toneMapped: false,
       })
-    : new THREE.MeshStandardMaterial({
-        map: DEBUG_SHOW_LABEL_TEXTURE_ONLY ? undefined : texture ?? undefined,
-        color: "#43484A",
-        roughness: 0.84,
-        metalness: 0.045,
-        emissive: "#111416",
-        emissiveIntensity: DEBUG_HIDE_GLOBE_GLOW ? 0 : 0.24,
-      });
+    : DEBUG_DISABLE_GLOBE_LIGHTING
+      ? new THREE.MeshBasicMaterial({
+          map: DEBUG_SHOW_LABEL_TEXTURE_ONLY ? undefined : texture ?? undefined,
+          color: "#FFFFFF",
+          side: DEBUG_SHOW_TEXTURE_PLANE ? THREE.DoubleSide : THREE.FrontSide,
+          toneMapped: false,
+        })
+      : new THREE.MeshStandardMaterial({
+          map: DEBUG_SHOW_LABEL_TEXTURE_ONLY ? undefined : texture ?? undefined,
+          color: "#43484A",
+          roughness: 0.84,
+          metalness: 0.045,
+          emissive: "#111416",
+          emissiveIntensity: DEBUG_HIDE_GLOBE_GLOW ? 0 : 0.24,
+        });
 
   const globeMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96),
+    DEBUG_SHOW_TEXTURE_PLANE
+      ? new THREE.PlaneGeometry(GLOBE_RADIUS * 2.16, GLOBE_RADIUS * 1.08)
+      : new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96),
     globeMaterial,
   );
+  globeMesh.visible = !DEBUG_HIDE_GLOBE_MESH;
   globeGroup.add(globeMesh);
 
   let countryLabelMesh: THREE.Mesh | null = null;
@@ -1400,8 +1672,14 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
     false,
     5,
   );
-  if (!DEBUG_HIDE_BORDER_OVERLAY && !DEBUG_SHOW_LABEL_TEXTURE_ONLY) {
-    globeGroup.add(coastlineLines, borderLines);
+  if (!DEBUG_SHOW_LABEL_TEXTURE_ONLY) {
+    if (!DEBUG_HIDE_BORDER_OVERLAY && !DEBUG_HIDE_COASTLINE_OVERLAY) {
+      globeGroup.add(coastlineLines);
+    }
+
+    if (!DEBUG_HIDE_BORDER_OVERLAY && !DEBUG_HIDE_COUNTRY_BORDER_OVERLAY) {
+      globeGroup.add(borderLines);
+    }
   }
 
   if (!DEBUG_HIDE_ATMOSPHERE && !DEBUG_HIDE_TRANSPARENT_LAYERS && !DEBUG_SHOW_BASE_TEXTURE_ONLY && !DEBUG_SHOW_LABEL_TEXTURE_ONLY) {
@@ -1412,15 +1690,17 @@ function createGlobeScene(renderer: THREE.WebGLRenderer) {
     scene.add(atmosphereInner);
   }
 
-  const ambient = new THREE.AmbientLight("#b2b8b1", 1.1);
-  const hemi = new THREE.HemisphereLight("#d8ddd7", "#1c2123", 1.08);
+  const ambient = new THREE.AmbientLight("#bcc2bb", 1.18);
+  const hemi = new THREE.HemisphereLight("#e0e4df", "#2b3030", 1.12);
   hemi.position.set(0, 180, 120);
-  const keyLight = new THREE.DirectionalLight("#f2f4ef", 0.66);
-  keyLight.position.set(175, 125, 240);
-  const fillLight = new THREE.DirectionalLight("#8A9590", 0.46);
-  fillLight.position.set(-145, -30, 150);
 
-  scene.add(ambient, hemi, keyLight, fillLight);
+  if (!DEBUG_DISABLE_AMBIENT_LIGHT) {
+    scene.add(ambient);
+  }
+
+  if (!DEBUG_DISABLE_HEMISPHERE_LIGHT) {
+    scene.add(hemi);
+  }
 
   return {
     scene,
@@ -1441,14 +1721,71 @@ function applyView(engine: GlobeEngine) {
   controls.update();
 }
 
-function pointFacesCamera(
+function markerVisibilityFromCamera(
   camera: THREE.PerspectiveCamera,
   globeGroup: THREE.Group,
   localPosition: THREE.Vector3,
+  baseScale: number,
 ) {
-  const worldPosition = localPosition.clone().applyQuaternion(globeGroup.quaternion).normalize();
-  const cameraDirection = camera.position.clone().normalize();
-  return worldPosition.dot(cameraDirection) > 0.06;
+  const globeCenter = globeGroup.getWorldPosition(new THREE.Vector3());
+  const markerWorldPosition = localPosition.clone().applyMatrix4(globeGroup.matrixWorld);
+  const markerVector = markerWorldPosition.sub(globeCenter);
+  const markerDirection = markerVector.clone().normalize();
+  const cameraDirection = camera.position.clone().sub(globeCenter).normalize();
+  const frontDot = markerDirection.dot(cameraDirection);
+  const axialDistance = markerVector.dot(cameraDirection);
+  const perpendicularDistance = markerVector
+    .clone()
+    .sub(cameraDirection.clone().multiplyScalar(axialDistance))
+    .length();
+  const safePerpendicularLimit = GLOBE_RADIUS - baseScale * 0.58 - 0.6;
+  const fadePerpendicularLimit = safePerpendicularLimit - 3.2;
+
+  if (frontDot < 0.24 || perpendicularDistance > safePerpendicularLimit) {
+    return {
+      visible: false,
+      opacityFactor: 0,
+      scaleFactor: 0.84,
+    };
+  }
+
+  if (frontDot >= 0.42 && perpendicularDistance <= fadePerpendicularLimit) {
+    return {
+      visible: true,
+      opacityFactor: 1,
+      scaleFactor: 1,
+    };
+  }
+
+  const frontFactor = clamp((frontDot - 0.24) / (0.42 - 0.24), 0, 1);
+  const edgeFactor = clamp(
+    (safePerpendicularLimit - perpendicularDistance) /
+      (safePerpendicularLimit - fadePerpendicularLimit),
+    0,
+    1,
+  );
+  const t = Math.min(frontFactor, edgeFactor);
+  return {
+    visible: true,
+    opacityFactor: lerp(0.34, 1, t),
+    scaleFactor: lerp(0.9, 1, t),
+  };
+}
+
+function markerZoomScaleFromCamera(
+  camera: THREE.PerspectiveCamera,
+  defaultDistance: number,
+  minZoomScaleFactor: number,
+) {
+  const distance = camera.position.length();
+  const t = clamp(
+    (distance - MARKER_MIN_DISTANCE) /
+      (defaultDistance - MARKER_MIN_DISTANCE),
+    0,
+    1,
+  );
+
+  return lerp(minZoomScaleFactor, 1, t);
 }
 
 function freezeLabelVisibility(engine: GlobeEngine, duration = LABEL_INTERACTION_FREEZE_MS) {
@@ -1475,7 +1812,7 @@ function syncEventMarkers(
   engine.markerEntries = engine.markerEntries.filter((entry) => entry.kind !== "event");
   engine.raycastTargets = engine.raycastTargets.filter((target) => target.userData.kind !== "event");
 
-  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY) return;
+  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY || DEBUG_HIDE_MARKERS) return;
 
   events.forEach((event) => {
     const coordinates = resolveEventCoordinates(event);
@@ -1492,7 +1829,7 @@ function syncEventMarkers(
     });
     const sprite = new THREE.Sprite(material);
     const localPosition = latLngToVector3(coordinates[0], coordinates[1], EVENT_MARKER_RADIUS);
-    const size = event.id === selectedId ? 11.4 : 9.2;
+    const size = event.id === selectedId ? EVENT_MARKER_SCALE.selected : EVENT_MARKER_SCALE.base;
     sprite.position.copy(localPosition);
     sprite.scale.set(size, size, 1);
     sprite.renderOrder = event.id === selectedId ? 12 : 10;
@@ -1503,6 +1840,8 @@ function syncEventMarkers(
       object: sprite,
       localPosition,
       kind: "event",
+      baseScale: size,
+      baseOpacity: event.id === selectedId ? 1 : 0.94,
     });
     engine.raycastTargets.push(sprite);
   });
@@ -1517,7 +1856,7 @@ function syncSignalMarkers(
   engine.markerEntries = engine.markerEntries.filter((entry) => entry.kind !== "signal");
   engine.raycastTargets = engine.raycastTargets.filter((target) => target.userData.kind !== "signal");
 
-  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY) return;
+  if (DEBUG_SHOW_BASE_TEXTURE_ONLY || DEBUG_SHOW_LABEL_TEXTURE_ONLY || DEBUG_HIDE_MARKERS) return;
 
   signals.forEach((signal) => {
     const source = socmintMarkerSourceFor(signal);
@@ -1531,7 +1870,7 @@ function syncSignalMarkers(
     });
     const sprite = new THREE.Sprite(material);
     const localPosition = latLngToVector3(signal.coordinates[0], signal.coordinates[1], SIGNAL_MARKER_RADIUS);
-    const size = signal.id === selectedSignalId ? 10.2 : 8.8;
+    const size = signal.id === selectedSignalId ? SIGNAL_MARKER_SCALE.selected : SIGNAL_MARKER_SCALE.base;
     sprite.position.copy(localPosition);
     sprite.scale.set(size, size, 1);
     sprite.renderOrder = signal.id === selectedSignalId ? 16 : 14;
@@ -1542,21 +1881,47 @@ function syncSignalMarkers(
       object: sprite,
       localPosition,
       kind: "signal",
+      baseScale: size,
+      baseOpacity: signal.id === selectedSignalId ? 1 : 0.98,
     });
     engine.raycastTargets.push(sprite);
   });
 }
 
 function updateMarkerVisibility(engine: GlobeEngine) {
+  const eventZoomScale = markerZoomScaleFromCamera(
+    engine.camera,
+    GLOBAL_MARKER_DEFAULT_DISTANCE,
+    EVENT_MARKER_MIN_ZOOM_SCALE_FACTOR,
+  );
+  const signalZoomScale = markerZoomScaleFromCamera(
+    engine.camera,
+    SOCMINT_MARKER_DEFAULT_DISTANCE,
+    SIGNAL_MARKER_MIN_ZOOM_SCALE_FACTOR,
+  );
   engine.markerEntries.forEach((entry) => {
-    entry.object.visible = pointFacesCamera(engine.camera, engine.globeGroup, entry.localPosition);
+    const visibility = markerVisibilityFromCamera(
+      engine.camera,
+      engine.globeGroup,
+      entry.localPosition,
+      entry.baseScale,
+    );
+    const material = entry.object.material;
+    const zoomScale = entry.kind === "signal" ? signalZoomScale : eventZoomScale;
+    entry.object.visible = visibility.visible;
+    entry.object.scale.setScalar(
+      entry.baseScale * zoomScale * visibility.scaleFactor,
+    );
+    if (material instanceof THREE.SpriteMaterial) {
+      material.opacity = entry.baseOpacity * visibility.opacityFactor;
+    }
   });
 }
 
 function updateCountryLabelSprites(engine: GlobeEngine, _mode: MapMode) {
   void _mode;
   if (engine.capitalLabelMesh) {
-    engine.capitalLabelMesh.visible = engine.currentView.zoom >= CAPITAL_LABEL_SHOW_ZOOM;
+    engine.capitalLabelMesh.visible = capitalLabelsShouldBeVisible(engine.currentView.zoom);
   }
 
   engine.countryLabelGroup.visible = false;
@@ -1761,7 +2126,7 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
       dragStartView: { ...initialView },
       clickMoved: false,
       hoverId: null,
-      autoRotateSuppressed: false,
+      autoRotateSuppressed: modeRef.current !== "monitor-home",
       autoRotateResumeAt: null,
       didInitialRender: false,
       labelRuntime: {},
@@ -1787,6 +2152,9 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
     engine.controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
 
     engineRef.current = engine;
+    if (modeRef.current === "global" || modeRef.current === "socmint") {
+      scheduleAutoRotateResume(engine, modeRef.current);
+    }
     syncEventMarkers(engine, eventsRef.current, selectedIdRef.current);
     syncSignalMarkers(engine, signalsRef.current, selectedSignalIdRef.current);
 
@@ -1831,7 +2199,7 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
           live.autoRotateResumeAt !== null &&
           timestamp >= live.autoRotateResumeAt &&
           !live.isDragging &&
-          modeRef.current === "monitor-home"
+          modeUsesAutoRotate(modeRef.current)
         ) {
           live.autoRotateSuppressed = false;
           live.autoRotateResumeAt = null;
@@ -1841,7 +2209,10 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
         live.controls.enableRotate = true;
         live.controls.enableZoom = true;
         live.controls.enablePan = false;
-        live.controls.autoRotate = modeRef.current === "monitor-home" && !live.isDragging && !live.autoRotateSuppressed;
+        live.controls.autoRotate =
+          modeUsesAutoRotate(modeRef.current) &&
+          !live.isDragging &&
+          !live.autoRotateSuppressed;
         const distance = live.camera.position.length();
         const speedRatio = clamp((distance - live.controls.minDistance) / (live.controls.maxDistance - live.controls.minDistance), 0, 1);
         live.controls.rotateSpeed = 0.05 + speedRatio * speedRatio * 0.65;
@@ -1916,6 +2287,9 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
       updateHover(live, renderer.domElement, event.clientX - rect.left, event.clientY - rect.top);
       const hit = live.raycastTargets.find((target) => target.userData.id === live.hoverId && target.visible);
       if (!hit) return;
+
+      live.autoRotateSuppressed = true;
+      scheduleAutoRotateResume(live, modeRef.current);
 
       if (hit.userData.kind === "event") {
         onSelectEventRef.current?.(hit.userData.id);
@@ -1994,12 +2368,18 @@ export const GlobeMap = forwardRef<GlobeMapHandle, Props>(function GlobeMap({
       engine.animation = null;
       engine.autoRotateResumeAt = null;
       engine.autoRotateSuppressed = mode !== "monitor-home";
+      if (mode === "global" || mode === "socmint") {
+        scheduleAutoRotateResume(engine, mode);
+      }
       return;
     }
 
     setAnimatedView(engine, next, 520);
     engine.autoRotateSuppressed = mode !== "monitor-home";
     engine.autoRotateResumeAt = null;
+    if (mode === "global" || mode === "socmint") {
+      scheduleAutoRotateResume(engine, mode);
+    }
   }, [mode]);
 
   return (

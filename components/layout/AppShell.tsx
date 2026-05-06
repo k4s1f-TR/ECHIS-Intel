@@ -9,6 +9,8 @@ import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard"
 import { MapControls } from "@/components/map/MapControls";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
 import { RightEventsPanel } from "@/components/events/RightEventsPanel";
+import { BookmarksView } from "@/components/events/BookmarksView";
+import { useBookmarks } from "@/components/events/useBookmarks";
 import { SignalsPanel } from "@/components/signals/SignalsPanel";
 import { SignalsFloatingCard } from "@/components/signals/SignalsFloatingCard";
 import { SourcesScreen } from "@/components/sources/SourcesScreen";
@@ -19,10 +21,60 @@ import type { EventCategory, RegionKey } from "@/types/event";
 import { socmintMatchesConfidenceFilter } from "@/types/socmint";
 
 export type ViewMode = "situation" | "global" | "signals";
-type ActiveSection = "dashboard" | "sources";
-type ActiveTopTab = "situation" | "politics" | "sources";
+type ActiveSection = "dashboard" | "sources" | "bookmarks";
+type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
+type PlaceholderTopTab = "intel" | "cyber" | "defense";
+
+const PLACEHOLDER_MODULES: Record<PlaceholderTopTab, { title: string; description: string }> = {
+  intel: {
+    title: "Intel Watch",
+    description: "Intel watch monitoring module will be available here.",
+  },
+  cyber: {
+    title: "Cyber Sec.",
+    description: "Cyber security monitoring module will be available here.",
+  },
+  defense: {
+    title: "Defense Industry",
+    description: "Defense industry monitoring module will be available here.",
+  },
+};
+
+function ModulePlaceholder({ title, description }: { title: string; description: string }) {
+  return (
+    <main
+      className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6"
+      style={{
+        background:
+          "radial-gradient(circle at 50% 28%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
+      }}
+    >
+      <section
+        className="w-full max-w-[560px] rounded-[10px] px-6 py-5"
+        style={{
+          background: "rgba(12,12,12,0.94)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.035)",
+        }}
+      >
+        <p
+          className="mb-2 font-semibold uppercase"
+          style={{ color: "rgba(147,147,147,0.82)", fontSize: "10.5px", letterSpacing: "0.12em" }}
+        >
+          Module
+        </p>
+        <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "22px" }}>
+          {title}
+        </h1>
+        <p className="mt-3" style={{ color: "rgba(150,150,150,0.9)", fontSize: "13px", lineHeight: 1.55 }}>
+          {description}
+        </p>
+      </section>
+    </main>
+  );
+}
 
 export function AppShell() {
   const globeMapRef = useRef<GlobeMapHandle | null>(null);
@@ -36,6 +88,8 @@ export function AppShell() {
   const [activeSignalRegion, setActiveSignalRegion] = useState<SignalCoverage>("global");
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
+  const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
+    useBookmarks(mockEvents, socmintReports);
 
   const displayedSignals = useMemo(
     () =>
@@ -104,6 +158,14 @@ export function AppShell() {
     setSelectedSignalId(null);
   }
 
+  function handleBookmarksOpen() {
+    setActiveSection("bookmarks");
+    setActiveTopTab("situation");
+    setActiveRailMode(null);
+    setSelectedId(null);
+    setSelectedSignalId(null);
+  }
+
   function handleRegionChange(region: RegionKey) {
     setActiveSection("dashboard");
     setActiveTopTab("situation");
@@ -146,8 +208,23 @@ export function AppShell() {
       return;
     }
 
+    if (tab === "intel" || tab === "cyber" || tab === "defense") {
+      setActiveSection("dashboard");
+      setActiveTopTab(tab);
+      setActiveRailMode(null);
+      setActiveCategory("all");
+      setSelectedId(null);
+      setSelectedSignalId(null);
+      return;
+    }
+
     handleViewChange("situation");
   }
+
+  const placeholderModule =
+    activeTopTab === "intel" || activeTopTab === "cyber" || activeTopTab === "defense"
+      ? PLACEHOLDER_MODULES[activeTopTab]
+      : null;
 
   return (
     <div
@@ -162,7 +239,9 @@ export function AppShell() {
       <div className="flex flex-1 overflow-hidden">
         <LeftRail
           activeView={activeSection === "dashboard" && activeTopTab === "situation" ? activeRailMode : null}
+          activeBookmarks={activeSection === "bookmarks"}
           onViewChange={handleViewChange}
+          onBookmarks={handleBookmarksOpen}
           onHome={handleHomeReset}
         />
 
@@ -252,6 +331,8 @@ export function AppShell() {
                 events={displayedEvents}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                isBookmarked={isBookmarked}
+                onToggleBookmark={toggleBookmark}
               />
             </div>
             <div
@@ -273,6 +354,8 @@ export function AppShell() {
                 confidenceMin={signalConfidenceMin}
                 selectedId={selectedSignalId}
                 onSelect={setSelectedSignalId}
+                isBookmarked={isBookmarked}
+                onToggleBookmark={toggleBookmark}
               />
             </div>
           </div>
@@ -282,9 +365,26 @@ export function AppShell() {
               <SourcesScreen />
             </div>
           )}
+          {activeSection === "bookmarks" && (
+            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+              <BookmarksView
+                items={bookmarkedItems}
+                onRemoveBookmark={removeBookmark}
+                onClearBookmarks={clearBookmarks}
+              />
+            </div>
+          )}
           {activeSection === "dashboard" && activeTopTab === "politics" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
               <PoliticsPanel events={displayedEvents} />
+            </div>
+          )}
+          {activeSection === "dashboard" && placeholderModule !== null && (
+            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+              <ModulePlaceholder
+                title={placeholderModule.title}
+                description={placeholderModule.description}
+              />
             </div>
           )}
         </div>

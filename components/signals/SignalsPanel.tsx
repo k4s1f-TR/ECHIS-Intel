@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Radio } from "lucide-react";
+import { BookmarkToggleButton } from "@/components/events/BookmarkToggleButton";
 import type { SocmintReport, SocmintReportType, SocmintStatus } from "@/types/socmint";
 import {
   SOCMINT_PLATFORM_LABELS,
@@ -48,11 +49,15 @@ export function SignalsPanel({
   confidenceMin,
   selectedId,
   onSelect,
+  isBookmarked,
+  onToggleBookmark,
 }: {
   signals: SocmintReport[];
   confidenceMin: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  isBookmarked: (id: string) => boolean;
+  onToggleBookmark: (id: string) => void;
 }) {
   const [activeType, setActiveType] = useState<SocmintReportType | "all">("all");
 
@@ -173,6 +178,11 @@ export function SignalsPanel({
                   >
                     {score}%
                   </span>
+                  <BookmarkToggleButton
+                    bookmarked={isBookmarked(report.id)}
+                    onToggle={() => onToggleBookmark(report.id)}
+                    size={11}
+                  />
                 </div>
               </div>
 

@@ -195,7 +195,7 @@ export const worldCapitals: WorldCapital[] = [
   { country: "Ukraine", capital: "Kyiv", coordinates: [30.5234, 50.4501], priority: 1 },
   { country: "United Arab Emirates", capital: "Abu Dhabi", coordinates: [54.3773, 24.4539], priority: 1 },
   { country: "United Kingdom", capital: "London", coordinates: [-0.1276, 51.5072], priority: 1 },
-  { country: "United States", capital: "Washington", coordinates: [-77.0369, 38.9072], priority: 1 },
+  { country: "United States", capital: "Washington, D.C.", coordinates: [-77.0369, 38.9072], priority: 1 },
   { country: "Uruguay", capital: "Montevideo", coordinates: [-56.1645, -34.9011], priority: 1 },
   { country: "Uzbekistan", capital: "Tashkent", coordinates: [69.2401, 41.2995], priority: 1 },
   { country: "Vanuatu", capital: "Port Vila", coordinates: [168.3273, -17.7333], priority: 3 },

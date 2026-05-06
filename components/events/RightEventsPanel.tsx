@@ -6,12 +6,16 @@ interface RightEventsPanelProps {
   events: OsintEvent[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  isBookmarked: (eventId: string) => boolean;
+  onToggleBookmark: (eventId: string) => void;
 }
 
 export function RightEventsPanel({
   events,
   selectedId,
   onSelect,
+  isBookmarked,
+  onToggleBookmark,
 }: RightEventsPanelProps) {
   return (
     <div
@@ -50,6 +54,8 @@ export function RightEventsPanel({
             index={i + 1}
             selected={selectedId === event.id}
             onClick={() => onSelect(event.id)}
+            bookmarked={isBookmarked(event.id)}
+            onToggleBookmark={onToggleBookmark}
           />
         ))}
       </div>

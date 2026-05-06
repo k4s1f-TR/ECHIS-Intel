@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { Sun } from "lucide-react";
 import type { ReactNode } from "react";
 
-type TopNavTab = "situation" | "politics" | "sources";
+type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
 
 const NAV_TABS: { label: string; key?: TopNavTab }[] = [
-  { label: "Situation", key: "situation" },
+  { label: "Monitor", key: "situation" },
   { label: "Politics", key: "politics" },
-  { label: "Intel Watch" },
+  { label: "Intel Watch", key: "intel" },
+  { label: "Cyber Sec.", key: "cyber" },
+  { label: "Defense Industry", key: "defense" },
   { label: "Sources", key: "sources" },
 ];
 
@@ -83,7 +85,7 @@ export function HeaderNav({
       </div>
 
       {/* Nav */}
-      <nav className="flex items-center gap-0.5 flex-1">
+      <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
         {NAV_TABS.map((tab) => {
           const tabKey = tab.key;
           const active = tabKey === activeTab;
@@ -91,7 +93,7 @@ export function HeaderNav({
             <button
               key={tab.label}
               onClick={tabKey ? () => onTabSelect(tabKey) : undefined}
-              className="relative px-3 h-full flex items-center transition-colors duration-150"
+              className="relative flex h-full flex-shrink-0 items-center whitespace-nowrap px-2.5 transition-colors duration-150 sm:px-3"
               style={{
                 height: "52px",
                 fontSize: "12px",

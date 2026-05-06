@@ -1,73 +1,118 @@
 <!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Next.js Version Notice
 
-This version has breaking changes - APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This project may use Next.js APIs or conventions that differ from common
+training examples. Before making framework-level changes, check the
+relevant docs under `node_modules/next/dist/docs/` and follow deprecation
+warnings.
 <!-- END:nextjs-agent-rules -->
 
 # BoruEyes Agent Instructions
 
-## Project Identity
+## Project
 
-BoruEyes is a dark, premium, OSINT-style situational awareness dashboard built with Next.js, TypeScript, Tailwind, and a Three.js-first globe system. MapLibre may remain as a dependency, but the live globe presentation is currently custom Three.js.
+BoruEyes is a dark, premium OSINT-style situational awareness dashboard
+built with Next.js, TypeScript, Tailwind, and a custom Three.js globe.
 
-The project is currently a frontend prototype using mock/static data.
+The current product is a frontend prototype using mock/static data.
 
-## Hard Rules
+## Working Rules
 
-- Make minimal, scoped changes.
+- Make small, scoped changes.
+- Preserve existing behavior unless the task clearly asks otherwise.
 - Do not refactor unrelated code.
-- Do not add real APIs, backend, database, auth, scraping, or live tracking unless explicitly requested.
-- Use mock/static data unless explicitly requested otherwise.
-- Preserve the existing dark premium BoruEyes UI language.
-- Preserve existing behavior unless the task explicitly changes it.
+- Do not add backend, auth, database, scraping, live tracking, or real APIs
+  unless explicitly requested.
+- Use existing mock/static data patterns.
+- Do not change data schemas unless required by the task.
+- Keep the UI dark, restrained, premium, and analyst-oriented.
+
+## Protected Areas
+
+Do not change these unless the task explicitly targets them:
+
+- app shell
+- top navigation
+- left rail
+- Three.js globe engine
+- camera presets
+- marker behavior
+- label strategy
+- map tone / center / zoom / interaction model
+- SOCMINT behavior
+- Global View marker data
+- backend/API/auth/database assumptions
+
+## Product Notes
+
+- The live globe is Three.js-first. MapLibre may exist as a dependency but
+  is not the main presentation layer.
+- Country labels are baked into the generated globe texture for stability.
+  Do not reintroduce DOM, billboard, sprite, or screen-space country labels
+  unless explicitly requested.
+- Label stability matters more than maximum label coverage.
+- Politics and Conflict are moving toward panel/feed-first screens.
+- Signals is OSINT signal-environment awareness, not real SIGINT collection.
+- Air and Maritime are reserved for future use unless explicitly requested.
+- Sources refers to the Source Registry screen.
+- Source counts should be derived from `mockEvents.sourceId` where possible.
 - Do not re-add removed left-rail Situation or Sources icons.
-- Do not implement Air or Maritime unless explicitly requested.
-- Do not change the Three.js globe engine, camera presets, marker behavior, label strategy, map tone, center, zoom, or interaction model unless explicitly requested.
-- Do not change data schemas unless the task explicitly requires it.
 
-## Current Product Decisions
+## UI Guidance
 
-- Top-nav "Situation" may be visually renamed to "Monitor"; internal state may remain `situation` if safer.
-- Politics and Conflict are moving toward panel/feed-first screens, not globe/map-first screens.
-- Signals is an OSINT signal-environment awareness module, not real SIGINT collection.
-- Air is reserved for future aircraft tracking.
-- Maritime is reserved for future vessel/AIS tracking.
-- Sources is the top-nav Source Registry screen.
-- Source counts should be derived from `mockEvents.sourceId` when possible.
-- Radar infrastructure has been removed from Signals for now unless explicitly reintroduced later.
-- The current globe/map presentation is Three.js-first, not MapLibre-first.
-- Country labels are currently baked into the generated globe texture for stability.
-- Do not reintroduce DOM/screen-space country label selection or billboard/sprite country labels unless explicitly requested.
-- Label stability is prioritized over maximum label coverage.
-
-## UI Rules
-
-- Keep BoruEyes dark, restrained, modern, and analyst-oriented.
-- Avoid bright decorative borders, unnecessary glow, and busy effects.
+- Avoid excessive glow, decorative borders, or busy visual effects.
 - Side panels should support the main view, not overpower it.
-- Header, left rail, top navigation, and module navigation should stay visually consistent.
-- If a UI element is not functional, avoid making it look active.
-- Prefer clean, sharp icon styling over fuzzy glow/halo effects.
+- Do not make non-functional UI look active.
+- Prefer clean, sharp icon styling.
+- Keep header, left rail, top nav, and module navigation visually consistent.
 
-## Data Rules
+## Data Guidance
 
 - Events should follow the existing `OsintEvent` model.
 - Sources should follow the existing `OsintSource` model.
-- New mock data must use valid existing categories, regions, source IDs, severity values, and verification values.
-- Do not invent live/current factual claims. Mock events should be generic OSINT-style placeholders.
+- New mock data should use existing categories, regions, source IDs,
+  severity values, and verification values where possible.
+- Do not invent live/current factual claims. Use generic OSINT-style mock
+  placeholders.
 
 ## Validation
 
 - Run `npm run lint` after changes.
-- On Windows PowerShell, if `npm run lint` is blocked by execution policy, use `npm.cmd run lint`.
-- Run `npm run build` when TypeScript, imports, data models, or component structure change.
-- For tiny label/CSS-only changes, lint is usually enough unless errors appear.
+- On Windows PowerShell, use `npm.cmd run lint` if execution policy blocks
+  npm scripts.
+- Run `npm run build` when TypeScript, imports, data models, or component
+  structure change.
+- For tiny CSS/text-only changes, lint is usually enough.
 
-## Output Format
+## Final Response Format
 
-Keep final summaries short:
+Keep summaries short:
 
 - Files changed
 - What changed, max 3 bullets
 - Validation result
-- Any risk or follow-up, if relevant
+- Risks or follow-up, only if relevant
+
+## Communication Rules
+
+- Do not narrate your internal process.
+- Do not print progress updates like “I’m reading…”, “I’ve located…”,
+  “I’m now checking…”, or “Next I will…”.
+- Do not summarize tool usage while working.
+- Do not explain obvious repo inspection steps.
+- Work silently until you have either:
+  - completed the task, or
+  - hit a blocker that requires user input.
+- Final response only:
+  - Files changed
+  - What changed, max 3 bullets
+  - Validation result
+  - Risks/follow-up only if relevant
+
+
+Silent mode:
+Do not output any intermediate status messages.
+No “I’m going to…”, “I’ve located…”, “I’m reading…”, “Next I’m…”
+or similar progress narration.
+Do the work silently.
+Only produce the final summary after completion, or ask only if blocked.

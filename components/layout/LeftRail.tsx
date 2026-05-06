@@ -11,12 +11,19 @@ import {
 } from "lucide-react";
 import type { ViewMode } from "./AppShell";
 
-const topIcons: { icon: React.ElementType; label: string; viewKey?: ViewMode }[] = [
+type RailItem = {
+  icon: React.ElementType;
+  label: string;
+  viewKey?: ViewMode;
+  action?: "bookmarks";
+};
+
+const topIcons: RailItem[] = [
   { icon: Globe, label: "Global View", viewKey: "global" },
   { icon: Radio, label: "SOCMINT Watch", viewKey: "signals" },
   { icon: Plane, label: "Air Track" },
   { icon: Ship, label: "Ship Track" },
-  { icon: Bookmark, label: "Bookmarks" },
+  { icon: Bookmark, label: "Bookmarks", action: "bookmarks" },
   { icon: BarChart2, label: "Analytics" },
 ];
 
@@ -76,11 +83,15 @@ function RailIcon({
 
 export function LeftRail({
   activeView,
+  activeBookmarks,
   onViewChange,
+  onBookmarks,
   onHome,
 }: {
   activeView: ViewMode | null;
+  activeBookmarks: boolean;
   onViewChange: (view: ViewMode) => void;
+  onBookmarks: () => void;
   onHome: () => void;
 }) {
   return (
@@ -118,8 +129,20 @@ export function LeftRail({
             key={item.label}
             icon={item.icon}
             label={item.label}
-            active={item.viewKey !== undefined ? activeView === item.viewKey : false}
-            onClick={item.viewKey !== undefined ? () => onViewChange(item.viewKey!) : undefined}
+            active={
+              item.action === "bookmarks"
+                ? activeBookmarks
+                : item.viewKey !== undefined
+                  ? activeView === item.viewKey
+                  : false
+            }
+            onClick={
+              item.action === "bookmarks"
+                ? onBookmarks
+                : item.viewKey !== undefined
+                  ? () => onViewChange(item.viewKey!)
+                  : undefined
+            }
           />
         ))}
       </div>

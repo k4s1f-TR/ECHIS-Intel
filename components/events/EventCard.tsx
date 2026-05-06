@@ -1,20 +1,30 @@
 "use client";
-import { Clock, MapPin, Bookmark } from "lucide-react";
+import { Clock, MapPin } from "lucide-react";
 import { OsintEvent } from "@/types/event";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { BookmarkToggleButton } from "./BookmarkToggleButton";
 
 interface EventCardProps {
   event: OsintEvent;
   index: number;
   selected: boolean;
-  onClick: () => void;
+  onClick?: () => void;
+  bookmarked?: boolean;
+  onToggleBookmark?: (eventId: string) => void;
 }
 
-export function EventCard({ event, index, selected, onClick }: EventCardProps) {
+export function EventCard({
+  event,
+  index,
+  selected,
+  onClick,
+  bookmarked = false,
+  onToggleBookmark,
+}: EventCardProps) {
   return (
     <div
       onClick={onClick}
-      className="relative rounded-lg cursor-pointer transition-all duration-150"
+      className={`relative rounded-lg transition-all duration-150 ${onClick ? "cursor-pointer" : ""}`}
       style={{
         padding: "10px 11px",
         border: selected
@@ -70,21 +80,12 @@ export function EventCard({ event, index, selected, onClick }: EventCardProps) {
         >
           {event.title}
         </p>
-        <button
-          className="flex-shrink-0 mt-0.5 transition-colors duration-150"
-          style={{ color: "rgba(85,85,85,0.8)" }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseEnter={(e) =>
-            ((e.currentTarget as HTMLElement).style.color =
-              "rgba(96,165,250,0.8)")
-          }
-          onMouseLeave={(e) =>
-            ((e.currentTarget as HTMLElement).style.color =
-              "rgba(85,85,85,0.8)")
-          }
-        >
-          <Bookmark size={11} />
-        </button>
+        <div className="mt-0.5">
+          <BookmarkToggleButton
+            bookmarked={bookmarked}
+            onToggle={() => onToggleBookmark?.(event.id)}
+          />
+        </div>
       </div>
 
       {/* Meta: time + location */}

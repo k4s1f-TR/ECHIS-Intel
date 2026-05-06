@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import {
   Building2,
   ChevronDown,
@@ -37,6 +38,165 @@ const PILL_ACTIVE: Record<SeverityFilter, { text: string; border: string; bg: st
 
 function getSourceName(sourceId: string): string {
   return mockSources.find((s) => s.id === sourceId)?.name ?? sourceId;
+}
+
+type SourceDropdownOption = {
+  id: string;
+  label: string;
+};
+
+function SourceFilterDropdown({
+  options,
+  selectedId,
+  onSelect,
+}: {
+  options: SourceDropdownOption[];
+  selectedId: string;
+  onSelect: (sourceId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.id === selectedId),
+  );
+  const selectedLabel = options[selectedIndex]?.label ?? "All Sources";
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  function commitSelection(option: SourceDropdownOption) {
+    onSelect(option.id);
+    setOpen(false);
+  }
+
+  function openMenu() {
+    setHighlightedIndex(selectedIndex);
+    setOpen(true);
+  }
+
+  function toggleMenu() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    openMenu();
+  }
+
+  function handleTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (open) {
+        const option = options[highlightedIndex];
+        if (option) {
+          commitSelection(option);
+        }
+      } else {
+        openMenu();
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        openMenu();
+        return;
+      }
+      setHighlightedIndex((current) => {
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        return (current + direction + options.length) % options.length;
+      });
+    }
+  }
+
+  return (
+    <div ref={rootRef} className="relative w-[184px]">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggleMenu}
+        onKeyDown={handleTriggerKeyDown}
+        className="flex h-[32px] w-full items-center justify-between rounded-md px-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-blue-400/45"
+        style={{
+          fontSize: "10.5px",
+          color: "rgba(150,160,175,0.9)",
+          background: open ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.04)",
+          border: open ? "1px solid rgba(96,165,250,0.28)" : "1px solid rgba(255,255,255,0.07)",
+          boxShadow: open ? "0 0 0 1px rgba(59,130,246,0.04)" : "none",
+        }}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={11}
+          className={`ml-2 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          style={{ color: "rgba(120,135,155,0.85)" }}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="politics-feed-scrollbar absolute right-0 top-[36px] z-50 max-h-[186px] w-[220px] overflow-y-auto rounded-md py-1"
+          style={{
+            background: "rgba(12,12,12,0.99)",
+            border: "1px solid rgba(255,255,255,0.085)",
+            boxShadow: "0 18px 44px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.035)",
+          }}
+        >
+          {options.map((option, index) => {
+            const selected = option.id === selectedId;
+            const highlighted = index === highlightedIndex;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => commitSelection(option)}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                className="flex w-full items-center px-2.5 py-2 text-left transition-colors duration-150"
+                style={{
+                  background: selected
+                    ? "rgba(59,130,246,0.16)"
+                    : highlighted
+                      ? "rgba(255,255,255,0.05)"
+                      : "transparent",
+                  color: selected ? "rgba(205,225,255,0.97)" : "rgba(145,150,160,0.92)",
+                  fontSize: "10.5px",
+                  fontWeight: selected ? 600 : 500,
+                }}
+              >
+                <span className="truncate">{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── Side panel mock data ──────────────────────────────────────── */
@@ -532,7 +692,13 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
   const [selectedPoliticalMonitor, setSelectedPoliticalMonitor] = useState("All Politics");
   const [selectedSourceId, setSelectedSourceId] = useState("all");
 
-  const sourceOptions = Array.from(new Set(events.map((event) => event.sourceId)));
+  const sourceOptions: SourceDropdownOption[] = [
+    { id: "all", label: "All Sources" },
+    ...Array.from(new Set(events.map((event) => event.sourceId))).map((sourceId) => ({
+      id: sourceId,
+      label: getSourceName(sourceId),
+    })),
+  ];
 
   const filtered = events.filter((e) => {
     if (!matchesRegionalFocus(e, selectedRegionFocus)) return false;
@@ -600,31 +766,11 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
                 Politics Monitor
               </span>
             </div>
-            <div className="relative">
-              <select
-                value={selectedSourceId}
-                onChange={(event) => setSelectedSourceId(event.target.value)}
-                className="appearance-none rounded py-1 pl-2 pr-6 outline-none"
-                style={{
-                  fontSize: "10.5px",
-                  color: "rgba(120,120,120,0.9)",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                }}
-              >
-                <option value="all">All Sources</option>
-                {sourceOptions.map((sourceId) => (
-                  <option key={sourceId} value={sourceId}>
-                    {getSourceName(sourceId)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={10}
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
-                style={{ color: "rgba(120,120,120,0.8)" }}
-              />
-            </div>
+            <SourceFilterDropdown
+              options={sourceOptions}
+              selectedId={selectedSourceId}
+              onSelect={setSelectedSourceId}
+            />
           </div>
 
           {/* Severity pills */}
