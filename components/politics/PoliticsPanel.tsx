@@ -254,8 +254,8 @@ const REGIONAL_FOCUS_ITEMS = [
 ];
 
 const POLITICAL_MONITOR_ITEMS = [
-  "All Politics",
-  "Turkey Politics",
+  "All Policy",
+  "Turkey Policy",
   "Turkey Foreign Policy",
   "Diplomacy",
   "Elections",
@@ -357,11 +357,11 @@ function matchesRegionalFocus(event: OsintEvent, focus: string) {
 }
 
 function matchesPoliticalMonitor(event: OsintEvent, monitor: string) {
-  if (monitor === "All Politics") return true;
+  if (monitor === "All Policy") return true;
 
   const text = eventSearchText(event);
   switch (monitor) {
-    case "Turkey Politics":
+    case "Turkey Policy":
       return isTurkeyRelated(event, text);
     case "Turkey Foreign Policy":
       return (
@@ -689,7 +689,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRegionFocus, setSelectedRegionFocus] = useState("All Regions");
-  const [selectedPoliticalMonitor, setSelectedPoliticalMonitor] = useState("All Politics");
+  const [selectedPoliticalMonitor, setSelectedPoliticalMonitor] = useState("All Policy");
   const [selectedSourceId, setSelectedSourceId] = useState("all");
 
   const sourceOptions: SourceDropdownOption[] = [
@@ -732,7 +732,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
             onSelect={setSelectedRegionFocus}
           />
           <PoliticsSidePanel
-            title="Political Monitors"
+            title="Policy Monitors"
             items={POLITICAL_MONITOR_ITEMS}
             selected={selectedPoliticalMonitor}
             onSelect={setSelectedPoliticalMonitor}
@@ -763,7 +763,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
                 className="tracking-widest uppercase font-semibold"
                 style={{ fontSize: "10px", color: "rgba(155,155,155,0.85)" }}
               >
-                Politics Monitor
+                Policy Monitor
               </span>
             </div>
             <SourceFilterDropdown

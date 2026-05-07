@@ -3,7 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BörüEyes",
+  title: "TaipanMonitor",
   description: "Open-source intelligence situation awareness dashboard",
 };
 

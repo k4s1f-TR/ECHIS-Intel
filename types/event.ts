@@ -40,7 +40,7 @@ export const REGION_OPTIONS: { key: RegionKey; label: string }[] = [
 
 export const CATEGORY_OPTIONS: { key: EventCategory | "all"; label: string }[] = [
   { key: "all", label: "All Categories" },
-  { key: "politics", label: "Politics" },
+  { key: "politics", label: "Policy" },
   { key: "conflict", label: "Conflict" },
   { key: "intel", label: "Intel" },
   { key: "maritime", label: "Maritime" },

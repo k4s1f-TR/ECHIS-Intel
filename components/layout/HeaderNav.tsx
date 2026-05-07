@@ -7,9 +7,9 @@ type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sou
 
 const NAV_TABS: { label: string; key?: TopNavTab }[] = [
   { label: "Monitor", key: "situation" },
-  { label: "Politics", key: "politics" },
+  { label: "Policy", key: "politics" },
   { label: "Intel Watch", key: "intel" },
-  { label: "Cyber Sec.", key: "cyber" },
+  { label: "Cyber News", key: "cyber" },
   { label: "Defense Industry", key: "defense" },
   { label: "Sources", key: "sources" },
 ];
@@ -80,7 +80,7 @@ export function HeaderNav({
             color: "rgba(220,220,220,0.95)",
           }}
         >
-          BörüEyes
+          TaipanMonitor
         </span>
       </div>
 

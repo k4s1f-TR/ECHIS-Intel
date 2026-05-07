@@ -43,7 +43,7 @@ const TYPE_LABELS: Record<OsintSourceType, string> = {
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
-  politics: "Politics",
+  politics: "Policy",
   conflict: "Conflict",
   intel: "Intel",
   maritime: "Maritime",

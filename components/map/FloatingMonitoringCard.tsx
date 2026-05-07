@@ -60,7 +60,7 @@ export function FloatingMonitoringCard({
   const isGlobal = view === "global";
   const regionLabel = REGION_OPTIONS.find((r) => r.key === activeRegion)?.label ?? "Middle East";
   const categoryLabel = CATEGORY_OPTIONS.find((c) => c.key === activeCategory)?.label ?? "All Categories";
-  const monitoringTitle = isPoliticsWatch ? "Politics Watch" : isGlobal ? "Global View" : regionLabel;
+  const monitoringTitle = isPoliticsWatch ? "Policy Watch" : isGlobal ? "Global View" : regionLabel;
   const monitoringSubtitle = isPoliticsWatch
     ? "Regional Political Monitoring"
     : isGlobal

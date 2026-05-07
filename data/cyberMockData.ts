@@ -1,4 +1,4 @@
-/* ─── Cyber Sec. mock data ────────────────────────────────────── */
+/* ─── Cyber News mock data ────────────────────────────────────── */
 
 export type CyberAttackIndicator = {
   id: string;
