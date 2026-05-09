@@ -1,15 +1,28 @@
 "use client";
 
-const TOP_AGENCIES = [
-  { name: "CIA", value: 312 },
-  { name: "MI6", value: 278 },
-  { name: "FSB", value: 245 },
-  { name: "Mossad", value: 198 },
-  { name: "MİT", value: 153 },
-];
-const MAX_VAL = 320;
+import { agencies } from "@/data/intel-watch/agencies";
+import type { AgencyType } from "@/types/intel-watch";
 
-export function AgencyActivity() {
+const SORTED = [...agencies].sort((a, b) => b.activityLevel - a.activityLevel);
+const MAX_VAL = SORTED[0].activityLevel;
+
+const TYPE_ABBR: Record<AgencyType, string> = {
+  Intelligence: "INTEL",
+  Diplomatic: "DIPLO",
+  Supranational: "SUPRA",
+};
+
+const TYPE_COLOR: Record<AgencyType, { color: string; bg: string }> = {
+  Intelligence: { color: "rgba(217,119,6,0.9)", bg: "rgba(217,119,6,0.12)" },
+  Diplomatic: { color: "rgba(59,130,246,0.9)", bg: "rgba(59,130,246,0.12)" },
+  Supranational: { color: "rgba(167,139,250,0.9)", bg: "rgba(167,139,250,0.12)" },
+};
+
+type Props = {
+  onOpenDrawer: () => void;
+};
+
+export function AgencyActivity({ onOpenDrawer }: Props) {
   return (
     <div
       className="flex flex-col min-h-0 overflow-hidden"
@@ -17,7 +30,6 @@ export function AgencyActivity() {
         background: "rgba(10,12,18,0.97)",
         border: "1px solid rgba(255,255,255,0.07)",
         borderRadius: "8px",
-        flex: "0 0 18%",
       }}
     >
       {/* Header */}
@@ -49,6 +61,7 @@ export function AgencyActivity() {
           </span>
         </div>
         <button
+          onClick={onOpenDrawer}
           style={{
             fontSize: "9px",
             color: "rgba(74,222,128,0.8)",
@@ -63,7 +76,7 @@ export function AgencyActivity() {
       </div>
 
       {/* Subtitle */}
-      <div className="px-3 pt-2 flex-shrink-0">
+      <div className="px-3 pt-1 flex-shrink-0">
         <span
           style={{
             fontSize: "9px",
@@ -75,31 +88,55 @@ export function AgencyActivity() {
         </span>
       </div>
 
-      {/* Agency rows */}
-      <div className="flex flex-col gap-1.5 px-3 pt-2 pb-1 flex-1 min-h-0 overflow-hidden">
-        {TOP_AGENCIES.map((agency) => {
-          const pct = (agency.value / MAX_VAL) * 100;
+      {/* Scrollable agency rows */}
+      <div
+        className="intel-watch-scrollbar flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2"
+        style={{ display: "flex", flexDirection: "column", gap: "7px" }}
+      >
+        {SORTED.map((agency) => {
+          const pct = (agency.activityLevel / MAX_VAL) * 100;
+          const tc = TYPE_COLOR[agency.type];
           return (
-            <div key={agency.name} className="flex flex-col gap-0.5">
-              <div className="flex items-center justify-between">
-                <span
-                  style={{
-                    fontSize: "10.5px",
-                    fontWeight: 500,
-                    color: "rgba(195,208,225,0.9)",
-                  }}
-                >
-                  {agency.name}
-                </span>
+            <div key={agency.id} className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 500,
+                      color: "rgba(195,208,225,0.9)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {agency.name}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 600,
+                      color: tc.color,
+                      background: tc.bg,
+                      borderRadius: "3px",
+                      padding: "1px 4px",
+                      letterSpacing: "0.05em",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {TYPE_ABBR[agency.type]}
+                  </span>
+                </div>
                 <span
                   style={{
                     fontSize: "10px",
                     color: "rgba(140,155,175,0.75)",
                     fontVariantNumeric: "tabular-nums",
                     fontFamily: "ui-monospace, monospace",
+                    flexShrink: 0,
                   }}
                 >
-                  {agency.value}
+                  {agency.activityLevel}
                 </span>
               </div>
               <div
@@ -122,16 +159,6 @@ export function AgencyActivity() {
             </div>
           );
         })}
-      </div>
-
-      {/* Footer */}
-      <div
-        className="px-3 py-2 flex-shrink-0"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
-      >
-        <span style={{ fontSize: "9.5px", color: "rgba(80,95,115,0.75)" }}>
-          + 42 more agencies
-        </span>
       </div>
     </div>
   );

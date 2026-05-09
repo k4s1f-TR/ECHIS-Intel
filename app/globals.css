@@ -117,6 +117,24 @@ body {
   background: rgba(74, 222, 128, 0.28);
 }
 
+.intel-watch-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+.intel-watch-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.intel-watch-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.intel-watch-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 2px;
+}
+.intel-watch-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
 @keyframes ui-fade-in-kf {
   from {
     opacity: 0;

@@ -12,14 +12,20 @@ const CATEGORY_STYLE: Record<FeedCategory, { label: string; color: string; bg: s
   policy: { label: "Policy", color: "rgba(148,163,184,0.85)", bg: "rgba(255,255,255,0.06)" },
 };
 
-export function IntelWatchLiveFeed() {
+type Props = {
+  onOpenDrawer: () => void;
+};
+
+export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
   return (
+    // flex-1 fills the flex-column relative wrapper in IntelWatchPanel
     <div
-      className="flex flex-col min-h-0 overflow-hidden flex-shrink-0"
+      className="flex flex-col min-h-0 overflow-hidden flex-1"
       style={{
         width: "330px",
         background: "rgba(8,10,16,0.98)",
-        borderLeft: "1px solid rgba(255,255,255,0.065)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: "8px",
       }}
     >
       {/* Header */}
@@ -86,13 +92,13 @@ export function IntelWatchLiveFeed() {
       </div>
 
       {/* Feed cards */}
-      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ padding: "6px 0" }}>
+      <div className="intel-watch-scrollbar flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ padding: "4px 0" }}>
         {liveFeedEvents.map((event) => {
           const cs = CATEGORY_STYLE[event.category];
           return (
             <div
               key={event.id}
-              className="flex gap-2.5 px-3.5 py-2.5"
+              className="flex gap-2.5 px-3.5 py-2"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
             >
               {/* Agency circle */}
@@ -143,7 +149,6 @@ export function IntelWatchLiveFeed() {
                   {event.description}
                 </span>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {/* Category tag */}
                   <span
                     style={{
                       fontSize: "8.5px",
@@ -156,13 +161,9 @@ export function IntelWatchLiveFeed() {
                   >
                     {cs.label}
                   </span>
-                  {/* Source */}
-                  <span
-                    style={{ fontSize: "9px", color: "rgba(100,115,135,0.7)" }}
-                  >
+                  <span style={{ fontSize: "9px", color: "rgba(100,115,135,0.7)" }}>
                     {event.source}
                   </span>
-                  {/* Timestamp */}
                   <span
                     style={{
                       fontSize: "9px",
@@ -186,6 +187,7 @@ export function IntelWatchLiveFeed() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.055)" }}
       >
         <button
+          onClick={onOpenDrawer}
           style={{
             fontSize: "10px",
             color: "rgba(74,222,128,0.8)",
