@@ -16,6 +16,7 @@ import { SignalsFloatingCard } from "@/components/signals/SignalsFloatingCard";
 import { SourcesScreen } from "@/components/sources/SourcesScreen";
 import { PoliticsPanel } from "@/components/politics/PoliticsPanel";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
+import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
 import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
 import type { EventCategory, RegionKey } from "@/types/event";
@@ -26,13 +27,9 @@ type ActiveSection = "dashboard" | "sources" | "bookmarks";
 type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
-type PlaceholderTopTab = "intel" | "defense";
+type PlaceholderTopTab = "defense";
 
 const PLACEHOLDER_MODULES: Record<PlaceholderTopTab, { title: string; description: string }> = {
-  intel: {
-    title: "Intel Watch",
-    description: "Intel watch monitoring module will be available here.",
-  },
   defense: {
     title: "Defense Industry",
     description: "Defense industry monitoring module will be available here.",
@@ -219,7 +216,7 @@ export function AppShell() {
   }
 
   const placeholderModule =
-    activeTopTab === "intel" || activeTopTab === "defense"
+    activeTopTab === "defense"
       ? PLACEHOLDER_MODULES[activeTopTab]
       : null;
 
@@ -379,6 +376,11 @@ export function AppShell() {
           {activeSection === "dashboard" && activeTopTab === "cyber" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
               <CyberSecPanel />
+            </div>
+          )}
+          {activeSection === "dashboard" && activeTopTab === "intel" && (
+            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+              <IntelWatchPanel />
             </div>
           )}
           {activeSection === "dashboard" && placeholderModule !== null && (
