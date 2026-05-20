@@ -2,7 +2,7 @@ declare module "react-simple-maps" {
   import type { ReactNode, CSSProperties } from "react";
 
   export interface ComposableMapProps {
-    projection?: string;
+    projection?: string | ((point: [number, number]) => [number, number] | null) | unknown;
     projectionConfig?: Record<string, unknown>;
     width?: number;
     height?: number;
@@ -14,7 +14,7 @@ declare module "react-simple-maps" {
   export function ComposableMap(props: ComposableMapProps): JSX.Element;
 
   export interface GeographiesProps {
-    geography: string | Record<string, unknown>;
+    geography: string | Record<string, unknown> | unknown;
     children: (args: { geographies: Geography[] }) => ReactNode;
   }
 

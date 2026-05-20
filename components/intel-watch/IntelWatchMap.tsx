@@ -1,262 +1,212 @@
 "use client";
 
+import { useState } from "react";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
-import { agencies } from "@/data/intel-watch/agencies";
-import type { AgencyType } from "@/types/intel-watch";
+import { geoEquirectangular } from "d3-geo";
+import { feature } from "topojson-client";
+import countriesAtlas from "world-atlas/countries-110m.json";
+import {
+  intelWatchMapItems,
+  type IntelWatchCategory,
+} from "@/data/intel-watch/intelWatchMapItems";
+import { IntelWatchMarkerPopup } from "./IntelWatchMarkerPopup";
 
-const ANCHOR_IDS = new Set([
-  "cia", "mi6", "bnd", "fsb", "mit", "mossad", "mss", "raw", "asis", "abin", "eu-intcen",
-]);
+// Muted semantic palette — restrained, analyst-oriented, non-neon.
+const CATEGORY_COLOR: Record<IntelWatchCategory, { fill: string; ring: string }> = {
+  Diplomatic:  { fill: "rgba(96,140,200,0.85)",  ring: "rgba(96,140,200,0.32)" },
+  Security:    { fill: "rgba(210,110,90,0.85)",  ring: "rgba(210,110,90,0.32)" },
+  Policy:      { fill: "rgba(180,165,110,0.85)", ring: "rgba(180,165,110,0.32)" },
+  Sanctions:   { fill: "rgba(200,120,140,0.85)", ring: "rgba(200,120,140,0.32)" },
+  Border:      { fill: "rgba(220,150,90,0.85)",  ring: "rgba(220,150,90,0.32)" },
+  Influence:   { fill: "rgba(170,140,200,0.85)", ring: "rgba(170,140,200,0.32)" },
+  Cooperation: { fill: "rgba(120,180,150,0.85)", ring: "rgba(120,180,150,0.32)" },
+  Maritime:    { fill: "rgba(110,170,190,0.85)", ring: "rgba(110,170,190,0.32)" },
+};
 
-const HIGH_HEAT = new Set([
-  // Europe
-  "276", "250", "826", "380", "724", "642", "616", "804",
-  "56", "528", "752", "208", "246", "372", "40", "756", "191",
-  // MENA
-  "792", "364", "376", "400", "682", "818", "784", "760", "368",
-  "422", "434", "504", "788", "012",
-  // Russia / Eurasia
-  "643", "112", "398", "860", "417", "762", "795",
-]);
+const VIEW_W = 760;
+const VIEW_H = 442;
+const PAD = 20;
 
-const MED_HEAT = new Set([
-  // S. & E. Asia
-  "156", "356", "586", "410", "392",
-  // SE Asia / Oceania
-  "036", "554", "360", "608",
-]);
+// Optical horizontal correction applied to the shared map content frame
+// (SVG + marker + popup layers). A small negative shift compensates for the
+// Eurasia-heavy landmass distribution that visually pulls the composition
+// rightward despite the geometric bounding box being centered.
+const MAP_OPTICAL_SHIFT_X = "-1.1%";
 
-function countryFill(id: string): string {
-  if (HIGH_HEAT.has(id)) return "rgba(180,83,9,0.28)";
-  if (MED_HEAT.has(id)) return "rgba(180,83,9,0.18)";
-  return "#0F172A";
+// Scale applied to the shared map content frame. Split into horizontal and
+// vertical components so vertical presence can be tuned independently while
+// the horizontal fit stays locked. All layers (artwork + markers + popups)
+// scale together so alignment is preserved.
+const MAP_CONTENT_SCALE_X = 1.155;
+const MAP_CONTENT_SCALE_Y = 1.46;
+
+const topology = countriesAtlas as unknown as TopoJSON.Topology;
+const allFeatures = feature(
+  topology,
+  topology.objects.countries as TopoJSON.GeometryCollection,
+);
+
+function gn(o: { properties?: unknown } | null | undefined) {
+  return ((o?.properties as { name?: string } | undefined)?.name ?? "").toLowerCase();
 }
 
-const MARKER_COLOR: Record<AgencyType, string> = {
-  Intelligence: "rgba(217,119,6,0.9)",
-  Diplomatic: "rgba(59,130,246,0.9)",
-  Supranational: "rgba(167,139,250,0.9)",
+const filteredCollection: GeoJSON.FeatureCollection = {
+  type: "FeatureCollection",
+  features: allFeatures.features.filter((f) => {
+    const n = gn(f);
+    return n !== "antarctica" && n !== "fr. s. antarctic lands";
+  }) as GeoJSON.Feature[],
 };
 
-const RING_COLOR: Record<AgencyType, string> = {
-  Intelligence: "rgba(217,119,6,0.45)",
-  Diplomatic: "rgba(59,130,246,0.45)",
-  Supranational: "rgba(167,139,250,0.45)",
-};
+// Flat rectangular projection — equirectangular gives a clean, wider,
+// operational world view with no high-latitude compression. fitExtent
+// auto-centers the visible geography in a padded viewBox.
+const fittedProjection = geoEquirectangular().fitExtent(
+  [
+    [PAD, PAD],
+    [VIEW_W - PAD, VIEW_H - PAD],
+  ],
+  filteredCollection,
+);
 
 export function IntelWatchMap() {
+  // openIds is ordered: last item is rendered on top.
+  const [openIds, setOpenIds] = useState<string[]>([]);
+
+  function toggleOrFocus(id: string) {
+    setOpenIds((prev) => {
+      if (prev.includes(id)) return [...prev.filter((x) => x !== id), id];
+      return [...prev, id];
+    });
+  }
+  function focus(id: string) {
+    setOpenIds((prev) => {
+      if (!prev.includes(id)) return prev;
+      if (prev[prev.length - 1] === id) return prev;
+      return [...prev.filter((x) => x !== id), id];
+    });
+  }
+  function closeOne(id: string) {
+    setOpenIds((prev) => prev.filter((x) => x !== id));
+  }
+
   return (
     <div
-      className="relative"
+      className="relative w-full h-full flex items-center justify-center"
       style={{
-        width: "100%",
-        height: "100%",
         background: "#08101A",
         borderRadius: "8px",
         border: "1px solid rgba(255,255,255,0.07)",
         overflow: "hidden",
       }}
     >
-      {/* Heat mode selector — top-right */}
-      <div
-        className="absolute flex items-center gap-1.5 z-10"
-        style={{ top: 8, right: 10 }}
-      >
-        <span style={{ fontSize: "8.5px", color: "rgba(100,115,135,0.7)", letterSpacing: "0.06em" }}>
-          Heat:
-        </span>
-        <select
-          defaultValue="overall"
-          style={{
-            background: "rgba(10,14,22,0.9)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: "4px",
-            padding: "2px 6px",
-            fontSize: "9px",
-            color: "rgba(160,175,200,0.85)",
-            outline: "none",
-            cursor: "pointer",
-          }}
-        >
-          <option value="overall" style={{ background: "#0d1117" }}>Overall Activity</option>
-          <option value="diplomatic" style={{ background: "#0d1117" }}>Diplomatic</option>
-          <option value="security" style={{ background: "#0d1117" }}>Security</option>
-        </select>
-      </div>
-
       {/*
-        scale=163 fills the container width with ~2% side padding.
-        center=[0,12] shifts 12°N to the SVG center, pulling Antarctica's
-        empty band below the visible area while keeping Arctic content visible.
-        Antarctica features are also filtered out in the render loop.
+        Shared map content frame: aspect-locked viewport that contains the SVG,
+        marker layer, and popup layer. The optical shift is applied here so all
+        layers move together and stay aligned.
       */}
-      <ComposableMap
-        projection="geoEqualEarth"
-        projectionConfig={{ scale: 163, center: [0, 12] }}
-        width={800}
-        height={390}
-        style={{ width: "100%", height: "100%", display: "block" }}
-      >
-        <Geographies geography="/countries-110m.json">
-          {({ geographies }) =>
-            geographies
-              .filter((geo) => geo.properties.name !== "Antarctica")
-              .map((geo) => {
-                const fill = countryFill(geo.id as string);
-                const hoverFill = fill === "#0F172A" ? "#1E293B" : fill;
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={fill}
-                    stroke="rgba(51,65,85,0.85)"
-                    strokeWidth={0.5}
-                    style={{
-                      default: { outline: "none" },
-                      hover: { fill: hoverFill, outline: "none", cursor: "default", transition: "fill 150ms" },
-                      pressed: { outline: "none" },
-                    }}
-                  />
-                );
-              })
-          }
-        </Geographies>
-
-        {agencies.map((agency) => {
-          const showLabel = ANCHOR_IDS.has(agency.id);
-          const fill = MARKER_COLOR[agency.type];
-          const ring = RING_COLOR[agency.type];
-          return (
-            <Marker key={agency.id} coordinates={[agency.lng, agency.lat]}>
-              <circle r={6} fill="none" stroke={ring} strokeWidth={1} />
-              <circle r={3} fill={fill} stroke="rgba(0,0,0,0.45)" strokeWidth={0.6} />
-              {showLabel && (
-                <text
-                  x={8}
-                  y={3.5}
-                  style={{
-                    fontSize: "6px",
-                    fontWeight: 500,
-                    fill: "#E2E8F0",
-                    stroke: "#0F172A",
-                    strokeWidth: "2",
-                    paintOrder: "stroke fill",
-                    pointerEvents: "none",
-                    userSelect: "none",
-                    fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                    letterSpacing: "0.02em",
-                  } as React.CSSProperties}
-                >
-                  {agency.name}
-                </text>
-              )}
-            </Marker>
-          );
-        })}
-      </ComposableMap>
-
-      {/* Activity intensity legend — bottom-left */}
-      <div className="absolute flex flex-col gap-1" style={{ bottom: 10, left: 12, zIndex: 10 }}>
-        <span
-          style={{
-            fontSize: "8px",
-            fontWeight: 600,
-            color: "rgba(90,105,125,0.7)",
-            letterSpacing: "0.07em",
-            textTransform: "uppercase",
-          }}
-        >
-          Activity Intensity
-        </span>
-        <div className="flex items-center gap-1">
-          <span style={{ fontSize: "8px", color: "rgba(80,95,115,0.65)" }}>Low</span>
-          <div
-            style={{
-              width: 100,
-              height: 5,
-              borderRadius: "3px",
-              background: "linear-gradient(to right, rgba(15,23,42,1), rgba(180,83,9,0.65))",
-              border: "1px solid rgba(255,255,255,0.06)",
-            }}
-          />
-          <span style={{ fontSize: "8px", color: "rgba(80,95,115,0.65)" }}>High</span>
-        </div>
-      </div>
-
-      {/* Combined KPI + legend overlay — bottom-right */}
       <div
-        className="absolute flex flex-col"
+        className="relative max-w-full max-h-full"
         style={{
-          bottom: 12,
-          right: 12,
-          zIndex: 10,
-          background: "rgba(15,23,42,0.78)",
-          backdropFilter: "blur(4px)",
-          border: "1px solid rgba(51,65,85,0.5)",
-          borderRadius: "6px",
-          padding: "12px 14px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-          minWidth: 180,
+          width: "100%",
+          aspectRatio: `${VIEW_W} / ${VIEW_H}`,
+          transform: `translateX(${MAP_OPTICAL_SHIFT_X}) scaleX(${MAP_CONTENT_SCALE_X}) scaleY(${MAP_CONTENT_SCALE_Y})`,
+          transformOrigin: "center center",
         }}
       >
-        {/* KPI section */}
-        <div className="flex flex-col" style={{ gap: 8 }}>
-          {[
-            { label: "New Mentions Today", value: "1,246", delta: "+18%" },
-            { label: "Total Reports", value: "18,657", delta: "+9%" },
-          ].map((kpi) => (
-            <div key={kpi.label} className="flex flex-col" style={{ gap: 2 }}>
-              <span
+        <ComposableMap
+          projection={fittedProjection}
+          width={VIEW_W}
+          height={VIEW_H}
+          style={{ width: "100%", height: "100%", display: "block" }}
+        >
+          <Geographies geography={filteredCollection}>
+            {({ geographies }) =>
+              geographies.map((geo) => (
+                <Geography
+                  key={geo.rsmKey}
+                  geography={geo}
+                  fill="#0F172A"
+                  stroke="rgba(51,65,85,0.7)"
+                  strokeWidth={0.5}
+                  style={{
+                    default: { outline: "none" },
+                    hover: { fill: "#0F172A", outline: "none", cursor: "default" },
+                    pressed: { outline: "none" },
+                  }}
+                />
+              ))
+            }
+          </Geographies>
+
+          {intelWatchMapItems.map((item) => {
+            const c = CATEGORY_COLOR[item.category];
+            const isOpen = openIds.includes(item.id);
+            return (
+              <Marker key={item.id} coordinates={[item.lng, item.lat]}>
+                {isOpen && (
+                  <circle
+                    r={6.5}
+                    fill="none"
+                    stroke={c.fill}
+                    strokeOpacity={0.55}
+                    strokeWidth={0.6}
+                  />
+                )}
+                <circle r={4.5} fill="none" stroke={c.ring} strokeWidth={0.8} />
+                <circle r={2.1} fill={c.fill} stroke="rgba(8,16,26,0.65)" strokeWidth={0.5} />
+                {/* Larger transparent hit area for easier clicking */}
+                <circle
+                  r={9}
+                  fill="transparent"
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleOrFocus(item.id);
+                  }}
+                />
+              </Marker>
+            );
+          })}
+        </ComposableMap>
+
+        {/* Popup layer — absolute, positioned via projection % coords */}
+        <div className="absolute inset-0 pointer-events-none">
+          {openIds.map((id, idx) => {
+            const item = intelWatchMapItems.find((m) => m.id === id);
+            if (!item) return null;
+            const projected = fittedProjection([item.lng, item.lat]);
+            if (!projected) return null;
+            const [vx, vy] = projected;
+            const leftPct = (vx / VIEW_W) * 100;
+            const topPct = (vy / VIEW_H) * 100;
+            const flipX = leftPct > 60;
+            const flipY = topPct > 65;
+            const c = CATEGORY_COLOR[item.category];
+            return (
+              <div
+                key={id}
                 style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: "#94A3B8",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
+                  position: "absolute",
+                  left: `${leftPct}%`,
+                  top: `${topPct}%`,
+                  transform: `translate(${flipX ? "calc(-100% - 10px)" : "10px"}, ${
+                    flipY ? "calc(-100% - 8px)" : "8px"
+                  })`,
+                  zIndex: 10 + idx,
+                  pointerEvents: "none",
                 }}
               >
-                {kpi.label}
-              </span>
-              <div className="flex items-baseline" style={{ gap: 8 }}>
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: "#E2E8F0",
-                    fontVariantNumeric: "tabular-nums",
-                    fontFamily: "ui-monospace, monospace",
-                  }}
-                >
-                  {kpi.value}
-                </span>
-                <span style={{ fontSize: 10.5, color: "rgba(74,222,128,0.85)" }}>
-                  ▲ {kpi.delta}
-                </span>
+                <IntelWatchMarkerPopup
+                  item={item}
+                  categoryColor={c}
+                  onClose={() => closeOne(id)}
+                  onFocus={() => focus(id)}
+                  zIndex={10 + idx}
+                />
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: "rgba(51,65,85,0.5)", margin: "10px 0 8px" }} />
-
-        {/* Legend section */}
-        <div className="flex flex-col" style={{ gap: 6 }}>
-          {(["Intelligence", "Diplomatic", "Supranational"] as AgencyType[]).map((t) => (
-            <div key={t} className="flex items-center" style={{ gap: 6 }}>
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: MARKER_COLOR[t],
-                  flexShrink: 0,
-                  display: "inline-block",
-                }}
-              />
-              <span style={{ fontSize: 10, fontWeight: 500, color: "#94A3B8" }}>{t}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

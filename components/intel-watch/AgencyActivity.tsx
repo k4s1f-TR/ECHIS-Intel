@@ -19,13 +19,13 @@ const TYPE_COLOR: Record<AgencyType, { color: string; bg: string }> = {
 };
 
 type Props = {
-  onOpenDrawer: () => void;
+  onOpenDrawer?: () => void;
 };
 
 export function AgencyActivity({ onOpenDrawer }: Props) {
   return (
     <div
-      className="flex flex-col min-h-0 overflow-hidden"
+      className="flex flex-col h-full min-h-0 overflow-hidden"
       style={{
         background: "rgba(10,12,18,0.97)",
         border: "1px solid rgba(255,255,255,0.07)",
@@ -60,19 +60,21 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
             (i)
           </span>
         </div>
-        <button
-          onClick={onOpenDrawer}
-          style={{
-            fontSize: "9px",
-            color: "rgba(74,222,128,0.8)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          View All
-        </button>
+        {onOpenDrawer && (
+          <button
+            onClick={onOpenDrawer}
+            style={{
+              fontSize: "9px",
+              color: "rgba(74,222,128,0.8)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            View All
+          </button>
+        )}
       </div>
 
       {/* Subtitle */}

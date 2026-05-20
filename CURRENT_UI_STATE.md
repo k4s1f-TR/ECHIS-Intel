@@ -1,76 +1,116 @@
-# BörüEyes — Current UI State Handoff
+# BoruEyes - Current UI State Handoff
 
 ## Goal
-Dark-themed, map-first OSINT situation dashboard. Full-screen, 16:9 desktop layout, no backend, mock data only.
+Dark-themed, map-first OSINT situation dashboard. Full-screen desktop layout, no backend, mock data only.
 
 ---
 
-## Layout (complete, do not restructure)
+## Layout
 
+```text
+[ HeaderNav spans full width ]
+[ LeftRail 68px ] [ Main content / globe / active module ]
 ```
-[ LeftRail 72px ] [ Map fills remaining width ] [ RightEventsPanel 372px ]
-                         ↑ HeaderNav spans full width above map
-```
 
-- **`app/page.tsx`** — root layout, owns `selectedId` state, wires all panels together
-- **`components/layout/AppShell.tsx`** — outer shell with left rail + content area
-- **`components/layout/HeaderNav.tsx`** — top bar with logo, 7 nav tabs, right icon cluster
-- **`components/layout/LeftRail.tsx`** — icon-only vertical nav, 72px wide
-- **`components/events/RightEventsPanel.tsx`** — scrollable event card list, 372px wide
-- **`components/events/EventCard.tsx`** — individual event card with selection state
-- **`components/map/GlobeMap.tsx`** — MapLibre GL JS interactive map (see below)
-- **`components/map/FloatingMonitoringCard.tsx`** — overlay card on map
-- **`components/map/MapControls.tsx`** — zoom/bearing UI buttons on map
-- **`components/map/LiveStatusPill.tsx`** — live indicator badge on map
-- **`components/ui/StatusBadge.tsx`** — category/severity/source/verification badges
+- **`app/page.tsx`** - root entry, renders `AppShell`
+- **`components/layout/AppShell.tsx`** - owns top-level UI state and wires all modules together
+- **`components/layout/HeaderNav.tsx`** - top navigation with Monitor, Policy, Intel Watch, Cyber News, Defense Industry, Sources
+- **`components/layout/LeftRail.tsx`** - icon-only rail for Global View, SOCMINT Watch, Bookmarks, and reserved modules
+- **`components/map/GlobeMap.tsx`** - custom Three.js globe engine
+- **`components/map/FloatingMonitoringCard.tsx`** - Global View overlay controls
+- **`components/map/MapControls.tsx`** - center and zoom controls wired to `GlobeMap` via ref
+- **`components/map/LiveStatusPill.tsx`** - live indicator badge on map modes
+- **`components/events/RightEventsPanel.tsx`** - scrollable event panel for Global View
+- **`components/events/EventCard.tsx`** - individual event card with selection and bookmark state
+- **`components/ui/StatusBadge.tsx`** - category/severity/source/verification badges
 
 ---
 
-## Map (GlobeMap.tsx) — current implementation
+## Globe Map (`GlobeMap.tsx`)
 
-- **MapLibre GL JS v5.24.0**, fully interactive (pan, zoom, globe rotation)
-- Style: `https://demotiles.maplibre.org/style.json` with `applyDarkMapStyle()` override applied on `load`
-- Globe projection: `map.setProjection({ type: 'globe' })` called after `load`
-- Initial center: `[44, 27]` (Middle East), zoom `3.15`
-- Dark overlay: subtle `radial-gradient` vignette (max ~0.56 opacity) — **do not increase**
-- CSS import: `import "maplibre-gl/dist/maplibre-gl.css"` is in **`app/layout.tsx`**, not in the component — keep it there (Turbopack requirement)
-- No `mountedRef` guard — correct pattern for React 19 Strict Mode
-- Event markers: GeoJSON circle layers with per-category color palettes (conflict=red, politics=blue, maritime=cyan, energy=amber, humanitarian/intel=green)
-- Selected marker: larger core dot + dashed ring layer + brighter glow
-- Click-to-select: `EVENT_HIT_LAYER_ID` transparent circle layer handles clicks, fires `onSelectEvent`
-- Selection sync: `updateEventSource()` called in a separate effect whenever `events` or `selectedId` changes
-
----
-
-## Data model
-
-- **`types/event.ts`** — `OsintEvent`, `EventCategory`, `EventSeverity`, `SourceType`, `VerificationStatus`
-- **`data/mockEvents.ts`** — 8 events with `coordinates`, covering Middle East/Red Sea
+- The active map is a **custom Three.js globe**, not MapLibre.
+- Rendering uses `three`, `OrbitControls`, `world-atlas`, and `topojson-client`.
+- Camera presets live in **`components/map/cameraPresets.ts`**.
+- Supported map modes are `monitor-home`, `global`, and `socmint`.
+- The globe supports drag rotation, wheel zoom, auto-rotation, center view, zoom in, and zoom out.
+- Country and capital labels are generated into globe textures for stability.
+- Event and SOCMINT markers are rendered as Three.js sprites on the globe surface.
+- Marker clicks are handled through Three.js raycasting and call `onSelectEvent` or `onSelectSignal`.
+- Marker palettes are category/source-aware and are defined inside `GlobeMap.tsx`.
+- `MapControls.tsx` is already wired to `GlobeMapHandle` through `AppShell`.
 
 ---
 
-## Design rules to preserve
+## Main Screens
 
-- Color palette via CSS vars in `globals.css`: `--bg-base: #04080f`, `--accent-blue: #3b82f6`
-- All text, borders, and backgrounds use `rgba()` with low opacity — no solid bright colors
-- Font: Inter, fallback `-apple-system`
-- `overflow: hidden` on `html` and `body` — no page scroll; map fills viewport
-- Scrollbar: 3px, blue-tinted thumb
-
----
-
-## Remaining tasks
-
-1. **Map tile style** — `demotiles.maplibre.org` is a low-detail demo style. Could upgrade to CartoDB Dark Matter (`https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json`) for higher visual quality. Note: CartoDB style has different layer names — `applyDarkMapStyle()` would need updating.
-2. **Event count** — Header shows hardcoded "128 Results"; should reflect `events.length`.
-3. **Nav tab switching** — tabs are rendered but clicking does nothing (no tab state or content switching).
-4. **Map controls** — `MapControls.tsx` renders zoom buttons but they are not wired to the MapLibre map instance.
+- **Monitor home** - Three.js globe without side panels until a rail mode is selected
+- **Global View** - globe markers, `FloatingMonitoringCard`, `RightEventsPanel`, and live pill
+- **SOCMINT Watch** - signal markers, `SignalsFloatingCard`, `SignalsPanel`, and live pill
+- **Policy** - panel/feed-first political monitoring screen with filters and market side panels
+- **Intel Watch** - mock intelligence watch dashboard with map, feed, watchlist, agency activity, and drawers
+- **Cyber News** - mock cyber dashboard with threat map, news feed, context, regions, and sectors
+- **Sources** - Source Registry screen with counts derived from `mockEvents.sourceId`
+- **Bookmarks** - localStorage-backed bookmarked events and SOCMINT reports
+- **Defense Industry** - placeholder module
 
 ---
 
-## Do not touch
+## Data Model
 
-- `app/layout.tsx` maplibre CSS import location
-- `globals.css` color variables and scrollbar rules
-- `StatusBadge.tsx` variant color mapping
-- Overall 3-column layout proportions
+- **`types/event.ts`** - `OsintEvent`, `EventCategory`, `EventSeverity`, `SourceType`, `VerificationStatus`, `RegionKey`
+- **`data/mockEvents.ts`** - mock OSINT events across Middle East and global regions
+- **`types/socmint.ts`** - `SocmintReport` model and confidence filter helpers
+- **`data/socmintReports.ts`** - mock SOCMINT reports
+- **`types/source.ts`** and **`data/mockSources.ts`** - Source Registry model and mock source list
+- **`data/intel-watch/*`** - Intel Watch mock data
+- **`data/cyberMockData.ts`** - Cyber module mock data
+
+---
+
+## Design Rules To Preserve
+
+- Keep the UI dark, restrained, premium, and analyst-oriented.
+- Use existing mock/static data patterns.
+- Do not add backend, auth, database, scraping, live tracking, or real APIs unless explicitly requested.
+- Do not invent live/current factual claims.
+- Preserve existing schemas unless the task requires a schema change.
+- Avoid unrelated refactors.
+- Avoid excessive glow, decorative borders, and busy effects.
+- Use low-opacity `rgba()` backgrounds, borders, and text treatments.
+- Keep `html` and `body` overflow hidden so the app owns the full viewport.
+- Keep the global scrollbar styling in `globals.css`.
+
+---
+
+## Protected Areas
+
+Do not change these unless the task explicitly targets them:
+
+- app shell structure
+- top navigation
+- left rail
+- Three.js globe engine
+- camera presets
+- marker behavior
+- country/capital label strategy
+- map tone, center, zoom, and interaction model
+- SOCMINT behavior
+- Global View marker data
+- backend/API/auth/database assumptions
+
+---
+
+## Reserved / Future Areas
+
+- Air Track and Ship Track are reserved for future modules.
+- Defense Industry is currently a placeholder module.
+- Analytics is currently reserved.
+
+---
+
+## Validation
+
+- Run `npm run lint` after changes.
+- On Windows PowerShell, use `npm.cmd run lint` if execution policy blocks npm scripts.
+- Run `npm run build` when TypeScript, imports, data models, or component structure change.
+- For tiny CSS/text-only changes, lint is usually enough.

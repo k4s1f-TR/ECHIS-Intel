@@ -1,0 +1,221 @@
+import {
+  Factory,
+  Flag,
+  Building,
+  Rocket,
+  Activity,
+  Layers,
+  Boxes,
+  FileText,
+} from "lucide-react";
+import { defenseFeedItems } from "@/data/defenseIndustryMockData";
+
+function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-1">
+      <Icon size={11} style={{ color: "rgba(165,180,195,0.45)", flexShrink: 0 }} />
+      <span
+        style={{
+          fontSize: "9px",
+          fontWeight: 600,
+          color: "rgba(120,135,150,0.7)",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase" as const,
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function SectionValue({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        fontSize: "12px",
+        fontWeight: 500,
+        color: "rgba(210,225,235,0.9)",
+        marginBottom: "12px",
+        paddingLeft: "19px",
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      className="flex items-center justify-between py-2"
+      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+    >
+      <span
+        style={{
+          fontSize: "9.5px",
+          fontWeight: 600,
+          color: "rgba(120,135,150,0.7)",
+          letterSpacing: "0.06em",
+          textTransform: "uppercase" as const,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: "10.5px",
+          fontWeight: 500,
+          color: "rgba(195,210,220,0.85)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatusBar({
+  label,
+  level,
+  color,
+  caption,
+}: {
+  label: string;
+  level: number;
+  color: string;
+  caption: string;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between py-2"
+      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+    >
+      <span
+        style={{
+          fontSize: "9.5px",
+          fontWeight: 600,
+          color: "rgba(120,135,150,0.7)",
+          letterSpacing: "0.06em",
+          textTransform: "uppercase" as const,
+        }}
+      >
+        {label}
+      </span>
+      <div className="flex items-center gap-2.5">
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              style={{
+                width: 14,
+                height: 4,
+                borderRadius: 1,
+                background: i <= level ? color : "rgba(255,255,255,0.05)",
+              }}
+            />
+          ))}
+        </div>
+        <span style={{ fontSize: "10px", fontWeight: 600, color, minWidth: 32 }}>{caption}</span>
+      </div>
+    </div>
+  );
+}
+
+export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: string }) {
+  const selected = defenseFeedItems.find((d) => d.id === selectedItemId) || defenseFeedItems[0];
+  const ctx = selected.context;
+
+  return (
+    <div
+      className="flex flex-col h-full"
+      style={{
+        background: "rgba(7,8,11,0.985)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: "10px",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+      >
+        <Factory size={12} style={{ color: "rgba(165,180,195,0.4)" }} />
+        <span
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "rgba(155,170,180,0.88)",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase" as const,
+          }}
+        >
+          Industry Context
+        </span>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col cyber-scrollbar">
+        <SectionLabel icon={Flag} label="Country / Region" />
+        <SectionValue>{ctx.countryRegion}</SectionValue>
+
+        <SectionLabel icon={Building} label="Organization / Company" />
+        <SectionValue>{ctx.organization}</SectionValue>
+
+        <SectionLabel icon={Rocket} label="Program / Platform" />
+        <SectionValue>{ctx.program}</SectionValue>
+
+        <SectionLabel icon={Activity} label="Activity Type" />
+        <SectionValue>{ctx.activityType}</SectionValue>
+
+        <SectionLabel icon={Layers} label="Industry Segment" />
+        <SectionValue>{ctx.industrySegment}</SectionValue>
+
+        <SectionLabel icon={Boxes} label="Supply Chain Area" />
+        <SectionValue>{ctx.supplyChainArea}</SectionValue>
+
+        <SectionLabel icon={FileText} label="Summary" />
+        <p
+          style={{
+            fontSize: "11px",
+            fontWeight: 400,
+            color: "rgba(165,180,195,0.8)",
+            lineHeight: 1.65,
+            marginBottom: 16,
+            paddingLeft: 19,
+          }}
+        >
+          {ctx.summary}
+        </p>
+
+        <div className="mt-auto" style={{ borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
+          <MetaRow label="Source Type" value={ctx.sourceType} />
+          <MetaRow label="First Seen" value={ctx.firstSeen} />
+          <MetaRow label="Last Update" value={ctx.lastUpdate} />
+          <StatusBar
+            label="Confidence"
+            level={ctx.confidenceLevel}
+            color={
+              ctx.confidenceLevel >= 4
+                ? "rgba(160,180,200,0.85)"
+                : "rgba(218,175,22,0.85)"
+            }
+            caption={ctx.confidence}
+          />
+          <StatusBar
+            label="Impact"
+            level={ctx.impactLevel}
+            color={
+              ctx.impactLevel >= 4
+                ? "rgba(239,140,90,0.85)"
+                : ctx.impactLevel === 3
+                ? "rgba(218,175,22,0.85)"
+                : "rgba(140,160,180,0.7)"
+            }
+            caption={ctx.impact}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

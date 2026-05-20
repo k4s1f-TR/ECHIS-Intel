@@ -45,8 +45,8 @@ Do not change these unless the task explicitly targets them:
 
 ## Product Notes
 
-- The live globe is Three.js-first. MapLibre may exist as a dependency but
-  is not the main presentation layer.
+- The live globe is a custom Three.js implementation. MapLibre is not part of
+  the active map stack.
 - Country labels are baked into the generated globe texture for stability.
   Do not reintroduce DOM, billboard, sprite, or screen-space country labels
   unless explicitly requested.

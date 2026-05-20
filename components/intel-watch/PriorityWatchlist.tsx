@@ -22,13 +22,13 @@ const PRIORITY_STYLE: Record<PriorityLevel, { color: string; bg: string; border:
 };
 
 type Props = {
-  onOpenDrawer: () => void;
+  onOpenDrawer?: () => void;
 };
 
 export function PriorityWatchlist({ onOpenDrawer }: Props) {
   return (
     <div
-      className="flex flex-col min-h-0 overflow-hidden"
+      className="flex flex-col h-full min-h-0 overflow-hidden"
       style={{
         background: "rgba(10,12,18,0.97)",
         border: "1px solid rgba(255,255,255,0.07)",
@@ -53,36 +53,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
         </span>
       </div>
 
-      {/* Column header row */}
-      <div
-        className="flex-shrink-0 px-3.5 py-1"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2.4fr) 70px 100px 80px",
-          gap: "8px",
-          borderBottom: "1px solid rgba(255,255,255,0.035)",
-        }}
-      >
-        {["Region / Topic", "Priority", "Conf.", "Updated"].map((h) => (
-          <span
-            key={h}
-            style={{
-              fontSize: "9px",
-              fontWeight: 600,
-              color: "rgba(90,105,125,0.7)",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {h}
-          </span>
-        ))}
-      </div>
-
-      {/* Rows — scrollable */}
+      {/* Rows — scrollable, stacked for compact side-panel width */}
       <div
         className="intel-watch-scrollbar flex flex-col flex-1 min-h-0 divide-y"
         style={{ overflowY: "auto", overflowX: "hidden", borderColor: "rgba(255,255,255,0.045)" }}
@@ -90,130 +61,123 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
         {watchlistEntries.map((entry) => {
           const ps = PRIORITY_STYLE[entry.priority];
           return (
-            <div
-              key={entry.id}
-              className="px-3.5 py-1.5"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 2.4fr) 70px 100px 80px",
-                gap: "8px",
-                alignItems: "center",
-              }}
-            >
-              {/* Region / Topic */}
-              <div className="flex flex-col min-w-0">
-                <span
-                  style={{
-                    fontSize: "10.5px",
-                    fontWeight: 500,
-                    color: "rgba(195,208,225,0.9)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {entry.region}
-                </span>
-                <span
-                  style={{
-                    fontSize: "10px",
-                    color: "rgba(120,135,155,0.75)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {entry.topic}
-                </span>
-              </div>
-
-              {/* Priority pill */}
-              <span
-                style={{
-                  fontSize: "9.5px",
-                  fontWeight: 600,
-                  letterSpacing: "0.06em",
-                  color: ps.color,
-                  background: ps.bg,
-                  border: `1px solid ${ps.border}`,
-                  borderRadius: "4px",
-                  padding: "2px 8px",
-                  textAlign: "center",
-                  justifySelf: "start",
-                  minWidth: "44px",
-                }}
-              >
-                {entry.priority}
-              </span>
-
-              {/* Confidence */}
-              <div className="flex flex-col items-start gap-0.5">
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 500,
-                    color: "rgba(140,155,175,0.75)",
-                    fontVariantNumeric: "tabular-nums",
-                    fontFamily: "ui-monospace, monospace",
-                  }}
-                >
-                  {entry.confidence}%
-                </span>
-                <div
-                  style={{
-                    width: "100%",
-                    height: "2px",
-                    borderRadius: "1px",
-                    background: "rgba(255,255,255,0.07)",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
+            <div key={entry.id} className="px-3 py-2 flex flex-col gap-1.5">
+              {/* Line 1 — region/topic + priority */}
+              <div className="flex items-start gap-2">
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span
                     style={{
-                      width: `${entry.confidence}%`,
-                      height: "100%",
-                      borderRadius: "1px",
-                      background: "rgba(96,165,250,0.5)",
+                      fontSize: "10.5px",
+                      fontWeight: 500,
+                      color: "rgba(195,208,225,0.9)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
                     }}
-                  />
+                  >
+                    {entry.region}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "rgba(120,135,155,0.75)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {entry.topic}
+                  </span>
                 </div>
+                <span
+                  className="flex-shrink-0"
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                    color: ps.color,
+                    background: ps.bg,
+                    border: `1px solid ${ps.border}`,
+                    borderRadius: "3px",
+                    padding: "1px 6px",
+                  }}
+                >
+                  {entry.priority}
+                </span>
               </div>
 
-              {/* Last update */}
-              <span
-                style={{
-                  fontSize: "10px",
-                  color: "rgba(140,155,175,0.75)",
-                  fontFamily: "ui-monospace, monospace",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {entry.lastUpdate}
-              </span>
+              {/* Line 2 — confidence bar + updated */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span
+                    style={{
+                      fontSize: "9.5px",
+                      fontWeight: 500,
+                      color: "rgba(140,155,175,0.75)",
+                      fontVariantNumeric: "tabular-nums",
+                      fontFamily: "ui-monospace, monospace",
+                      minWidth: 26,
+                    }}
+                  >
+                    {entry.confidence}%
+                  </span>
+                  <div
+                    className="flex-1 min-w-0"
+                    style={{
+                      height: "2px",
+                      borderRadius: "1px",
+                      background: "rgba(255,255,255,0.07)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${entry.confidence}%`,
+                        height: "100%",
+                        borderRadius: "1px",
+                        background: "rgba(96,165,250,0.5)",
+                      }}
+                    />
+                  </div>
+                </div>
+                <span
+                  className="flex-shrink-0"
+                  style={{
+                    fontSize: "9.5px",
+                    color: "rgba(120,135,155,0.7)",
+                    fontFamily: "ui-monospace, monospace",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {entry.lastUpdate}
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
 
       {/* Footer */}
-      <div
-        className="px-3.5 py-2 flex-shrink-0"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
-      >
-        <button
-          onClick={onOpenDrawer}
-          style={{
-            fontSize: "10px",
-            color: "rgba(74,222,128,0.8)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-          }}
+      {onOpenDrawer && (
+        <div
+          className="px-3.5 py-2 flex-shrink-0"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
         >
-          Open Watchlist
-        </button>
-      </div>
+          <button
+            onClick={onOpenDrawer}
+            style={{
+              fontSize: "10px",
+              color: "rgba(74,222,128,0.8)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            Open Watchlist
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { SourcesScreen } from "@/components/sources/SourcesScreen";
 import { PoliticsPanel } from "@/components/politics/PoliticsPanel";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
 import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
+import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
 import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
 import type { EventCategory, RegionKey } from "@/types/event";
@@ -27,49 +28,6 @@ type ActiveSection = "dashboard" | "sources" | "bookmarks";
 type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
-type PlaceholderTopTab = "defense";
-
-const PLACEHOLDER_MODULES: Record<PlaceholderTopTab, { title: string; description: string }> = {
-  defense: {
-    title: "Defense Industry",
-    description: "Defense industry monitoring module will be available here.",
-  },
-};
-
-function ModulePlaceholder({ title, description }: { title: string; description: string }) {
-  return (
-    <main
-      className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6"
-      style={{
-        background:
-          "radial-gradient(circle at 50% 28%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
-      }}
-    >
-      <section
-        className="w-full max-w-[560px] rounded-[10px] px-6 py-5"
-        style={{
-          background: "rgba(12,12,12,0.94)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.035)",
-        }}
-      >
-        <p
-          className="mb-2 font-semibold uppercase"
-          style={{ color: "rgba(147,147,147,0.82)", fontSize: "10.5px", letterSpacing: "0.12em" }}
-        >
-          Module
-        </p>
-        <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "22px" }}>
-          {title}
-        </h1>
-        <p className="mt-3" style={{ color: "rgba(150,150,150,0.9)", fontSize: "13px", lineHeight: 1.55 }}>
-          {description}
-        </p>
-      </section>
-    </main>
-  );
-}
-
 export function AppShell() {
   const globeMapRef = useRef<GlobeMapHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -214,11 +172,6 @@ export function AppShell() {
 
     handleViewChange("situation");
   }
-
-  const placeholderModule =
-    activeTopTab === "defense"
-      ? PLACEHOLDER_MODULES[activeTopTab]
-      : null;
 
   return (
     <div
@@ -383,12 +336,9 @@ export function AppShell() {
               <IntelWatchPanel />
             </div>
           )}
-          {activeSection === "dashboard" && placeholderModule !== null && (
+          {activeSection === "dashboard" && activeTopTab === "defense" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
-              <ModulePlaceholder
-                title={placeholderModule.title}
-                description={placeholderModule.description}
-              />
+              <DefenseIndustryPanel />
             </div>
           )}
         </div>
