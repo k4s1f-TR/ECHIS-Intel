@@ -3,6 +3,7 @@
 import { Radar } from "lucide-react";
 import { AgencyActivity } from "./AgencyActivity";
 import { PriorityWatchlist } from "./PriorityWatchlist";
+import { IntelWatchWorldMap } from "./IntelWatchWorldMap";
 
 export function IntelWatchPanel() {
   return (
@@ -37,7 +38,9 @@ export function IntelWatchPanel() {
             Intel Watch Map
           </span>
         </div>
-        <div className="flex-1 min-h-0" />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <IntelWatchWorldMap />
+        </div>
       </div>
 
       {/* RIGHT — Stacked side column */}
