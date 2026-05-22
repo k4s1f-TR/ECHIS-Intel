@@ -7,10 +7,10 @@ type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sou
 
 const NAV_TABS: { label: string; key?: TopNavTab }[] = [
   { label: "Monitor", key: "situation" },
-  { label: "Policy", key: "politics" },
   { label: "Intel Watch", key: "intel" },
   { label: "Cyber News", key: "cyber" },
   { label: "Defense Industry", key: "defense" },
+  { label: "Policy", key: "politics" },
   { label: "Sources", key: "sources" },
 ];
 

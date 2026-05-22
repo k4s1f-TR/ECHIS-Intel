@@ -95,7 +95,7 @@ export function KeySegmentsPanel() {
           Key Segments
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1 cyber-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1 defense-scrollbar">
         {defenseKeySegments.map((s) => (
           <SegmentRow key={s.segment} item={s} maxCount={maxCount} />
         ))}

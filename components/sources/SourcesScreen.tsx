@@ -4,8 +4,8 @@ import { Clock3, Database, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { mockEvents } from "@/data/mockEvents";
 import { mockSources } from "@/data/mockSources";
-import type { EventCategory, RegionKey } from "@/types/event";
-import type { OsintSourceType, SourceStatus } from "@/types/source";
+import type { RegionKey } from "@/types/event";
+import type { OsintSourceType, SourceCategory, SourceStatus } from "@/types/source";
 
 const STATUS_STYLES: Record<SourceStatus, { color: string; background: string; border: string }> = {
   ACTIVE: {
@@ -42,14 +42,14 @@ const TYPE_LABELS: Record<OsintSourceType, string> = {
   OPEN_DATA: "Open Data",
 };
 
-const CATEGORY_LABELS: Record<EventCategory, string> = {
-  politics: "Policy",
-  conflict: "Conflict",
-  intel: "Intel",
-  maritime: "Maritime",
-  humanitarian: "Humanitarian",
-  energy: "Energy",
-  air: "Air",
+const CATEGORY_LABELS: Record<SourceCategory, string> = {
+  PUBLIC_NEWS_WIRE: "Public News / Wire",
+  GOVERNMENT_INSTITUTIONAL: "Government & Institutional",
+  THINK_TANK_POLICY: "Think Tank / Policy",
+  CYBER_SECURITY_FEEDS: "Cyber Security Feeds",
+  DEFENSE_INDUSTRY: "Defense Industry",
+  REGIONAL_MONITORING: "Regional Monitoring",
+  SOCIAL_OPEN_WEB_SIGNALS: "Social / Open Web Signals",
 };
 
 const REGION_LABELS: Record<RegionKey, string> = {
@@ -197,8 +197,8 @@ export function SourcesScreen() {
             <span>Source</span>
             <span>Type</span>
             <span>Status</span>
-            <span>Coverage</span>
-            <span>Last Checked</span>
+            <span>Category</span>
+            <span>Last Reviewed</span>
             <span className="text-right">Events</span>
           </div>
 
@@ -250,7 +250,7 @@ export function SourcesScreen() {
                     style={{ color: "rgba(145,145,145,0.88)", fontSize: "11px" }}
                   >
                     <Clock3 size={12} style={{ color: "rgba(95,95,95,0.9)" }} />
-                    {source.lastChecked}
+                    {source.lastReviewed}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {source.regions.slice(0, 2).map((region) => (

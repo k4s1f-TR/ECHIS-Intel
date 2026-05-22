@@ -141,7 +141,7 @@ export function DefenseIndustryFeedPanel({
           <span style={{ fontSize: "9px", color: "rgba(165,180,195,0.55)", fontWeight: 600 }}>OSINT</span>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-2 cyber-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-2 defense-scrollbar">
         {defenseFeedItems.map((item) => (
           <FeedCard
             key={item.id}

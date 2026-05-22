@@ -32,7 +32,8 @@ function MapLegend() {
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "rgba(195,210,220,0.78)",
+            background: "rgba(255,210,31,0.98)",
+            boxShadow: "0 0 6px rgba(255,210,31,0.38)",
             flexShrink: 0,
           }}
         />
@@ -85,7 +86,7 @@ export function DefenseIndustryPanel() {
               </span>
             </div>
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden" style={{ background: "#000000" }}>
             <DefenseIndustryMap />
           </div>
           <MapLegend />

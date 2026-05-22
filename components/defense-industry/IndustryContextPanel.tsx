@@ -155,7 +155,7 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
         </span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col cyber-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col defense-scrollbar">
         <SectionLabel icon={Flag} label="Country / Region" />
         <SectionValue>{ctx.countryRegion}</SectionValue>
 

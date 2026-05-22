@@ -37,7 +37,7 @@ export function SupplyChainPressurePanel() {
           Supply Chain Pressure
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 cyber-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 defense-scrollbar">
         {defenseSupplyChainPressure.map((row) => {
           const tone = STATUS_COLOR[row.status] ?? STATUS_COLOR.Moderate;
           return (

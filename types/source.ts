@@ -1,4 +1,13 @@
-import type { EventCategory, RegionKey } from "./event";
+import type { RegionKey } from "./event";
+
+export type SourceCategory =
+  | "PUBLIC_NEWS_WIRE"
+  | "GOVERNMENT_INSTITUTIONAL"
+  | "THINK_TANK_POLICY"
+  | "CYBER_SECURITY_FEEDS"
+  | "DEFENSE_INDUSTRY"
+  | "REGIONAL_MONITORING"
+  | "SOCIAL_OPEN_WEB_SIGNALS";
 
 export type OsintSourceType =
   | "OFFICIAL"
@@ -18,9 +27,9 @@ export type OsintSource = {
   name: string;
   type: OsintSourceType;
   status: SourceStatus;
-  categories: EventCategory[];
+  categories: SourceCategory[];
   regions: RegionKey[];
-  lastChecked: string;
+  lastReviewed: string;
   description: string;
   url?: string;
   eventCount?: number;

@@ -117,6 +117,28 @@ body {
   background: rgba(74, 222, 128, 0.28);
 }
 
+.defense-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 180, 195, 0.28) rgba(255, 255, 255, 0.02);
+}
+
+.defense-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.defense-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.defense-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(165, 180, 195, 0.22);
+  border-radius: 999px;
+}
+
+.defense-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(165, 180, 195, 0.36);
+}
+
 .intel-watch-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
