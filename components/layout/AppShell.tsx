@@ -6,6 +6,7 @@ import { HeaderNav } from "./HeaderNav";
 import {
   MapLibreGlobe,
   type MapLibreGlobeHandle,
+  type MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
 import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard";
 import { MapControls } from "@/components/map/MapControls";
@@ -74,6 +75,34 @@ export function AppShell() {
         ? baseEvents
         : baseEvents.filter((e) => e.category === activeCategory),
     [baseEvents, activeCategory],
+  );
+
+  // GeoJSON-ready marker payloads for the MapLibre globe.  Global View
+  // pulls from displayedEvents (already filtered by region/category);
+  // SOCMINT pulls from displayedSignals.  Empty arrays are valid — the
+  // globe simply renders no points.
+  const globalMarkers = useMemo<MarkerFeature[]>(
+    () =>
+      displayedEvents
+        .filter((e) => e.coordinates !== undefined)
+        .map((e) => ({
+          id: e.id,
+          lng: e.coordinates!.lng,
+          lat: e.coordinates!.lat,
+          severity: e.severity,
+        })),
+    [displayedEvents],
+  );
+
+  const signalsMarkers = useMemo<MarkerFeature[]>(
+    () =>
+      displayedSignals.map((s) => ({
+        id: s.id,
+        lng: s.coordinates[0],
+        lat: s.coordinates[1],
+        confidence: s.confidence,
+      })),
+    [displayedSignals],
   );
 
   function handleViewChange(view: ViewMode) {
@@ -197,7 +226,12 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            <MapLibreGlobe ref={globeMapRef} />
+            <MapLibreGlobe
+              ref={globeMapRef}
+              activeView={activeView}
+              globalMarkers={globalMarkers}
+              signalsMarkers={signalsMarkers}
+            />
             <div
               style={{
                 opacity: activeMapRailMode === "signals" ? 1 : 0,

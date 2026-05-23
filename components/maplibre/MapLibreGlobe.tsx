@@ -22,6 +22,42 @@ export interface MapLibreGlobeHandle {
 }
 
 // ---------------------------------------------------------------------------
+// View modes the globe component can frame for.  Mirrors AppShell's ViewMode
+// so the value can be passed through as a prop without conversion.
+// ---------------------------------------------------------------------------
+export type GlobeViewMode = "situation" | "global" | "signals";
+
+// ---------------------------------------------------------------------------
+// Marker foundation — Global View and SOCMINT use separate GeoJSON sources
+// + circle layers so visibility, styling, and lifecycle stay independent.
+//
+// Far-side clipping note: MapLibre v5's globe projection automatically hides
+// symbol/circle features that fall on the back of the sphere, so no manual
+// horizon visibility check is needed for this foundation.  TODO revisit if
+// we ever ship a per-marker label / sprite that doesn't respect occlusion.
+// ---------------------------------------------------------------------------
+export type MarkerKind = "global" | "signals";
+
+export type MarkerFeature = {
+  id: string;
+  lng: number;
+  lat: number;
+  severity?: "low" | "medium" | "high" | "critical";
+  confidence?: "low" | "medium" | "high";
+};
+
+interface MapLibreGlobeProps {
+  activeView?: GlobeViewMode;
+  globalMarkers?: MarkerFeature[];
+  signalsMarkers?: MarkerFeature[];
+}
+
+const MARKER_SOURCE_GLOBAL = "taipan-markers-global";
+const MARKER_SOURCE_SIGNALS = "taipan-markers-signals";
+const MARKER_LAYER_GLOBAL = "taipan-markers-global-layer";
+const MARKER_LAYER_SIGNALS = "taipan-markers-signals-layer";
+
+// ---------------------------------------------------------------------------
 // Style source — CARTO dark-matter (public, no token).
 //
 // Chosen for OSIRIS-adjacent dark cartography quality: crisp muted labels,
@@ -52,12 +88,11 @@ const DEFAULT_GLOBE_VIEW = {
   // the framed globe rather than dead center.  Longitude held around 35.
   // MapLibre center order is [longitude, latitude].
   center: [35, 31] as [number, number],
-  // Tuned visually: full globe comfortably visible with black margin while
-  // keeping Europe / Türkiye / Middle East / Africa / Asia in a balanced
-  // frame.  Equivalent to the prior Central View (zoom 2.9) minus one
-  // zoom-out button step (ZOOM_STEP = 0.75).  Single source of truth —
+  // Tuned visually to the reference screenshot: the full globe is
+  // comfortably visible with a black margin around it, Europe / Türkiye /
+  // Middle East / Africa / Asia all in frame.  Single source of truth —
   // initial paint and Central View consume this same value.
-  zoom: 2.15,
+  zoom: 1.9,
   bearing: 0,
   pitch: 0,
 } as const;
@@ -90,6 +125,217 @@ function applyDefaultGlobeView(
   }
 }
 
+// ---------------------------------------------------------------------------
+// View targets — one camera config per ViewMode.  Single config so the
+// switch animation between Monitor / Global / SOCMINT is consistent.  All
+// three start from DEFAULT_GLOBE_VIEW's center and zoom; Global/Signals
+// lean slightly closer to give the operator more spatial detail without
+// breaking the canonical Türkiye-centred composition.
+// ---------------------------------------------------------------------------
+type ViewTarget = {
+  center: [number, number];
+  zoom: number;
+  bearing: number;
+  pitch: number;
+};
+
+const VIEW_TARGETS: Record<GlobeViewMode, ViewTarget> = {
+  situation: {
+    center: DEFAULT_GLOBE_VIEW.center,
+    zoom: DEFAULT_GLOBE_VIEW.zoom,
+    bearing: DEFAULT_GLOBE_VIEW.bearing,
+    pitch: DEFAULT_GLOBE_VIEW.pitch,
+  },
+  global: {
+    center: DEFAULT_GLOBE_VIEW.center,
+    zoom: 2.6,
+    bearing: 0,
+    pitch: 0,
+  },
+  signals: {
+    center: DEFAULT_GLOBE_VIEW.center,
+    zoom: 2.8,
+    bearing: 0,
+    pitch: 0,
+  },
+};
+
+const VIEW_TRANSITION_MS = 1400;
+
+// Apply a view target's camera + marker visibility in one call.  When
+// `animated` is true the camera eases over VIEW_TRANSITION_MS; otherwise
+// it jumps (used on first-paint sync, where no animation is desired).
+function applyViewMode(
+  map: maplibregl.Map,
+  view: GlobeViewMode,
+  animated: boolean,
+): void {
+  const target = VIEW_TARGETS[view];
+  const camera = {
+    center: target.center,
+    zoom: target.zoom,
+    bearing: target.bearing,
+    pitch: target.pitch,
+  };
+  try {
+    if (animated) {
+      map.easeTo({
+        ...camera,
+        duration: VIEW_TRANSITION_MS,
+        easing: (t) => 1 - Math.pow(1 - t, 3),
+      });
+    } else {
+      map.jumpTo(camera);
+    }
+  } catch {
+    /* map mid-teardown — ignore */
+  }
+  setMarkerVisibility(map, "global", view === "global");
+  setMarkerVisibility(map, "signals", view === "signals");
+}
+
+function setMarkerVisibility(
+  map: maplibregl.Map,
+  kind: MarkerKind,
+  visible: boolean,
+): void {
+  const layerId = kind === "global" ? MARKER_LAYER_GLOBAL : MARKER_LAYER_SIGNALS;
+  try {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(
+        layerId,
+        "visibility",
+        visible ? "visible" : "none",
+      );
+    }
+  } catch {
+    /* layer not yet added — skip */
+  }
+}
+
+// Idempotent setup — adds the empty marker sources + circle layers once.
+// Called after style.load so the layers sit above the dark-tone style.
+function setupMarkerLayers(map: maplibregl.Map): void {
+  const emptyFC: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: [],
+  };
+
+  try {
+    if (!map.getSource(MARKER_SOURCE_GLOBAL)) {
+      map.addSource(MARKER_SOURCE_GLOBAL, { type: "geojson", data: emptyFC });
+    }
+    if (!map.getLayer(MARKER_LAYER_GLOBAL)) {
+      map.addLayer({
+        id: MARKER_LAYER_GLOBAL,
+        type: "circle",
+        source: MARKER_SOURCE_GLOBAL,
+        layout: { visibility: "none" },
+        paint: {
+          // Small, clamped — premium feel, no inflation on zoom.
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            0,
+            3,
+            4,
+            4.5,
+            8,
+            6,
+          ],
+          "circle-color": [
+            "match",
+            ["coalesce", ["get", "severity"], "low"],
+            "critical",
+            "#dc2626",
+            "high",
+            "#ea580c",
+            "medium",
+            "#ca8a04",
+            "#9ca3af",
+          ],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "rgba(255, 255, 255, 0.22)",
+          "circle-opacity": 0.9,
+          "circle-stroke-opacity": 0.6,
+        },
+      });
+    }
+
+    if (!map.getSource(MARKER_SOURCE_SIGNALS)) {
+      map.addSource(MARKER_SOURCE_SIGNALS, { type: "geojson", data: emptyFC });
+    }
+    if (!map.getLayer(MARKER_LAYER_SIGNALS)) {
+      map.addLayer({
+        id: MARKER_LAYER_SIGNALS,
+        type: "circle",
+        source: MARKER_SOURCE_SIGNALS,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            0,
+            3,
+            4,
+            4,
+            8,
+            5.5,
+          ],
+          "circle-color": [
+            "match",
+            ["coalesce", ["get", "confidence"], "low"],
+            "high",
+            "#22d3ee",
+            "medium",
+            "#a3a3a3",
+            "#64748b",
+          ],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "rgba(255, 255, 255, 0.22)",
+          "circle-opacity": 0.85,
+          "circle-stroke-opacity": 0.55,
+        },
+      });
+    }
+  } catch (e) {
+    console.warn("[MapLibreGlobe] marker layer setup failed:", e);
+  }
+}
+
+// Push a fresh feature set into a marker source.  Safe to call before
+// layers exist (no-op) and tolerant of mid-teardown errors.
+function applyMarkerData(
+  map: maplibregl.Map,
+  kind: MarkerKind,
+  features: MarkerFeature[],
+): void {
+  const sourceId =
+    kind === "global" ? MARKER_SOURCE_GLOBAL : MARKER_SOURCE_SIGNALS;
+  const source = map.getSource(sourceId);
+  if (!source || source.type !== "geojson") return;
+  const fc: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: features.map((f) => ({
+      type: "Feature",
+      id: f.id,
+      geometry: { type: "Point", coordinates: [f.lng, f.lat] },
+      properties: {
+        id: f.id,
+        severity: f.severity ?? null,
+        confidence: f.confidence ?? null,
+      },
+    })),
+  };
+  try {
+    (source as maplibregl.GeoJSONSource).setData(fc);
+  } catch {
+    /* mid-teardown — ignore */
+  }
+}
+
 // Time after which a still-loading map is treated as failed.  Prevents the
 // loading placeholder from sitting forever if the style/tiles never arrive.
 const LOAD_TIMEOUT_MS = 9000;
@@ -102,12 +348,17 @@ const LOAD_TIMEOUT_MS = 9000;
 // spin the viewport like a clock (counter-clockwise flat-disk effect);
 // stepping longitude makes the globe surface naturally drift right-to-left.
 //
-// 0.6°/sec → one full revolution every 10 minutes.  Calm and operational.
-// 75 seconds is the idle window after the last real user input before
-// rotation resumes.
+// 1.5°/sec → one full revolution every 4 minutes.  A touch livelier than
+// the previous 1.2°/s baseline; still ambient and not consumer-map fast.
+// Two distinct idle delays:
+//   • CENTRAL_VIEW_IDLE_DELAY_MS — short, after a Central View reset
+//   • INTERACTION_IDLE_DELAY_MS  — longer, after raw user input
 // ---------------------------------------------------------------------------
-const AUTO_ROTATE_DEG_PER_SEC = 0.6;
-const AUTO_ROTATE_RESUME_DELAY_MS = 75_000;
+const AUTO_ROTATE_DEG_PER_SEC = 1.5;
+const CENTRAL_VIEW_IDLE_DELAY_MS = 5_000;
+const INTERACTION_IDLE_DELAY_MS = 15_000;
+// Duration of the Central View easeTo (kept in sync with applyDefaultGlobeView).
+const CENTRAL_VIEW_ANIM_MS = 1200;
 // Cap on per-frame delta so a tab-throttle or long task can't make the
 // globe leap forward; ~50ms ≈ one slow frame's worth.
 const AUTO_ROTATE_MAX_DT_S = 0.05;
@@ -140,6 +391,46 @@ const LABEL_MAJOR = "rgba(190, 198, 194, 0.72)";
 const LABEL_MINOR = "rgba(150, 160, 156, 0.48)";
 const LABEL_WATER = "rgba(120, 132, 138, 0.55)";
 const LABEL_HALO = "rgba(5, 7, 8, 0.85)";
+
+// ---------------------------------------------------------------------------
+// Default-view country whitelist.  At default / Central View zoom only the
+// continents (style default) plus Türkiye and a small set of globally
+// significant countries from each continent stay labeled; the rest fade
+// in past LABEL_DETAIL_ZOOM so user zoom-in restores the full country
+// label set.  Sub-country labels (cities, states, etc.) are left to the
+// CARTO style's own zoom rules.
+// ---------------------------------------------------------------------------
+const LABEL_DETAIL_ZOOM = 2.5;
+const DEFAULT_VIEW_COUNTRIES = [
+  // Türkiye
+  "Turkey",
+  "Türkiye",
+  "Turkiye",
+  // Major anchors per region — kept sparse for a clean, balanced look
+  "United States",
+  "United States of America",
+  "USA",
+  "Brazil",
+  "Russia",
+  "China",
+  "India",
+  "Australia",
+  "South Africa",
+  // Europe (a couple)
+  "France",
+  "Germany",
+  "United Kingdom",
+  // North Africa (a couple)
+  "Egypt",
+  "Algeria",
+  // Additional regional anchors
+  "Iran",
+  "Ukraine",
+  "Ethiopia",
+  "Afghanistan",
+  "Bosnia and Herzegovina",
+  "Bosna i Hercegovina",
+];
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -285,19 +576,172 @@ function applyDarkTone(map: maplibregl.Map): void {
   }
 }
 
-export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
-  function MapLibreGlobe(_props, ref) {
+// ---------------------------------------------------------------------------
+// Country label declutter — at default / Central View zoom, only the
+// continent labels (style default) and the whitelisted countries stay
+// visible.  Other country labels fade in around LABEL_DETAIL_ZOOM via a
+// per-feature text-opacity expression, so user zoom-in restores the full
+// label set.  Sub-country labels (cities, states, etc.) are NOT touched
+// here — CARTO's own zoom rules handle them.
+// ---------------------------------------------------------------------------
+const WHITELIST_LAYER_ID = "taipan-country-whitelist";
+
+function applyCountryLabelWhitelist(map: maplibregl.Map): void {
+  const style = map.getStyle();
+  const layers = style?.layers ?? [];
+
+  // Step 1: hide all native country label layers below LABEL_DETAIL_ZOOM
+  // via a per-feature text-opacity fade.  Our own custom whitelist layer
+  // covers the low-zoom range and CARTO's native rendering takes over
+  // once the user zooms past the fade window.
+  const lowZoomHide: maplibregl.ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    LABEL_DETAIL_ZOOM - 0.3,
+    0,
+    LABEL_DETAIL_ZOOM + 0.3,
+    1,
+  ];
+
+  // Probe one of the native country symbol layers to copy its source /
+  // source-layer / font into our custom whitelist layer — that way we
+  // hit exactly the same vector tiles the style itself uses without
+  // hardcoding CARTO-specific names.
+  let countrySource: string | undefined;
+  let countrySourceLayer: string | undefined;
+  let countryFont: unknown;
+
+  for (const layer of layers) {
+    if (layer.type !== "symbol") continue;
+    const id = layer.id;
+    if (!/country/i.test(id)) continue;
+    if (/continent/i.test(id)) continue;
+    const lyr = layer as unknown as {
+      source?: string;
+      "source-layer"?: string;
+      layout?: { "text-font"?: unknown };
+    };
+    if (!countrySource && lyr.source) {
+      countrySource = lyr.source;
+      countrySourceLayer = lyr["source-layer"];
+      countryFont = lyr.layout?.["text-font"];
+    }
+    try {
+      map.setPaintProperty(id, "text-opacity", lowZoomHide);
+    } catch {
+      /* skip */
+    }
+  }
+
+  // Step 2: add a dedicated whitelist layer drawing only the few
+  // globally-significant countries at low zoom.  Reuses CARTO's vector
+  // source so the data is guaranteed to be present.  Auto-cleaned by
+  // its own maxzoom once the native layers fade in.
+  if (
+    countrySource &&
+    countrySourceLayer &&
+    !map.getLayer(WHITELIST_LAYER_ID)
+  ) {
+    const fontProp = (countryFont as string[] | undefined) ?? [
+      "Open Sans Regular",
+    ];
+    try {
+      map.addLayer({
+        id: WHITELIST_LAYER_ID,
+        type: "symbol",
+        source: countrySource,
+        "source-layer": countrySourceLayer,
+        minzoom: 0,
+        maxzoom: LABEL_DETAIL_ZOOM + 0.3,
+        filter: [
+          "any",
+          [
+            "match",
+            ["coalesce", ["get", "name:en"], ""],
+            DEFAULT_VIEW_COUNTRIES,
+            true,
+            false,
+          ],
+          [
+            "match",
+            ["coalesce", ["get", "name"], ""],
+            DEFAULT_VIEW_COUNTRIES,
+            true,
+            false,
+          ],
+          [
+            "match",
+            ["coalesce", ["get", "name_en"], ""],
+            DEFAULT_VIEW_COUNTRIES,
+            true,
+            false,
+          ],
+          [
+            "match",
+            ["coalesce", ["get", "name:latin"], ""],
+            DEFAULT_VIEW_COUNTRIES,
+            true,
+            false,
+          ],
+        ],
+        layout: {
+          "text-field": [
+            "coalesce",
+            ["get", "name:en"],
+            ["get", "name:latin"],
+            ["get", "name_en"],
+            ["get", "name"],
+            "",
+          ],
+          "text-font": fontProp,
+          "text-size": 12,
+          "text-letter-spacing": 0.1,
+          "text-transform": "uppercase",
+          "text-padding": 4,
+        },
+        paint: {
+          "text-color": LABEL_MAJOR,
+          "text-halo-color": LABEL_HALO,
+          "text-halo-width": 1.2,
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    } catch (e) {
+      console.warn("[MapLibreGlobe] whitelist layer add failed:", e);
+    }
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      "[MapLibreGlobe] country source:",
+      countrySource,
+      "source-layer:",
+      countrySourceLayer,
+    );
+  }
+}
+
+export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>(
+  function MapLibreGlobe(
+    { activeView = "situation", globalMarkers, signalsMarkers },
+    ref,
+  ) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
 
     // Imperative pause-rotate hook — wired by the useEffect below and called
     // from the imperative handle (button-driven zoom/center) and from real
-    // user input listeners on the canvas.  Stored as a ref so it remains
-    // available without re-binding the imperative handle on every render.
-    const pauseAutoRotateRef = useRef<() => void>(() => {});
+    // user input listeners on the canvas.  Accepts the idle delay (ms) so
+    // Central View can use a shorter resume window than raw user input.
+    const pauseAutoRotateRef = useRef<(delayMs: number) => void>(() => {});
 
     const [loadState, setLoadState] = useState<LoadState>("loading");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    // Tracks the last view actually applied to the map so we can tell
+    // first-application (jumpTo, no auto-rotate pause) from a real user
+    // navigation between views (easeTo + pause).
+    const lastAppliedViewRef = useRef<GlobeViewMode | null>(null);
 
     useImperativeHandle(
       ref,
@@ -305,22 +749,25 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
         zoomIn: () => {
           const m = mapRef.current;
           if (!m) return;
-          pauseAutoRotateRef.current();
+          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
           m.zoomTo(m.getZoom() + ZOOM_STEP, { duration: 350 });
         },
         zoomOut: () => {
           const m = mapRef.current;
           if (!m) return;
-          pauseAutoRotateRef.current();
+          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
           m.zoomTo(m.getZoom() - ZOOM_STEP, { duration: 350 });
         },
         centerView: () => {
           const m = mapRef.current;
           if (!m) return;
-          // Pause auto-rotate immediately so it can't fight the animation
-          // or mutate the camera mid-reset.  The pause schedules the normal
-          // idle-delay resume; nothing else needs to be done here.
-          pauseAutoRotateRef.current();
+          // Pause auto-rotate immediately so it can't fight the easeTo or
+          // mutate the camera mid-reset.  Schedule resume 10s AFTER the
+          // animation finishes, not 10s after the click — that is what
+          // "dönüş tamamlandıktan sonra 10 saniye hareketsizlikte" means.
+          pauseAutoRotateRef.current(
+            CENTRAL_VIEW_ANIM_MS + CENTRAL_VIEW_IDLE_DELAY_MS,
+          );
           applyDefaultGlobeView(m, true);
         },
       }),
@@ -394,6 +841,12 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
         // route it through the tuning categoriser.  Robust across style
         // versions: missing/renamed layers are silently skipped.
         applyDarkTone(map);
+        // Default-view country label whitelist — keeps only continents +
+        // whitelisted countries at default zoom; user zoom-in restores all.
+        applyCountryLabelWhitelist(map);
+        // Marker foundation — empty sources + circle layers for Global View
+        // and SOCMINT.  Visibility/data driven by props via useEffects below.
+        setupMarkerLayers(map);
 
         // Force a resize after style commit in case the container was sized
         // during a transition / mount race.
@@ -528,7 +981,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
         }
       };
 
-      const scheduleResume = () => {
+      const scheduleResume = (delayMs: number) => {
         clearResumeTimer();
         resumeTimerId = window.setTimeout(() => {
           resumeTimerId = null;
@@ -536,13 +989,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
           // Reset frame clock so the first post-resume frame computes a
           // small dt instead of catching up missed seconds in one jump.
           lastFrameTime = null;
-        }, AUTO_ROTATE_RESUME_DELAY_MS);
+        }, delayMs);
       };
 
-      const pauseAutoRotate = () => {
+      const pauseAutoRotate = (delayMs: number) => {
         userInteracting = true;
         lastFrameTime = null;
-        scheduleResume();
+        scheduleResume(delayMs);
       };
 
       // Expose pause to the imperative handle (button-driven actions).
@@ -564,7 +1017,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
         e: { originalEvent?: unknown; [key: string]: unknown },
       ) => {
         if (!isUserOriginated(e)) return;
-        pauseAutoRotate();
+        pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
       };
 
       map.on("dragstart", onMapUserStart);
@@ -578,7 +1031,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
       // MapLibre's higher-level *start events fire, which closes the brief
       // window where a programmatic rotateTo might still tick during a tap.
       const canvas = map.getCanvasContainer();
-      const onDomUserInput = () => pauseAutoRotate();
+      const onDomUserInput = () => pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
       canvas.addEventListener("mousedown", onDomUserInput, { passive: true });
       canvas.addEventListener("pointerdown", onDomUserInput, { passive: true });
       canvas.addEventListener("touchstart", onDomUserInput, { passive: true });
@@ -586,12 +1039,12 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
 
       // ── visibilitychange ────────────────────────────────────────────────
       // Hidden: loop self-gates via document.hidden.  Visible: route through
-      // the normal idle-delay path so we don't jump on return.
+      // the interaction idle-delay path so we don't jump on return.
       const onVisibility = () => {
         if (document.hidden) {
           lastFrameTime = null;
         } else {
-          pauseAutoRotate();
+          pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
         }
       };
       document.addEventListener("visibilitychange", onVisibility);
@@ -653,6 +1106,47 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle>(
         }
       };
     }, []);
+
+    // ── View mode sync ──────────────────────────────────────────────────────
+    // First application after load: silent (jumpTo), no auto-rotate pause —
+    // the load handler already placed the globe at DEFAULT_GLOBE_VIEW.
+    // Subsequent changes: smooth easeTo with auto-rotate paused for the
+    // duration of the animation + the standard Central View idle delay.
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready") return;
+      const previous = lastAppliedViewRef.current;
+      if (previous === activeView) {
+        // Still keep marker visibility in sync in case it desynced
+        setMarkerVisibility(map, "global", activeView === "global");
+        setMarkerVisibility(map, "signals", activeView === "signals");
+        return;
+      }
+      const isFirstApply = previous === null;
+      lastAppliedViewRef.current = activeView;
+      if (isFirstApply) {
+        applyViewMode(map, activeView, false);
+        return;
+      }
+      pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
+      applyViewMode(map, activeView, true);
+    }, [activeView, loadState]);
+
+    // ── Marker data sync ────────────────────────────────────────────────────
+    // Push fresh feature sets into the GeoJSON sources whenever the parent
+    // hands us new arrays.  applyMarkerData is a no-op if the source isn't
+    // ready yet, so race conditions during initial load are harmless.
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready") return;
+      applyMarkerData(map, "global", globalMarkers ?? []);
+    }, [globalMarkers, loadState]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready") return;
+      applyMarkerData(map, "signals", signalsMarkers ?? []);
+    }, [signalsMarkers, loadState]);
 
     // -----------------------------------------------------------------------
     // Render — inline styles only (no Tailwind classes) to guarantee CSS is
