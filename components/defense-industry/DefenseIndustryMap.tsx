@@ -13,15 +13,15 @@ export function DefenseIndustryMap() {
             {`
               .defense-map-marker-core {
                 animation: defenseMapMarkerBreath 3200ms ease-in-out infinite;
-                fill: rgba(255, 210, 31, 0.98);
-                stroke: rgba(255, 236, 140, 0.72);
+                fill: rgba(255, 122, 24, 0.98);
+                stroke: rgba(255, 181, 92, 0.74);
                 stroke-width: 0.55;
                 vector-effect: non-scaling-stroke;
-                filter: drop-shadow(0 0 6px rgba(255, 210, 31, 0.38));
+                filter: drop-shadow(0 0 6px rgba(255, 122, 24, 0.4));
               }
 
               .defense-map-marker-inner {
-                fill: rgba(255, 236, 140, 0.95);
+                fill: rgba(255, 205, 140, 0.95);
                 stroke: none;
               }
 

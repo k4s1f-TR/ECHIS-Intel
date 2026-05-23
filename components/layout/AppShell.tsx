@@ -3,8 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
-import { GlobeMap, type GlobeMapHandle } from "@/components/map/GlobeMap";
-import type { MapMode } from "@/components/map/cameraPresets";
+import {
+  MapLibreGlobe,
+  type MapLibreGlobeHandle,
+} from "@/components/maplibre/MapLibreGlobe";
 import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard";
 import { MapControls } from "@/components/map/MapControls";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
@@ -29,7 +31,7 @@ type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 export function AppShell() {
-  const globeMapRef = useRef<GlobeMapHandle | null>(null);
+  const globeMapRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
@@ -57,12 +59,6 @@ export function AppShell() {
   const activeMapRailMode = isMapScreen ? activeRailMode : null;
   const mapControlPanelOffset =
     activeMapRailMode === "global" ? 390 : activeMapRailMode === "signals" ? 368 : 0;
-  const mapMode: MapMode =
-    activeMapRailMode === "global"
-      ? "global"
-      : activeMapRailMode === "signals"
-        ? "socmint"
-        : "monitor-home";
 
   const baseEvents = useMemo(
     () =>
@@ -201,16 +197,7 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            <GlobeMap
-              ref={globeMapRef}
-              mode={mapMode}
-              events={activeMapRailMode === "global" ? displayedEvents : []}
-              selectedId={selectedId}
-              onSelectEvent={setSelectedId}
-              signals={isMapScreen ? displayedSignals : []}
-              selectedSignalId={selectedSignalId}
-              onSelectSignal={setSelectedSignalId}
-            />
+            <MapLibreGlobe ref={globeMapRef} />
             <div
               style={{
                 opacity: activeMapRailMode === "signals" ? 1 : 0,
