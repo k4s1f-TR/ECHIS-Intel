@@ -1,4 +1,4 @@
-# BoruEyes - Current UI State Handoff
+# TaipanMonitor - Current UI State Handoff
 
 ## Goal
 Dark-themed, map-first OSINT situation dashboard. Full-screen desktop layout, no backend, mock data only.
@@ -16,9 +16,9 @@ Dark-themed, map-first OSINT situation dashboard. Full-screen desktop layout, no
 - **`components/layout/AppShell.tsx`** - owns top-level UI state and wires all modules together
 - **`components/layout/HeaderNav.tsx`** - top navigation with Monitor, Policy, Intel Watch, Cyber News, Defense Industry, Sources
 - **`components/layout/LeftRail.tsx`** - icon-only rail for Global View, SOCMINT Watch, Bookmarks, and reserved modules
-- **`components/map/GlobeMap.tsx`** - custom Three.js globe engine
+- **`components/maplibre/MapLibreGlobe.tsx`** - MapLibre-only active globe
 - **`components/map/FloatingMonitoringCard.tsx`** - Global View overlay controls
-- **`components/map/MapControls.tsx`** - center and zoom controls wired to `GlobeMap` via ref
+- **`components/map/MapControls.tsx`** - center and zoom controls wired to `MapLibreGlobe` via ref
 - **`components/map/LiveStatusPill.tsx`** - live indicator badge on map modes
 - **`components/events/RightEventsPanel.tsx`** - scrollable event panel for Global View
 - **`components/events/EventCard.tsx`** - individual event card with selection and bookmark state
@@ -26,24 +26,23 @@ Dark-themed, map-first OSINT situation dashboard. Full-screen desktop layout, no
 
 ---
 
-## Globe Map (`GlobeMap.tsx`)
+## Globe Map (`MapLibreGlobe.tsx`)
 
-- The active map is a **custom Three.js globe**, not MapLibre.
-- Rendering uses `three`, `OrbitControls`, `world-atlas`, and `topojson-client`.
-- Camera presets live in **`components/map/cameraPresets.ts`**.
-- Supported map modes are `monitor-home`, `global`, and `socmint`.
+- The active map is a **MapLibre-only globe**.
+- Rendering uses `maplibre-gl` with globe projection and the CARTO dark-matter style.
+- `DEFAULT_GLOBE_VIEW` in **`components/maplibre/MapLibreGlobe.tsx`** is the canonical camera source.
+- Supported view modes are `situation`, `global`, and `signals`.
 - The globe supports drag rotation, wheel zoom, auto-rotation, center view, zoom in, and zoom out.
-- Country and capital labels are generated into globe textures for stability.
-- Event and SOCMINT markers are rendered as Three.js sprites on the globe surface.
-- Marker clicks are handled through Three.js raycasting and call `onSelectEvent` or `onSelectSignal`.
-- Marker palettes are category/source-aware and are defined inside `GlobeMap.tsx`.
-- `MapControls.tsx` is already wired to `GlobeMapHandle` through `AppShell`.
+- Country labels are handled through MapLibre style layers and default-view label filtering.
+- Event and SOCMINT markers are rendered through separate MapLibre GeoJSON sources and circle layers.
+- Marker palettes are severity/confidence-aware and are defined inside `MapLibreGlobe.tsx`.
+- `MapControls.tsx` is already wired to `MapLibreGlobeHandle` through `AppShell`.
 
 ---
 
 ## Main Screens
 
-- **Monitor home** - Three.js globe without side panels until a rail mode is selected
+- **Monitor home** - MapLibre globe without side panels until a rail mode is selected
 - **Global View** - globe markers, `FloatingMonitoringCard`, `RightEventsPanel`, and live pill
 - **SOCMINT Watch** - signal markers, `SignalsFloatingCard`, `SignalsPanel`, and live pill
 - **Policy** - panel/feed-first political monitoring screen with filters and market side panels
@@ -89,10 +88,10 @@ Do not change these unless the task explicitly targets them:
 - app shell structure
 - top navigation
 - left rail
-- Three.js globe engine
+- MapLibre globe engine
 - camera presets
 - marker behavior
-- country/capital label strategy
+- MapLibre label LOD strategy
 - map tone, center, zoom, and interaction model
 - SOCMINT behavior
 - Global View marker data

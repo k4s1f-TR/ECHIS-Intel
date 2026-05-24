@@ -4,7 +4,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import type { OsintEvent } from "@/types/event";
 import type { SocmintReport } from "@/types/socmint";
 
-const STORAGE_KEY = "borueyes.bookmarks";
+const STORAGE_KEY = "taipanmonitor.bookmarks";
 const EMPTY_BOOKMARK_IDS: string[] = [];
 const bookmarkSnapshots = new Map<string, { raw: string | null; ids: string[] }>();
 const bookmarkListeners = new Map<string, Set<() => void>>();

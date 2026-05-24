@@ -12,8 +12,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 // ---------------------------------------------------------------------------
 // Public handle — imperative API consumed by MapControls.
-// Mirrors the API the previous Three.js GlobeMap exposed so the rest of the
-// UI keeps working without changes.
 // ---------------------------------------------------------------------------
 export interface MapLibreGlobeHandle {
   centerView: () => void;
