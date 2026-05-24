@@ -92,32 +92,76 @@ const DEFAULT_GLOBE_VIEW = {
   // comfortably visible with a black margin around it, Europe / Türkiye /
   // Middle East / Africa / Asia all in frame.  Single source of truth —
   // initial paint and Central View consume this same value.
-  zoom: 1.9,
+  zoom: 2.12,
   bearing: 0,
   pitch: 0,
 } as const;
 const ZOOM_STEP = 0.75;
 
 // ---------------------------------------------------------------------------
+// GLOBE_SCREEN_FRAMING — screen-space padding per view mode.
+//
+// The geographic camera (center/zoom/bearing/pitch) is identical across all
+// three view modes — Central View / site-entry composition is preserved.
+// What differs is the MapLibre `padding`, which insets the camera's effective
+// anchor so the globe is rendered into the empty viewport region instead of
+// sitting dead-centre behind the side panels.
+//
+// Layout reality (matters for how padding is chosen):
+//   • Left edge of the free zone is the right edge of the small top-left
+//     floating monitoring / signals card (~210px wide + a small margin →
+//     ~220px from the left).
+//   • Right edge of the free zone is the left edge of the MapControls
+//     (zoom / Central View buttons), which sit just to the left of the
+//     right panel.  MapControls = `bottom-12 right-4` translated left by
+//     `panelOffset` and the buttons are 28px wide:
+//       – Global View  → right-edge inset = 4 + 390 + 28 = 422
+//       – SOCMINT      → right-edge inset = 4 + 368 + 28 = 400
+// → Padding equals those two edges directly, so MapLibre's unpadded
+//   centre (= where the geographic centre is rendered) lands at the
+//   midpoint of the free zone — the globe sits visually centred between
+//   the floating card on the left and the buttons / right panel on the
+//   right, no longer hugging the left edge.
+// ---------------------------------------------------------------------------
+type FramingPadding = {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+};
+
+const GLOBE_SCREEN_FRAMING: Record<GlobeViewMode, FramingPadding> = {
+  situation: { top: 0, bottom: 0, left: 0, right: 0 },
+  global: { top: 16, bottom: 16, left: 220, right: 422 },
+  signals: { top: 16, bottom: 16, left: 220, right: 400 },
+};
+
+const VIEW_TRANSITION_MS = 1400;
+
+// ---------------------------------------------------------------------------
 // applyDefaultGlobeView — the only function that may set the canonical
 // default camera.  Both the initial load (animated=false) and the Central
 // View reset (animated=true) MUST go through here so the two views can
-// never drift apart.
+// never drift apart.  `padding` lets the caller reframe the same geographic
+// camera within the viewport (used by Central View when invoked from a
+// view mode that has side panels).
 // ---------------------------------------------------------------------------
 function applyDefaultGlobeView(
   map: maplibregl.Map,
   animated: boolean,
+  padding: FramingPadding = GLOBE_SCREEN_FRAMING.situation,
 ): void {
   const camera = {
     center: DEFAULT_GLOBE_VIEW.center,
     zoom: DEFAULT_GLOBE_VIEW.zoom,
     bearing: DEFAULT_GLOBE_VIEW.bearing,
     pitch: DEFAULT_GLOBE_VIEW.pitch,
+    padding,
   };
   if (animated) {
     map.easeTo({
       ...camera,
-      duration: 1200,
+      duration: CENTRAL_VIEW_ANIM_MS,
       easing: (t) => 1 - Math.pow(1 - t, 3),
     });
   } else {
@@ -125,57 +169,25 @@ function applyDefaultGlobeView(
   }
 }
 
-// ---------------------------------------------------------------------------
-// View targets — one camera config per ViewMode.  Single config so the
-// switch animation between Monitor / Global / SOCMINT is consistent.  All
-// three start from DEFAULT_GLOBE_VIEW's center and zoom; Global/Signals
-// lean slightly closer to give the operator more spatial detail without
-// breaking the canonical Türkiye-centred composition.
-// ---------------------------------------------------------------------------
-type ViewTarget = {
-  center: [number, number];
-  zoom: number;
-  bearing: number;
-  pitch: number;
-};
-
-const VIEW_TARGETS: Record<GlobeViewMode, ViewTarget> = {
-  situation: {
-    center: DEFAULT_GLOBE_VIEW.center,
-    zoom: DEFAULT_GLOBE_VIEW.zoom,
-    bearing: DEFAULT_GLOBE_VIEW.bearing,
-    pitch: DEFAULT_GLOBE_VIEW.pitch,
-  },
-  global: {
-    center: DEFAULT_GLOBE_VIEW.center,
-    zoom: 2.6,
-    bearing: 0,
-    pitch: 0,
-  },
-  signals: {
-    center: DEFAULT_GLOBE_VIEW.center,
-    zoom: 2.8,
-    bearing: 0,
-    pitch: 0,
-  },
-};
-
-const VIEW_TRANSITION_MS = 1400;
-
-// Apply a view target's camera + marker visibility in one call.  When
-// `animated` is true the camera eases over VIEW_TRANSITION_MS; otherwise
-// it jumps (used on first-paint sync, where no animation is desired).
+// Apply a view mode's camera + screen framing + marker visibility in one
+// call.  Geographic camera comes from DEFAULT_GLOBE_VIEW (same for all
+// modes — Central View / site-entry composition is preserved); only the
+// padding shifts so the globe re-frames into the empty area between panels.
+// When `animated` is true the camera eases over VIEW_TRANSITION_MS;
+// otherwise it jumps (used on first-paint sync, where no animation is
+// desired).
 function applyViewMode(
   map: maplibregl.Map,
   view: GlobeViewMode,
   animated: boolean,
 ): void {
-  const target = VIEW_TARGETS[view];
+  const framing = GLOBE_SCREEN_FRAMING[view];
   const camera = {
-    center: target.center,
-    zoom: target.zoom,
-    bearing: target.bearing,
-    pitch: target.pitch,
+    center: DEFAULT_GLOBE_VIEW.center,
+    zoom: DEFAULT_GLOBE_VIEW.zoom,
+    bearing: DEFAULT_GLOBE_VIEW.bearing,
+    pitch: DEFAULT_GLOBE_VIEW.pitch,
+    padding: framing,
   };
   try {
     if (animated) {
@@ -762,13 +774,17 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           const m = mapRef.current;
           if (!m) return;
           // Pause auto-rotate immediately so it can't fight the easeTo or
-          // mutate the camera mid-reset.  Schedule resume 10s AFTER the
-          // animation finishes, not 10s after the click — that is what
-          // "dönüş tamamlandıktan sonra 10 saniye hareketsizlikte" means.
+          // mutate the camera mid-reset.  Schedule resume CENTRAL_VIEW
+          // _IDLE_DELAY_MS AFTER the animation finishes, not after the
+          // click — matches "dönüş tamamlandıktan sonra".  Reframe with
+          // the current view's screen padding so Central View from inside
+          // Global View / SOCMINT stays out from behind the side panels.
+          const currentView = lastAppliedViewRef.current ?? "situation";
+          const framing = GLOBE_SCREEN_FRAMING[currentView];
           pauseAutoRotateRef.current(
             CENTRAL_VIEW_ANIM_MS + CENTRAL_VIEW_IDLE_DELAY_MS,
           );
-          applyDefaultGlobeView(m, true);
+          applyDefaultGlobeView(m, true, framing);
         },
       }),
       [],
