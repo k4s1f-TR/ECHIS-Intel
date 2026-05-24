@@ -9,6 +9,7 @@ import {
 } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { RegionKey } from "@/types/event";
 
 // ---------------------------------------------------------------------------
 // Public handle — imperative API consumed by MapControls.
@@ -17,6 +18,7 @@ export interface MapLibreGlobeHandle {
   centerView: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  projectMarker: (lng: number, lat: number) => { x: number; y: number } | null;
   /** Smoothly pan the globe to the given coordinate so the selected marker
    *  becomes visible.  Keeps the current zoom and framing padding so the
    *  marker appears in the open viewport area between panels.  Also pauses
@@ -51,11 +53,17 @@ export type MarkerFeature = {
 
 interface MapLibreGlobeProps {
   activeView?: GlobeViewMode;
+  activeRegion?: RegionKey;
+  activeSignalsRegion?: RegionKey;
   globalMarkers?: MarkerFeature[];
   signalsMarkers?: MarkerFeature[];
   /** Called when the user clicks a marker.  `kind` identifies which layer
    *  fired so the parent can route to the correct panel. */
-  onMarkerClick?: (id: string, kind: MarkerKind) => void;
+  onMarkerClick?: (
+    id: string,
+    kind: MarkerKind,
+    point?: { x: number; y: number },
+  ) => void;
   /** ID of the currently selected Global View event — drives the selected
    *  marker highlight (larger pin + neon red glow). */
   selectedGlobalId?: string | null;
@@ -213,10 +221,20 @@ type FramingPadding = {
 const GLOBE_SCREEN_FRAMING: Record<GlobeViewMode, FramingPadding> = {
   situation: { top: 0, bottom: 0, left: 0, right: 0 },
   global: { top: 16, bottom: 16, left: 220, right: 422 },
-  signals: { top: 16, bottom: 16, left: 220, right: 400 },
+  signals: { top: 16, bottom: 16, left: 220, right: 422 },
 };
 
 const VIEW_TRANSITION_MS = 1400;
+
+const REGION_GLOBE_VIEWS: Record<
+  RegionKey,
+  { center: [number, number]; zoom: number }
+> = {
+  "middle-east": { center: [35, 31], zoom: 2.45 },
+  europe: { center: [15, 51], zoom: 2.45 },
+  "asia-pacific": { center: [112, 18], zoom: 2.15 },
+  americas: { center: [-74, 15], zoom: 2.05 },
+};
 
 // ---------------------------------------------------------------------------
 // applyDefaultGlobeView — the only function that may set the canonical
@@ -284,6 +302,27 @@ function applyViewMode(
   }
   setMarkerVisibility(map, "global", view === "global");
   setMarkerVisibility(map, "signals", view === "signals");
+}
+
+function applyFramedRegionView(
+  map: maplibregl.Map,
+  region: RegionKey,
+  framing: FramingPadding,
+): void {
+  const target = REGION_GLOBE_VIEWS[region];
+  try {
+    map.easeTo({
+      center: target.center,
+      zoom: target.zoom,
+      bearing: DEFAULT_GLOBE_VIEW.bearing,
+      pitch: DEFAULT_GLOBE_VIEW.pitch,
+      padding: framing,
+      duration: VIEW_TRANSITION_MS,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+    });
+  } catch {
+    /* map mid-teardown — ignore */
+  }
 }
 
 function setMarkerVisibility(
@@ -900,6 +939,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
   function MapLibreGlobe(
     {
       activeView = "situation",
+      activeRegion,
+      activeSignalsRegion,
       globalMarkers,
       signalsMarkers,
       onMarkerClick,
@@ -946,6 +987,16 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           if (!m) return;
           pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
           m.zoomTo(m.getZoom() - ZOOM_STEP, { duration: 350 });
+        },
+        projectMarker: (lng: number, lat: number) => {
+          const m = mapRef.current;
+          if (!m) return null;
+          try {
+            const point = m.project([lng, lat]);
+            return { x: point.x, y: point.y };
+          } catch {
+            return null;
+          }
         },
         centerView: () => {
           const m = mapRef.current;
@@ -1086,13 +1137,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           const feature = e.features?.[0];
           if (!feature?.properties) return;
           const id = String(feature.properties.id ?? "");
-          if (id) onMarkerClickRef.current?.(id, "global");
+          if (id) onMarkerClickRef.current?.(id, "global", { x: e.point.x, y: e.point.y });
         };
         markerClickSignals = (e: LayerClickEvent) => {
           const feature = e.features?.[0];
           if (!feature?.properties) return;
           const id = String(feature.properties.id ?? "");
-          if (id) onMarkerClickRef.current?.(id, "signals");
+          if (id) onMarkerClickRef.current?.(id, "signals", { x: e.point.x, y: e.point.y });
         };
         map.on("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
         map.on("click", MARKER_LAYER_SIGNALS, markerClickSignals);
@@ -1377,6 +1428,28 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
       applyViewMode(map, activeView, true);
     }, [activeView, loadState]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready" || activeView !== "global") return;
+      pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
+      if (!activeRegion) {
+        applyViewMode(map, "global", true);
+        return;
+      }
+      applyFramedRegionView(map, activeRegion, GLOBE_SCREEN_FRAMING.global);
+    }, [activeRegion, activeView, loadState]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready" || activeView !== "signals") return;
+      pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
+      if (!activeSignalsRegion) {
+        applyViewMode(map, "signals", true);
+        return;
+      }
+      applyFramedRegionView(map, activeSignalsRegion, GLOBE_SCREEN_FRAMING.signals);
+    }, [activeSignalsRegion, activeView, loadState]);
 
     // ── Marker data sync ────────────────────────────────────────────────────
     // Push fresh feature sets into the GeoJSON sources whenever the parent

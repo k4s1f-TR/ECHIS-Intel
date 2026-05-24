@@ -26,6 +26,7 @@ export type SocmintReport = {
   id: string;
   title: string;
   summary: string;
+  detailedSummary?: string;
   type: SocmintReportType;
   platform: SocmintPlatform;
   sourceName: string;
@@ -37,6 +38,13 @@ export type SocmintReport = {
   status: SocmintStatus;
   timestamp: string;
   relatedEventId?: string;
+  entities?: {
+    country?: string;
+    city?: string;
+    organization?: string;
+    actor?: string;
+    sector?: string;
+  };
 };
 
 export const SOCMINT_TYPE_OPTIONS: { key: SocmintReportType | "all"; label: string }[] = [

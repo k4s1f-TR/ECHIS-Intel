@@ -1,6 +1,6 @@
-import type { OsintEvent } from "@/types/event";
+import type { OsintEvent, RegionKey } from "@/types/event";
 
-export const mockEvents: OsintEvent[] = [
+const baseMockEvents: OsintEvent[] = [
   {
     id: "1",
     sourceId: "src-official-statements-feed",
@@ -245,7 +245,7 @@ export const mockEvents: OsintEvent[] = [
     sourceId: "src-osint-specialist-watch",
     title: "Cairo — Cabinet reshuffle speculation grows",
     summary:
-      "Analyst monitoring notes renewed discussion of a cabinet reshuffle after several ministries postponed briefings.",
+      "Specialist monitoring records renewed discussion of a cabinet reshuffle after several ministries postponed briefings.",
     category: "politics",
     severity: "low",
     location: "Cairo, Egypt",
@@ -453,7 +453,7 @@ export const mockEvents: OsintEvent[] = [
     sourceId: "src-osint-specialist-watch",
     title: "Sarajevo — Party leadership crisis monitored",
     summary:
-      "Analyst monitoring flags internal party negotiations after several senior figures delayed a joint statement.",
+      "Specialist monitoring records internal party negotiations after several senior figures delayed a joint statement.",
     category: "politics",
     severity: "medium",
     location: "Sarajevo, Bosnia and Herzegovina",
@@ -838,7 +838,7 @@ export const mockEvents: OsintEvent[] = [
     sourceId: "src-osint-specialist-watch",
     title: "Algiers — Cabinet reshuffle discussions monitored",
     summary:
-      "Specialist monitoring notes increased political discussion around a possible cabinet reshuffle timeline.",
+      "Specialist monitoring records increased political discussion around a possible cabinet reshuffle sequence.",
     category: "politics",
     severity: "low",
     location: "Algiers, Algeria",
@@ -962,3 +962,66 @@ export const mockEvents: OsintEvent[] = [
     coordinates: { lat: 30.0444, lng: 31.2357 },
   },
 ];
+
+const regionLabels: Record<RegionKey, string> = {
+  "middle-east": "Middle East",
+  europe: "Europe",
+  "asia-pacific": "Asia-Pacific",
+  americas: "Americas",
+};
+
+function getEventEntities(event: OsintEvent): OsintEvent["entities"] {
+  const [city, country] = event.location.split(",").map((part) => part.trim());
+  const entities: NonNullable<OsintEvent["entities"]> = {};
+
+  if (country) {
+    entities.city = city;
+    entities.country = country;
+  } else if (event.location.includes("Strait") || event.location.includes("Sea")) {
+    entities.sector = "Maritime";
+  } else {
+    entities.country = event.location;
+  }
+
+  if (event.category === "energy") entities.sector = "Energy";
+  if (event.category === "humanitarian") entities.sector = "Humanitarian access";
+  if (event.category === "maritime") entities.sector = "Maritime";
+  if (event.category === "politics") entities.sector = "Public policy";
+
+  if (event.sourceType === "official") {
+    entities.organization = "Public government or institutional source";
+  }
+  if (event.sourceType === "media") {
+    entities.organization = "Regional media outlet";
+  }
+  if (event.sourceType === "ngo") {
+    entities.organization = "Relief and civil protection source";
+  }
+  if (event.title.includes("Opposition")) {
+    entities.actor = "Opposition organizers";
+  }
+  if (event.title.includes("Parliament") || event.title.includes("parliamentary")) {
+    entities.actor = "Parliamentary representatives";
+  }
+  if (event.title.includes("Foreign ministry") || event.title.includes("Diplomatic")) {
+    entities.actor = "Foreign ministry officials";
+  }
+
+  return entities;
+}
+
+function getDetailedSummary(event: OsintEvent): string {
+  const region = regionLabels[event.region];
+  const sourceText = event.summary.replace(
+    "Unconfirmed reports of",
+    "Public-source reporting describes",
+  );
+
+  return `${sourceText} The event is logged for ${event.location} in the ${region} coverage set, with the source classification listed as ${event.sourceType.replaceAll("_", " ")} and verification status marked ${event.verification.replaceAll("_", " ")}. The card summary is kept short for the Active Events feed, while this detail record preserves the available source, time, category, severity, and location context for the selected event.`;
+}
+
+export const mockEvents: OsintEvent[] = baseMockEvents.map((event) => ({
+  ...event,
+  detailedSummary: event.detailedSummary ?? getDetailedSummary(event),
+  entities: event.entities ?? getEventEntities(event),
+}));

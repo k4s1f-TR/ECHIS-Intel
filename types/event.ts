@@ -54,15 +54,24 @@ export type OsintEvent = {
   sourceId: string;
   title: string;
   summary: string;
+  detailedSummary?: string;
   category: EventCategory;
   severity: EventSeverity;
   location: string;
   time: string;
+  originalSourceUrl?: string;
   sourceType: SourceType;
   verification: VerificationStatus;
   scope: EventScope;
   region: RegionKey;
   markerVariant?: EventMarkerVariant;
   tags?: string[];
+  entities?: {
+    country?: string;
+    city?: string;
+    organization?: string;
+    actor?: string;
+    sector?: string;
+  };
   coordinates?: { lat: number; lng: number };
 };

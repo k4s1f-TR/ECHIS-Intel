@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
 import {
@@ -10,11 +10,14 @@ import {
 } from "@/components/maplibre/MapLibreGlobe";
 import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard";
 import { MapControls } from "@/components/map/MapControls";
+import { MarkerInfoPopup } from "@/components/map/MarkerInfoPopup";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
 import { RightEventsPanel } from "@/components/events/RightEventsPanel";
+import { EventDetailModal } from "@/components/events/EventDetailModal";
 import { BookmarksView } from "@/components/events/BookmarksView";
 import { useBookmarks } from "@/components/events/useBookmarks";
 import { SignalsPanel } from "@/components/signals/SignalsPanel";
+import { SocmintDetailModal } from "@/components/signals/SocmintDetailModal";
 import { SignalsFloatingCard } from "@/components/signals/SignalsFloatingCard";
 import { SourcesScreen } from "@/components/sources/SourcesScreen";
 import { PoliticsPanel } from "@/components/politics/PoliticsPanel";
@@ -31,9 +34,12 @@ type ActiveSection = "dashboard" | "sources" | "bookmarks";
 type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
+type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
 export function AppShell() {
   const globeMapRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [eventDetailOpen, setEventDetailOpen] = useState(false);
+  const [markerPopup, setMarkerPopup] = useState<MarkerPopupState>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);
@@ -43,6 +49,7 @@ export function AppShell() {
   const [activeSignalRegion, setActiveSignalRegion] = useState<SignalCoverage>("global");
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
+  const [signalDetailOpen, setSignalDetailOpen] = useState(false);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
 
@@ -81,8 +88,18 @@ export function AppShell() {
 
   const isMapScreen = activeSection === "dashboard" && activeTopTab === "situation";
   const activeMapRailMode = isMapScreen ? activeRailMode : null;
+  const globeView =
+    activeMapRailMode === "global" || activeMapRailMode === "signals"
+      ? activeMapRailMode
+      : activeView;
+  const globeRegion =
+    activeMapRailMode === "global" && activeView !== "global" ? activeRegion : undefined;
+  const globeSignalsRegion =
+    activeMapRailMode === "signals" && activeSignalRegion !== "global"
+      ? activeSignalRegion
+      : undefined;
   const mapControlPanelOffset =
-    activeMapRailMode === "global" ? 390 : activeMapRailMode === "signals" ? 368 : 0;
+    activeMapRailMode === "global" ? 390 : activeMapRailMode === "signals" ? 390 : 0;
 
   const baseEvents = useMemo(
     () =>
@@ -98,6 +115,18 @@ export function AppShell() {
         ? baseEvents
         : baseEvents.filter((e) => e.category === activeCategory),
     [baseEvents, activeCategory],
+  );
+
+  const selectedGlobalEvent = useMemo(
+    () => displayedEvents.find((event) => event.id === selectedId) ?? null,
+    [displayedEvents, selectedId],
+  );
+  const markerPopupEvent = useMemo(
+    () =>
+      markerPopup?.kind === "global"
+        ? displayedEvents.find((event) => event.id === markerPopup.id) ?? null
+        : null,
+    [displayedEvents, markerPopup],
   );
 
   // GeoJSON-ready marker payloads for the MapLibre globe.  Global View
@@ -128,13 +157,28 @@ export function AppShell() {
     [displayedSignals],
   );
 
+  const selectedSignalReport = useMemo(
+    () => displayedSignals.find((report) => report.id === selectedSignalId) ?? null,
+    [displayedSignals, selectedSignalId],
+  );
+  const markerPopupSignal = useMemo(
+    () =>
+      markerPopup?.kind === "signals"
+        ? displayedSignals.find((report) => report.id === markerPopup.id) ?? null
+        : null,
+    [displayedSignals, markerPopup],
+  );
+
   function handleViewChange(view: ViewMode) {
     setActiveSection("dashboard");
     setActiveTopTab("situation");
     setActiveView(view);
     setActiveCategory("all");
     setSelectedId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
     setSelectedSignalId(null);
+    setSignalDetailOpen(false);
     if (view === "global") {
       setActiveRailMode("global");
       return;
@@ -155,7 +199,10 @@ export function AppShell() {
     setActiveRegion("middle-east");
     setActiveCategory("all");
     setSelectedId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
     setSelectedSignalId(null);
+    setSignalDetailOpen(false);
   }
 
   function handleBookmarksOpen() {
@@ -163,7 +210,10 @@ export function AppShell() {
     setActiveTopTab("situation");
     setActiveRailMode(null);
     setSelectedId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
     setSelectedSignalId(null);
+    setSignalDetailOpen(false);
   }
 
   function handleRegionChange(region: RegionKey) {
@@ -173,6 +223,8 @@ export function AppShell() {
     setActiveRegion(region);
     setActiveView("situation");
     setSelectedId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
   }
 
   function handleCategoryChange(category: EventCategory | "all") {
@@ -185,6 +237,8 @@ export function AppShell() {
 
     if (selectedId !== null && !nextDisplayedEvents.some((e) => e.id === selectedId)) {
       setSelectedId(null);
+      setEventDetailOpen(false);
+      setMarkerPopup(null);
     }
   }
 
@@ -193,6 +247,10 @@ export function AppShell() {
       setActiveSection("sources");
       setActiveTopTab("sources");
       setActiveRailMode(null);
+      setEventDetailOpen(false);
+      setMarkerPopup(null);
+      setSelectedSignalId(null);
+      setSignalDetailOpen(false);
       return;
     }
 
@@ -204,7 +262,10 @@ export function AppShell() {
       setActiveRegion("middle-east");
       setActiveCategory("politics");
       setSelectedId(null);
+      setEventDetailOpen(false);
+      setMarkerPopup(null);
       setSelectedSignalId(null);
+      setSignalDetailOpen(false);
       return;
     }
 
@@ -214,12 +275,81 @@ export function AppShell() {
       setActiveRailMode(null);
       setActiveCategory("all");
       setSelectedId(null);
+      setEventDetailOpen(false);
+      setMarkerPopup(null);
       setSelectedSignalId(null);
+      setSignalDetailOpen(false);
       return;
     }
 
     handleViewChange("situation");
   }
+
+  function handleGlobalEventSelect(id: string) {
+    setSelectedId(id);
+    setMarkerPopup(null);
+    setEventDetailOpen(true);
+  }
+
+  function handleSignalSelect(id: string) {
+    setSelectedSignalId(id);
+    setMarkerPopup(null);
+    setSignalDetailOpen(true);
+  }
+
+  function handleGlobalMarkerSelect(id: string) {
+    setSelectedId(id);
+    setEventDetailOpen(false);
+    setMarkerPopup({ kind: "global", id });
+  }
+
+  function handleSignalMarkerSelect(id: string) {
+    setSelectedSignalId(id);
+    setSignalDetailOpen(false);
+    setMarkerPopup({ kind: "signals", id });
+  }
+
+  function handleMarkerPopupClose() {
+    if (markerPopup?.kind === "global") {
+      setSelectedId(null);
+    }
+    if (markerPopup?.kind === "signals") {
+      setSelectedSignalId(null);
+    }
+    setMarkerPopup(null);
+  }
+
+  function handleGlobalDetailClose() {
+    setEventDetailOpen(false);
+    setSelectedId(null);
+    setMarkerPopup(null);
+  }
+
+  function handleSignalDetailClose() {
+    setSignalDetailOpen(false);
+    setSelectedSignalId(null);
+    setMarkerPopup(null);
+  }
+
+  const getMarkerPopupPosition = useCallback(() => {
+    if (markerPopup?.kind === "global" && markerPopupEvent?.coordinates) {
+      return (
+        globeMapRef.current?.projectMarker(
+          markerPopupEvent.coordinates.lng,
+          markerPopupEvent.coordinates.lat,
+        ) ?? null
+      );
+    }
+    if (markerPopup?.kind === "signals" && markerPopupSignal?.coordinates) {
+      return (
+        globeMapRef.current?.projectMarker(
+          markerPopupSignal.coordinates[0],
+          markerPopupSignal.coordinates[1],
+        ) ?? null
+      );
+    }
+    return null;
+  }, [markerPopup, markerPopupEvent, markerPopupSignal]);
 
   return (
     <div
@@ -251,14 +381,16 @@ export function AppShell() {
           >
             <MapLibreGlobe
               ref={globeMapRef}
-              activeView={activeView}
+              activeView={globeView}
+              activeRegion={globeRegion}
+              activeSignalsRegion={globeSignalsRegion}
               globalMarkers={globalMarkers}
               signalsMarkers={signalsMarkers}
               selectedGlobalId={selectedId}
               selectedSignalsId={selectedSignalId}
               onMarkerClick={(id, kind) => {
-                if (kind === "global") setSelectedId(id);
-                else if (kind === "signals") setSelectedSignalId(id);
+                if (kind === "global") handleGlobalMarkerSelect(id);
+                else if (kind === "signals") handleSignalMarkerSelect(id);
               }}
             />
             <div
@@ -274,10 +406,14 @@ export function AppShell() {
                 onRegionChange={(region) => {
                   setActiveSignalRegion(region);
                   setSelectedSignalId(null);
+                  setSignalDetailOpen(false);
+                  setMarkerPopup(null);
                 }}
                 onConfidenceChange={(min) => {
                   setSignalConfidenceMin(min);
                   setSelectedSignalId(null);
+                  setSignalDetailOpen(false);
+                  setMarkerPopup(null);
                 }}
               />
             </div>
@@ -327,11 +463,29 @@ export function AppShell() {
               <RightEventsPanel
                 events={displayedEvents}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={handleGlobalEventSelect}
                 isBookmarked={isBookmarked}
                 onToggleBookmark={toggleBookmark}
               />
             </div>
+            {activeMapRailMode === "global" && eventDetailOpen && selectedGlobalEvent && (
+              <EventDetailModal
+                event={selectedGlobalEvent}
+                onClose={handleGlobalDetailClose}
+              />
+            )}
+            {activeMapRailMode === "global" && markerPopupEvent && (
+              <MarkerInfoPopup
+                title={markerPopupEvent.title}
+                location={markerPopupEvent.location}
+                summary={markerPopupEvent.summary}
+                source={markerPopupEvent.sourceId}
+                time={markerPopupEvent.time}
+                accent="#3b82f6"
+                getPosition={getMarkerPopupPosition}
+                onClose={handleMarkerPopupClose}
+              />
+            )}
             <div
               style={{
                 position: "absolute",
@@ -350,11 +504,29 @@ export function AppShell() {
                 signals={displayedSignals}
                 confidenceMin={signalConfidenceMin}
                 selectedId={selectedSignalId}
-                onSelect={setSelectedSignalId}
+                onSelect={handleSignalSelect}
                 isBookmarked={isBookmarked}
                 onToggleBookmark={toggleBookmark}
               />
             </div>
+            {activeMapRailMode === "signals" && signalDetailOpen && selectedSignalReport && (
+              <SocmintDetailModal
+                report={selectedSignalReport}
+                onClose={handleSignalDetailClose}
+              />
+            )}
+            {activeMapRailMode === "signals" && markerPopupSignal && (
+              <MarkerInfoPopup
+                title={markerPopupSignal.title}
+                location={markerPopupSignal.locationName}
+                summary={markerPopupSignal.summary}
+                source={markerPopupSignal.sourceName}
+                time={markerPopupSignal.timestamp}
+                accent="#60a5fa"
+                getPosition={getMarkerPopupPosition}
+                onClose={handleMarkerPopupClose}
+              />
+            )}
           </div>
 
           {activeSection === "sources" && (

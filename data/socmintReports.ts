@@ -1,9 +1,9 @@
-import type { SocmintReport } from "@/types/socmint";
+import type { SocmintReport, SocmintPlatform, SocmintReportType } from "@/types/socmint";
 
 // Mock-only SOCMINT reports. Future public-source adapters can map Telegram public
 // channels, X/Twitter public accounts, Mastodon/RSS/API, Bluesky/ATProto, and
 // local media RSS into this shape.
-export const socmintReports: SocmintReport[] = [
+const baseSocmintReports: SocmintReport[] = [
   {
     id: "soc-1",
     title: "Ankara — Local accounts report police cordon near parliament",
@@ -356,3 +356,51 @@ export const socmintReports: SocmintReport[] = [
     relatedEventId: "49",
   },
 ];
+
+const platformLabels: Record<SocmintPlatform, string> = {
+  telegram: "Telegram public channel",
+  "osint-account": "public OSINT account",
+  "local-media": "local media item",
+  mastodon: "Mastodon public post",
+  bluesky: "Bluesky public post",
+  rss: "RSS item",
+};
+
+const typeSectors: Record<SocmintReportType, string> = {
+  "local-report": "Local public reporting",
+  "social-claim": "Public social posts",
+  "osint-account": "Open-source observation",
+  "local-media": "Local media reporting",
+};
+
+function getSocmintEntities(report: SocmintReport): SocmintReport["entities"] {
+  const [city, country] = report.locationName.split(",").map((part) => part.trim());
+  const entities: NonNullable<SocmintReport["entities"]> = {
+    organization: report.sourceName,
+    sector: typeSectors[report.type],
+  };
+
+  if (country) {
+    entities.city = city;
+    entities.country = country;
+  } else {
+    entities.city = report.locationName;
+  }
+
+  if (report.type === "social-claim") entities.actor = "Public account users";
+  if (report.type === "osint-account") entities.actor = "Public OSINT account";
+  if (report.type === "local-media") entities.actor = "Local media outlet";
+  if (report.type === "local-report") entities.actor = "Local public accounts";
+
+  return entities;
+}
+
+function getSocmintDetailedSummary(report: SocmintReport): string {
+  return `${report.summary} The report is recorded from ${report.sourceName}, categorized as ${typeSectors[report.type].toLowerCase()}, and associated with ${report.locationName}. The source platform is listed as ${platformLabels[report.platform]}, with status marked ${report.status.replace("-", " ")}. This detail view preserves the static report text, source label, time, status, platform, and location fields available in the SOCMINT feed.`;
+}
+
+export const socmintReports: SocmintReport[] = baseSocmintReports.map((report) => ({
+  ...report,
+  detailedSummary: report.detailedSummary ?? getSocmintDetailedSummary(report),
+  entities: report.entities ?? getSocmintEntities(report),
+}));
