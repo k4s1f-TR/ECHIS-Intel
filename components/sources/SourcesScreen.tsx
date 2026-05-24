@@ -1,9 +1,20 @@
 "use client";
 
-import { Clock3, Database, ExternalLink } from "lucide-react";
+import { Clock3, Database, ExternalLink, FlaskConical } from "lucide-react";
 import type { ReactNode } from "react";
 import { mockEvents } from "@/data/mockEvents";
 import { mockSources } from "@/data/mockSources";
+import { candidateSourceDefinitions } from "@/data/sources/sourceDefinitions";
+import type {
+  ExtractionMethod,
+  SourceAccessType,
+  SourceBasis,
+  SourceCandidateStatus,
+  SourceRegionScope,
+  SourceStatus as CandidateSourceStatus,
+  SourceTargetScreen,
+  VerificationStatus as CandidateVerificationStatus,
+} from "@/data/sources/sourceTypes";
 import type { RegionKey } from "@/types/event";
 import type { OsintSourceType, SourceCategory, SourceStatus } from "@/types/source";
 
@@ -57,6 +68,67 @@ const REGION_LABELS: Record<RegionKey, string> = {
   europe: "Europe",
   "asia-pacific": "Asia-Pacific",
   americas: "Americas",
+};
+
+const ACCESS_TYPE_LABELS: Record<SourceAccessType, string> = {
+  rss: "RSS",
+  api: "API",
+  static: "Static",
+  manual: "Manual",
+};
+
+const CANDIDATE_STATUS_LABELS: Record<SourceCandidateStatus, string> = {
+  candidate_test: "Candidate / Test",
+  review_more: "Review More",
+  later: "Later",
+  rejected: "Rejected",
+};
+
+const CANDIDATE_SOURCE_STATUS_LABELS: Record<CandidateSourceStatus, string> = {
+  public_news_source: "Public News Source",
+  official_feed: "Official Feed",
+  community_signal: "Community Signal",
+  reference_dataset: "Reference Dataset",
+};
+
+const CANDIDATE_VERIFICATION_LABELS: Record<CandidateVerificationStatus, string> = {
+  source_reported: "Source Reported",
+  official_entry: "Official Entry",
+  multi_source_reference: "Multi-Source Reference",
+  manual_sample: "Manual Sample",
+};
+
+const SOURCE_BASIS_LABELS: Record<SourceBasis, string> = {
+  single_public_source: "Single Public Source",
+  single_official_source: "Single Official Source",
+  multiple_public_sources: "Multiple Public Sources",
+  manual_sample: "Manual Sample",
+};
+
+const EXTRACTION_METHOD_LABELS: Record<ExtractionMethod, string> = {
+  rss_summary: "RSS Summary",
+  official_json: "Official JSON",
+  manual_sample: "Manual Sample",
+  keyword_match: "Keyword Match",
+  api_result: "API Result",
+};
+
+const TARGET_SCREEN_LABELS: Record<SourceTargetScreen, string> = {
+  monitor: "Monitor",
+  intel_watch: "Intel Watch",
+  cyber_news: "Cyber News",
+  defense_industry: "Defense Industry",
+  policy: "Policy",
+  sources: "Sources",
+};
+
+const REGION_SCOPE_LABELS: Record<SourceRegionScope, string> = {
+  global: "Global",
+  middle_east: "Middle East",
+  europe: "Europe",
+  asia_pacific: "Asia-Pacific",
+  americas: "Americas",
+  africa: "Africa",
 };
 
 function StatusPill({ status }: { status: SourceStatus }) {
@@ -132,6 +204,22 @@ function SummaryCard({
   );
 }
 
+function CandidateField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <span
+        className="mb-1 block font-semibold uppercase"
+        style={{ color: "rgba(95,95,95,0.9)", fontSize: "9.5px", letterSpacing: "0.09em" }}
+      >
+        {label}
+      </span>
+      <div style={{ color: "rgba(210,210,210,0.92)", fontSize: "11.5px", lineHeight: 1.45 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function SourcesScreen() {
   const totalSources = mockSources.length;
   const activeSources = mockSources.filter((source) => source.status === "ACTIVE").length;
@@ -173,6 +261,151 @@ export function SourcesScreen() {
           <SummaryCard label="Active Sources" value={activeSources} tone="rgba(74,222,128,0.9)" />
           <SummaryCard label="Future Sources" value={futureSources} tone="rgba(96,165,250,0.9)" />
           <SummaryCard label="Pending Sources" value={pendingSources} tone="rgba(251,191,36,0.9)" />
+        </section>
+
+        <section
+          className="flex flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
+          style={{
+            background: "rgba(12,12,12,0.94)",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          <div
+            className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+          >
+            <div className="flex items-center gap-2">
+              <FlaskConical size={13} style={{ color: "rgba(251,191,36,0.85)" }} />
+              <span
+                className="font-semibold uppercase"
+                style={{ color: "rgba(147,147,147,0.85)", fontSize: "10.5px", letterSpacing: "0.1em" }}
+              >
+                Candidate / Test Sources
+              </span>
+            </div>
+            <span
+              className="rounded px-2 py-0.5 font-semibold uppercase"
+              style={{
+                color: "rgba(251,191,36,0.92)",
+                background: "rgba(113,63,18,0.18)",
+                border: "1px solid rgba(251,191,36,0.2)",
+                fontSize: "9.5px",
+                letterSpacing: "0.08em",
+                lineHeight: 1.4,
+              }}
+            >
+              Not Live · Static Frontend Only
+            </span>
+          </div>
+          <div
+            className="px-4 py-2.5"
+            style={{
+              color: "rgba(135,135,135,0.85)",
+              fontSize: "11px",
+              lineHeight: 1.5,
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}
+          >
+            These are candidate / test source records held for review. They are
+            not approved production / live sources. No live fetching, parsing,
+            scraping, API ingestion, or backend integration is connected.
+          </div>
+          <div className="flex flex-col">
+            {candidateSourceDefinitions.map((source, index) => (
+              <article
+                key={source.id}
+                className="px-4 py-3"
+                style={{
+                  borderTop: index === 0 ? "0" : "1px solid rgba(255,255,255,0.04)",
+                }}
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <h3
+                    className="font-semibold"
+                    style={{ color: "rgba(225,225,225,0.95)", fontSize: "13px" }}
+                  >
+                    {source.name}
+                  </h3>
+                  <TextPill>{source.category}</TextPill>
+                  <TextPill>{ACCESS_TYPE_LABELS[source.accessType]}</TextPill>
+                  <span
+                    className="inline-flex items-center rounded px-2 py-0.5 font-semibold uppercase"
+                    style={{
+                      color: "rgba(251,191,36,0.92)",
+                      background: "rgba(113,63,18,0.18)",
+                      border: "1px solid rgba(251,191,36,0.2)",
+                      fontSize: "9.5px",
+                      letterSpacing: "0.08em",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {CANDIDATE_STATUS_LABELS[source.candidateStatus]}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 lg:grid-cols-4">
+                  <CandidateField label="Source Status">
+                    {CANDIDATE_SOURCE_STATUS_LABELS[source.sourceStatus]}
+                  </CandidateField>
+                  <CandidateField label="Verification Status">
+                    {CANDIDATE_VERIFICATION_LABELS[source.verificationStatus]}
+                  </CandidateField>
+                  <CandidateField label="Source Basis">
+                    {SOURCE_BASIS_LABELS[source.sourceBasis]}
+                  </CandidateField>
+                  <CandidateField label="Extraction Method">
+                    {EXTRACTION_METHOD_LABELS[source.extractionMethod]}
+                  </CandidateField>
+                  <CandidateField label="Language">
+                    {source.language.toUpperCase()}
+                  </CandidateField>
+                  <CandidateField label="Region Scope">
+                    {REGION_SCOPE_LABELS[source.regionScope]}
+                  </CandidateField>
+                  <CandidateField label="Target Screens">
+                    <div className="flex flex-wrap gap-1.5">
+                      {source.targetScreens.map((screen) => (
+                        <TextPill key={screen}>{TARGET_SCREEN_LABELS[screen]}</TextPill>
+                      ))}
+                    </div>
+                  </CandidateField>
+                  <CandidateField label="Base URL">
+                    <a
+                      href={source.baseUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 break-all"
+                      style={{ color: "rgba(147,197,253,0.88)" }}
+                    >
+                      <span className="truncate">{source.baseUrl}</span>
+                      <ExternalLink size={11} style={{ flexShrink: 0 }} />
+                    </a>
+                  </CandidateField>
+                  {source.candidateFeedUrl && (
+                    <CandidateField label="Candidate Feed URL">
+                      <a
+                        href={source.candidateFeedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 break-all"
+                        style={{ color: "rgba(147,197,253,0.88)" }}
+                      >
+                        <span className="truncate">{source.candidateFeedUrl}</span>
+                        <ExternalLink size={11} style={{ flexShrink: 0 }} />
+                      </a>
+                    </CandidateField>
+                  )}
+                </div>
+                {source.notes && (
+                  <p
+                    className="mt-2.5"
+                    style={{ color: "rgba(125,125,125,0.88)", fontSize: "11px", lineHeight: 1.5 }}
+                  >
+                    {source.notes}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
         </section>
 
         <section
