@@ -1,7 +1,6 @@
 "use client";
 import { Clock, MapPin } from "lucide-react";
 import { OsintEvent } from "@/types/event";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { BookmarkToggleButton } from "./BookmarkToggleButton";
 
 interface EventCardProps {
@@ -101,14 +100,6 @@ export function EventCard({
           <MapPin size={9} style={{ color: "rgba(85,85,85,0.7)" }} />
           {event.location}
         </span>
-      </div>
-
-      {/* Badges */}
-      <div className="flex flex-wrap gap-1 mb-1.5">
-        <StatusBadge variant={event.category} />
-        <StatusBadge variant={event.severity} />
-        <StatusBadge variant={event.sourceType} />
-        <StatusBadge variant={event.verification} />
       </div>
 
       {/* Summary */}

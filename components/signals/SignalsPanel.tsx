@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Radio } from "lucide-react";
 import { BookmarkToggleButton } from "@/components/events/BookmarkToggleButton";
 import type { SocmintReport, SocmintReportType, SocmintStatus } from "@/types/socmint";
@@ -8,7 +8,6 @@ import {
   SOCMINT_STATUS_LABELS,
   SOCMINT_TYPE_BADGE_LABELS,
   SOCMINT_TYPE_OPTIONS,
-  socmintConfidenceScore,
   socmintMatchesConfidenceFilter,
 } from "@/types/socmint";
 
@@ -38,12 +37,6 @@ const STATUS_COLORS: Record<SocmintStatus, string> = {
   "needs-review": "rgba(147,197,253,0.9)",
 };
 
-function confidenceColor(score: number): string {
-  if (score >= 70) return "rgba(74,222,128,0.9)";
-  if (score >= 40) return "rgba(251,191,36,0.9)";
-  return "rgba(248,113,113,0.9)";
-}
-
 export function SignalsPanel({
   signals,
   confidenceMin,
@@ -60,6 +53,17 @@ export function SignalsPanel({
   onToggleBookmark: (id: string) => void;
 }) {
   const [activeType, setActiveType] = useState<SocmintReportType | "all">("all");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the selected report into view when it changes externally
+  // (e.g. from a globe marker click).
+  useEffect(() => {
+    if (!selectedId || !scrollRef.current) return;
+    const el = scrollRef.current.querySelector<HTMLElement>(
+      `[data-signal-id="${selectedId}"]`,
+    );
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedId]);
 
   const displayed = signals
     .filter((report) => socmintMatchesConfidenceFilter(report, confidenceMin))
@@ -67,11 +71,11 @@ export function SignalsPanel({
 
   return (
     <div
-      className="flex flex-col h-full flex-shrink-0"
+      className="flex h-full max-h-full min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
       style={{
-        width: "372px",
-        background: "rgba(10,10,10,0.95)",
-        borderLeft: "1px solid rgba(255,255,255,0.05)",
+        width: "100%",
+        background: "rgba(12,12,12,0.97)",
+        border: "1px solid rgba(255,255,255,0.07)",
       }}
     >
       <div
@@ -125,6 +129,7 @@ export function SignalsPanel({
       </div>
 
       <div
+        ref={scrollRef}
         className="flex-1 overflow-y-auto"
         style={{
           padding: "8px 10px",
@@ -135,11 +140,11 @@ export function SignalsPanel({
       >
         {displayed.map((report) => {
           const colors = TYPE_COLORS[report.type];
-          const score = socmintConfidenceScore(report);
           const isSelected = report.id === selectedId;
           return (
             <div
               key={report.id}
+              data-signal-id={report.id}
               onClick={() => onSelect(report.id)}
               style={{
                 background: isSelected ? "rgba(28,28,28,0.9)" : "rgba(18,18,18,0.7)",
@@ -165,25 +170,11 @@ export function SignalsPanel({
                 >
                   {SOCMINT_PLATFORM_LABELS[report.platform]} / {SOCMINT_TYPE_BADGE_LABELS[report.type]}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: "9px", color: "rgba(100,100,100,0.7)" }}>
-                    CONF
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      color: confidenceColor(score),
-                    }}
-                  >
-                    {score}%
-                  </span>
-                  <BookmarkToggleButton
-                    bookmarked={isBookmarked(report.id)}
-                    onToggle={() => onToggleBookmark(report.id)}
-                    size={11}
-                  />
-                </div>
+                <BookmarkToggleButton
+                  bookmarked={isBookmarked(report.id)}
+                  onToggle={() => onToggleBookmark(report.id)}
+                  size={11}
+                />
               </div>
 
               <div
@@ -248,14 +239,6 @@ export function SignalsPanel({
         })}
       </div>
 
-      <div
-        className="flex-shrink-0 px-4 py-2.5"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-      >
-        <span style={{ fontSize: "11px", color: "rgba(100,100,100,0.6)" }}>
-          Public social source monitoring active
-        </span>
-      </div>
     </div>
   );
 }

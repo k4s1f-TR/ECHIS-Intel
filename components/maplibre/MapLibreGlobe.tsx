@@ -17,6 +17,11 @@ export interface MapLibreGlobeHandle {
   centerView: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  /** Smoothly pan the globe to the given coordinate so the selected marker
+   *  becomes visible.  Keeps the current zoom and framing padding so the
+   *  marker appears in the open viewport area between panels.  Also pauses
+   *  auto-rotate for the standard interaction idle delay. */
+  focusMarker: (lng: number, lat: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,12 +53,89 @@ interface MapLibreGlobeProps {
   activeView?: GlobeViewMode;
   globalMarkers?: MarkerFeature[];
   signalsMarkers?: MarkerFeature[];
+  /** Called when the user clicks a marker.  `kind` identifies which layer
+   *  fired so the parent can route to the correct panel. */
+  onMarkerClick?: (id: string, kind: MarkerKind) => void;
+  /** ID of the currently selected Global View event — drives the selected
+   *  marker highlight (larger pin + neon red glow). */
+  selectedGlobalId?: string | null;
+  /** ID of the currently selected SOCMINT report — same visual treatment. */
+  selectedSignalsId?: string | null;
 }
 
-const MARKER_SOURCE_GLOBAL = "taipan-markers-global";
+// MapLibre adds `.features` to layer-specific mouse events; this local alias
+// avoids repeating the intersection type throughout the file.
+type LayerClickEvent = maplibregl.MapMouseEvent & {
+  features?: maplibregl.MapGeoJSONFeature[];
+};
+
+const MARKER_SOURCE_GLOBAL  = "taipan-markers-global";
 const MARKER_SOURCE_SIGNALS = "taipan-markers-signals";
-const MARKER_LAYER_GLOBAL = "taipan-markers-global-layer";
-const MARKER_LAYER_SIGNALS = "taipan-markers-signals-layer";
+
+// Layer IDs — ordered bottom → top per kind:
+//   BLOOM   outer soft spread (large blurred circle)
+//   GLOW    inner crisp ring (small circle + bright stroke)
+//   LAYER   normal pins      (all features minus the selected one)
+//   SEL     selected pin     (the one selected feature, larger)
+const MARKER_BLOOM_GLOBAL   = "taipan-markers-global-bloom";
+const MARKER_BLOOM_SIGNALS  = "taipan-markers-signals-bloom";
+const MARKER_GLOW_GLOBAL    = "taipan-markers-global-glow";
+const MARKER_GLOW_SIGNALS   = "taipan-markers-signals-glow";
+const MARKER_LAYER_GLOBAL   = "taipan-markers-global-layer";
+const MARKER_LAYER_SIGNALS  = "taipan-markers-signals-layer";
+const MARKER_SEL_GLOBAL     = "taipan-markers-global-selected";
+const MARKER_SEL_SIGNALS    = "taipan-markers-signals-selected";
+
+// Filter value used to make the selected-pin layer show nothing when there
+// is no active selection — matches a feature id that can never exist.
+const FILTER_MATCH_NONE: maplibregl.ExpressionSpecification =
+  ["==", ["get", "id"], "__taipan_none__"];
+
+// ---------------------------------------------------------------------------
+// Uniform red location-pin icon — single shared icon image used by both the
+// Global View and SOCMINT marker symbol layers.  Vivid deep red on the dark
+// globe, sharp simple silhouette with a small dark cutout for the head.
+//
+// Sizing: the SVG is 24x34 source pixels and registered with pixelRatio:2 so
+// MapLibre renders it at ~12x17 logical pixels — perceived footprint matches
+// the previous circle-marker dots (radius 3–6).  icon-anchor: "bottom" keeps
+// the pin tip aligned with the geographic coordinate during zoom / drag /
+// auto-rotate.
+// ---------------------------------------------------------------------------
+const PIN_ICON_ID = "taipan-marker-pin";
+const PIN_ICON_PIXEL_RATIO = 2;
+const PIN_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
+  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="#ff1f2d"/>' +
+  '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
+  "</svg>";
+
+function registerPinIcon(map: maplibregl.Map): void {
+  const tryLoad = () => {
+    if (map.hasImage(PIN_ICON_ID)) return;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        if (!map.hasImage(PIN_ICON_ID)) {
+          map.addImage(PIN_ICON_ID, img, { pixelRatio: PIN_ICON_PIXEL_RATIO });
+        }
+      } catch {
+        /* style mid-teardown — ignore */
+      }
+    };
+    img.onerror = () => {
+      console.warn("[MapLibreGlobe] pin icon failed to decode");
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(PIN_SVG);
+  };
+  // Eager load so the icon is in the sprite cache before the first paint of
+  // the symbol layers; styleimagemissing remains the safety net for any
+  // unforeseen race during HMR / style reloads.
+  tryLoad();
+  map.on("styleimagemissing", (e: { id: string }) => {
+    if (e.id === PIN_ICON_ID) tryLoad();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Style source — CARTO dark-matter (public, no token).
@@ -209,109 +291,192 @@ function setMarkerVisibility(
   kind: MarkerKind,
   visible: boolean,
 ): void {
-  const layerId = kind === "global" ? MARKER_LAYER_GLOBAL : MARKER_LAYER_SIGNALS;
+  const ids =
+    kind === "global"
+      ? [MARKER_BLOOM_GLOBAL,  MARKER_GLOW_GLOBAL,  MARKER_LAYER_GLOBAL,  MARKER_SEL_GLOBAL]
+      : [MARKER_BLOOM_SIGNALS, MARKER_GLOW_SIGNALS, MARKER_LAYER_SIGNALS, MARKER_SEL_SIGNALS];
+  const vis = visible ? "visible" : "none";
   try {
-    if (map.getLayer(layerId)) {
-      map.setLayoutProperty(
-        layerId,
-        "visibility",
-        visible ? "visible" : "none",
-      );
+    for (const id of ids) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
     }
   } catch {
     /* layer not yet added — skip */
   }
 }
 
-// Idempotent setup — adds the empty marker sources + circle layers once.
-// Called after style.load so the layers sit above the dark-tone style.
+// ---------------------------------------------------------------------------
+// setupMarkerLayers — idempotent, called once after style.load.
+//
+// Layer stack per kind (bottom → top):
+//
+//  BLOOM  large soft spread — outer neon bloom (big blurred circle)
+//  GLOW   small crisp ring  — inner neon ring with bright stroke
+//  LAYER  normal pin icons  — all features except the selected one
+//  SEL    selected pin icon — only the selected feature, larger
+//
+// BLOOM + GLOW start with opacity 0 and LAYER starts unfiltered.
+// SEL starts with a "match nothing" filter.
+// applyMarkerSelection() switches all four layers live on selection change.
+//
+// Glow circles are translated ≈11 px upward (viewport space) so they wrap
+// the pin head rather than the tip, which sits at the geographic coordinate.
+// ---------------------------------------------------------------------------
 function setupMarkerLayers(map: maplibregl.Map): void {
-  const emptyFC: GeoJSON.FeatureCollection = {
-    type: "FeatureCollection",
-    features: [],
+  const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+  const addGlowLayers = (source: string, bloomId: string, glowId: string) => {
+    // Outer bloom — large, very soft spread
+    if (!map.getLayer(bloomId)) {
+      map.addLayer({
+        id: bloomId,
+        type: "circle",
+        source,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": 22,
+          "circle-color": "#ff1a28",
+          "circle-blur": 1.0,
+          "circle-opacity": 0,
+          "circle-translate": [0, -11],
+          "circle-translate-anchor": "viewport",
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    }
+    // Inner crisp ring — tight circle + bright stroke
+    if (!map.getLayer(glowId)) {
+      map.addLayer({
+        id: glowId,
+        type: "circle",
+        source,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": 10,
+          "circle-color": "rgba(255,26,40,0.45)",
+          "circle-blur": 0.15,
+          "circle-opacity": 0,
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": "#ff2535",
+          "circle-stroke-opacity": 0,
+          "circle-translate": [0, -11],
+          "circle-translate-anchor": "viewport",
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    }
+  };
+
+  const addPinLayers = (
+    source: string,
+    layerId: string,
+    selId: string,
+  ) => {
+    // Normal pins — all features; selected feature excluded once a selection exists
+    if (!map.getLayer(layerId)) {
+      map.addLayer({
+        id: layerId,
+        type: "symbol",
+        source,
+        layout: {
+          visibility: "none",
+          "icon-image": PIN_ICON_ID,
+          "icon-anchor": "bottom",
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+    }
+    // Selected pin — only the selected feature, drawn larger on top
+    if (!map.getLayer(selId)) {
+      map.addLayer({
+        id: selId,
+        type: "symbol",
+        source,
+        filter: FILTER_MATCH_NONE,
+        layout: {
+          visibility: "none",
+          "icon-image": PIN_ICON_ID,
+          "icon-anchor": "bottom",
+          "icon-size": 1.45,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+    }
   };
 
   try {
+    // ── Global View ──────────────────────────────────────────────────────────
     if (!map.getSource(MARKER_SOURCE_GLOBAL)) {
       map.addSource(MARKER_SOURCE_GLOBAL, { type: "geojson", data: emptyFC });
     }
-    if (!map.getLayer(MARKER_LAYER_GLOBAL)) {
-      map.addLayer({
-        id: MARKER_LAYER_GLOBAL,
-        type: "circle",
-        source: MARKER_SOURCE_GLOBAL,
-        layout: { visibility: "none" },
-        paint: {
-          // Small, clamped — premium feel, no inflation on zoom.
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            0,
-            3,
-            4,
-            4.5,
-            8,
-            6,
-          ],
-          "circle-color": [
-            "match",
-            ["coalesce", ["get", "severity"], "low"],
-            "critical",
-            "#dc2626",
-            "high",
-            "#ea580c",
-            "medium",
-            "#ca8a04",
-            "#9ca3af",
-          ],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "rgba(255, 255, 255, 0.22)",
-          "circle-opacity": 0.9,
-          "circle-stroke-opacity": 0.6,
-        },
-      });
-    }
+    addGlowLayers(MARKER_SOURCE_GLOBAL, MARKER_BLOOM_GLOBAL, MARKER_GLOW_GLOBAL);
+    addPinLayers(MARKER_SOURCE_GLOBAL, MARKER_LAYER_GLOBAL, MARKER_SEL_GLOBAL);
 
+    // ── SOCMINT ──────────────────────────────────────────────────────────────
     if (!map.getSource(MARKER_SOURCE_SIGNALS)) {
       map.addSource(MARKER_SOURCE_SIGNALS, { type: "geojson", data: emptyFC });
     }
-    if (!map.getLayer(MARKER_LAYER_SIGNALS)) {
-      map.addLayer({
-        id: MARKER_LAYER_SIGNALS,
-        type: "circle",
-        source: MARKER_SOURCE_SIGNALS,
-        layout: { visibility: "none" },
-        paint: {
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            0,
-            3,
-            4,
-            4,
-            8,
-            5.5,
-          ],
-          "circle-color": [
-            "match",
-            ["coalesce", ["get", "confidence"], "low"],
-            "high",
-            "#22d3ee",
-            "medium",
-            "#a3a3a3",
-            "#64748b",
-          ],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "rgba(255, 255, 255, 0.22)",
-          "circle-opacity": 0.85,
-          "circle-stroke-opacity": 0.55,
-        },
-      });
-    }
+    addGlowLayers(MARKER_SOURCE_SIGNALS, MARKER_BLOOM_SIGNALS, MARKER_GLOW_SIGNALS);
+    addPinLayers(MARKER_SOURCE_SIGNALS, MARKER_LAYER_SIGNALS, MARKER_SEL_SIGNALS);
   } catch (e) {
     console.warn("[MapLibreGlobe] marker layer setup failed:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// applyMarkerSelection — called from the selectedGlobalId / selectedSignalsId
+// useEffects.  When a selection is active:
+//   • BLOOM + GLOW: opacity snaps to neon-red values (only for the selected feature)
+//   • LAYER: filter excludes the selected feature (SEL draws it instead)
+//   • SEL: filter includes only the selected feature (drawn 1.45x, on top)
+// When cleared (selectedId null/undefined):
+//   • BLOOM + GLOW: opacity 0 and stroke-opacity 0
+//   • LAYER: filter removed (show all)
+//   • SEL: FILTER_MATCH_NONE (show nothing)
+// ---------------------------------------------------------------------------
+function applyMarkerSelection(
+  map: maplibregl.Map,
+  kind: MarkerKind,
+  selectedId: string | null | undefined,
+): void {
+  const bloomId  = kind === "global" ? MARKER_BLOOM_GLOBAL  : MARKER_BLOOM_SIGNALS;
+  const glowId   = kind === "global" ? MARKER_GLOW_GLOBAL   : MARKER_GLOW_SIGNALS;
+  const layerId  = kind === "global" ? MARKER_LAYER_GLOBAL  : MARKER_LAYER_SIGNALS;
+  const selId    = kind === "global" ? MARKER_SEL_GLOBAL    : MARKER_SEL_SIGNALS;
+
+  try {
+    if (selectedId) {
+      // Match expressions route the selected feature to highlight values;
+      // all other features get transparent (0) so glow is exclusive.
+      const matchOpacity = (on: number): maplibregl.ExpressionSpecification =>
+        ["match", ["get", "id"], selectedId, on, 0] as maplibregl.ExpressionSpecification;
+
+      // Outer bloom
+      map.setPaintProperty(bloomId, "circle-opacity", matchOpacity(0.45));
+      // Inner ring: fill + vivid stroke
+      map.setPaintProperty(glowId, "circle-opacity", matchOpacity(0.70));
+      map.setPaintProperty(glowId, "circle-stroke-opacity", matchOpacity(1.0));
+
+      // Normal layer excludes selected so the selected-pin layer (larger, on top)
+      // renders cleanly without stacking.
+      map.setFilter(layerId,
+        ["!=", ["get", "id"], selectedId] as unknown as maplibregl.FilterSpecification,
+      );
+      // Selected pin layer — show only the selected feature
+      map.setFilter(selId,
+        ["==", ["get", "id"], selectedId] as unknown as maplibregl.FilterSpecification,
+      );
+    } else {
+      // Clear all highlight state
+      map.setPaintProperty(bloomId, "circle-opacity", 0);
+      map.setPaintProperty(glowId,  "circle-opacity", 0);
+      map.setPaintProperty(glowId,  "circle-stroke-opacity", 0);
+      map.setFilter(layerId, null);
+      map.setFilter(selId, FILTER_MATCH_NONE as unknown as maplibregl.FilterSpecification);
+    }
+  } catch {
+    /* layers may not exist yet — initial load race, safe to ignore */
   }
 }
 
@@ -733,7 +898,14 @@ function applyCountryLabelWhitelist(map: maplibregl.Map): void {
 
 export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>(
   function MapLibreGlobe(
-    { activeView = "situation", globalMarkers, signalsMarkers },
+    {
+      activeView = "situation",
+      globalMarkers,
+      signalsMarkers,
+      onMarkerClick,
+      selectedGlobalId,
+      selectedSignalsId,
+    },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -744,6 +916,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     // user input listeners on the canvas.  Accepts the idle delay (ms) so
     // Central View can use a shorter resume window than raw user input.
     const pauseAutoRotateRef = useRef<(delayMs: number) => void>(() => {});
+
+    // Stable ref for onMarkerClick so the one-time map setup closure always
+    // calls the latest prop value without needing to re-register handlers.
+    const onMarkerClickRef = useRef(onMarkerClick);
+    useEffect(() => {
+      onMarkerClickRef.current = onMarkerClick;
+    }, [onMarkerClick]);
 
     const [loadState, setLoadState] = useState<LoadState>("loading");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -783,6 +962,28 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             CENTRAL_VIEW_ANIM_MS + CENTRAL_VIEW_IDLE_DELAY_MS,
           );
           applyDefaultGlobeView(m, true, framing);
+        },
+        focusMarker: (lng: number, lat: number) => {
+          const m = mapRef.current;
+          if (!m) return;
+          // Pause auto-rotate for the standard interaction window so it
+          // does not fight the camera movement.
+          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
+          // Keep the current zoom.  Apply the current view's padding so
+          // the target coordinate is centered in the open viewport area
+          // (not hidden behind the left floating card or the right panel).
+          const currentView = lastAppliedViewRef.current ?? "situation";
+          const padding = GLOBE_SCREEN_FRAMING[currentView];
+          try {
+            m.easeTo({
+              center: [lng, lat],
+              padding,
+              duration: 850,
+              easing: (t) => 1 - Math.pow(1 - t, 3),
+            });
+          } catch {
+            /* map mid-teardown — ignore */
+          }
         },
       }),
       [],
@@ -831,6 +1032,19 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       // Disable consumer-y double-click zoom; keep wheel + drag + pinch.
       map.doubleClickZoom.disable();
 
+      // ── Marker click + cursor handlers ──────────────────────────────────
+      // Declared here (after map construction) so both handleStyleLoad
+      // (which registers them) and the cleanup function (which removes them)
+      // share the same references via closure.
+      const cursorEnter = () => {
+        try { map.getCanvas().style.cursor = "pointer"; } catch { /* noop */ }
+      };
+      const cursorLeave = () => {
+        try { map.getCanvas().style.cursor = ""; } catch { /* noop */ }
+      };
+      let markerClickGlobal: ((e: LayerClickEvent) => void) | null = null;
+      let markerClickSignals: ((e: LayerClickEvent) => void) | null = null;
+
       let resolved = false;
 
       // ── Style load → projection + dark tuning ────────────────────────────
@@ -858,9 +1072,34 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
-        // Marker foundation — empty sources + circle layers for Global View
+        // Register the shared red pin icon before adding the symbol layers
+        // that reference it; styleimagemissing acts as a safety net if the
+        // image add races the layer add.
+        registerPinIcon(map);
+        // Marker foundation — empty sources + symbol layers for Global View
         // and SOCMINT.  Visibility/data driven by props via useEffects below.
         setupMarkerLayers(map);
+
+        // Register click + hover handlers after the layers exist so MapLibre
+        // can bind them correctly.
+        markerClickGlobal = (e: LayerClickEvent) => {
+          const feature = e.features?.[0];
+          if (!feature?.properties) return;
+          const id = String(feature.properties.id ?? "");
+          if (id) onMarkerClickRef.current?.(id, "global");
+        };
+        markerClickSignals = (e: LayerClickEvent) => {
+          const feature = e.features?.[0];
+          if (!feature?.properties) return;
+          const id = String(feature.properties.id ?? "");
+          if (id) onMarkerClickRef.current?.(id, "signals");
+        };
+        map.on("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
+        map.on("click", MARKER_LAYER_SIGNALS, markerClickSignals);
+        map.on("mouseenter", MARKER_LAYER_GLOBAL, cursorEnter);
+        map.on("mouseleave", MARKER_LAYER_GLOBAL, cursorLeave);
+        map.on("mouseenter", MARKER_LAYER_SIGNALS, cursorEnter);
+        map.on("mouseleave", MARKER_LAYER_SIGNALS, cursorLeave);
 
         // Force a resize after style commit in case the container was sized
         // during a transition / mount race.
@@ -929,7 +1168,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       //
       // Gating: the loop only mutates the camera when
       //   mapLoaded && defaultViewApplied && !mapErrored
-      //     && !userInteracting && !disposed && !document.hidden
+      //     && !userInteracting && !disposed
       // defaultViewApplied prevents the loop from drifting longitude before
       // the canonical Türkiye-centered framing has been jumpTo'd in place,
       // which is what guarantees the refresh view matches the reset view.
@@ -947,8 +1186,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         defaultViewApplied &&
         !mapErrored &&
         !userInteracting &&
-        !disposed &&
-        !document.hidden;
+        !disposed;
 
       const wrapLng = (lng: number) =>
         ((((lng + 180) % 360) + 360) % 360) - 180;
@@ -1018,7 +1256,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       // ── MapLibre interaction events ─────────────────────────────────────
       // dragstart / zoomstart / rotatestart / pitchstart carry originalEvent
       // only when the action originated from a user gesture.  Our own
-      // rotateTo calls are tagged with AUTO_ROTATE_EVENT_TAG and skipped.
+      // programmatic jumpTo calls are tagged with AUTO_ROTATE_EVENT_TAG and
+      // skipped.
       const isUserOriginated = (
         e: { originalEvent?: unknown; [key: string]: unknown } | undefined,
       ) => {
@@ -1051,18 +1290,6 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       canvas.addEventListener("touchstart", onDomUserInput, { passive: true });
       canvas.addEventListener("wheel", onDomUserInput, { passive: true });
 
-      // ── visibilitychange ────────────────────────────────────────────────
-      // Hidden: loop self-gates via document.hidden.  Visible: route through
-      // the interaction idle-delay path so we don't jump on return.
-      const onVisibility = () => {
-        if (document.hidden) {
-          lastFrameTime = null;
-        } else {
-          pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
-        }
-      };
-      document.addEventListener("visibilitychange", onVisibility);
-
       // Promote mapLoaded once load resolves, apply the canonical default
       // framing with jumpTo (so refresh view == reset view), then unlock
       // auto-rotate via defaultViewApplied.  Order matters: auto-rotate
@@ -1092,7 +1319,6 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         clearResumeTimer();
         cancelAnimationFrame(rafId);
         rafId = 0;
-        document.removeEventListener("visibilitychange", onVisibility);
         try {
           canvas.removeEventListener("mousedown", onDomUserInput);
           canvas.removeEventListener("pointerdown", onDomUserInput);
@@ -1114,6 +1340,12 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           map.off("style.load", handleStyleLoad);
           map.off("load", handleLoad);
           map.off("error", handleError);
+          if (markerClickGlobal) map.off("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
+          if (markerClickSignals) map.off("click", MARKER_LAYER_SIGNALS, markerClickSignals);
+          map.off("mouseenter", MARKER_LAYER_GLOBAL, cursorEnter);
+          map.off("mouseleave", MARKER_LAYER_GLOBAL, cursorLeave);
+          map.off("mouseenter", MARKER_LAYER_SIGNALS, cursorEnter);
+          map.off("mouseleave", MARKER_LAYER_SIGNALS, cursorLeave);
           map.remove();
         } catch {
           // Defensive: removal during HMR can race with internal teardown.
@@ -1162,6 +1394,22 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       applyMarkerData(map, "signals", signalsMarkers ?? []);
     }, [signalsMarkers, loadState]);
 
+    // ── Selected-marker highlight sync ──────────────────────────────────────
+    // When the parent sets a selected event / report (either from a panel
+    // click or from a marker click routed back), update the icon-size and
+    // glow circle-opacity on the relevant layer via data-driven expressions.
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready") return;
+      applyMarkerSelection(map, "global", selectedGlobalId);
+    }, [selectedGlobalId, loadState]);
+
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || loadState !== "ready") return;
+      applyMarkerSelection(map, "signals", selectedSignalsId);
+    }, [selectedSignalsId, loadState]);
+
     // -----------------------------------------------------------------------
     // Render — inline styles only (no Tailwind classes) to guarantee CSS is
     // applied identically in dev/build regardless of Tailwind purge edge
@@ -1185,6 +1433,28 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             background: PANEL_BG,
+          }}
+        />
+
+        {/*
+          Premium surface polish overlay — non-interactive, very low opacity.
+          Two stacked gradients:
+            • a soft top sheen (faint cool highlight near the top edge), and
+            • a gentle bottom depth fade (slightly darker toward the bottom).
+          Both alphas stay under ~5% so the dark map style remains intact and
+          labels/borders remain readable — no neon, no vignette ring, no
+          oval blob, no cyberpunk glow.
+        */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            backgroundImage: [
+              "radial-gradient(120% 55% at 50% -8%, rgba(200, 215, 225, 0.045), rgba(200, 215, 225, 0) 60%)",
+              "linear-gradient(180deg, rgba(210, 220, 228, 0.025) 0%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.10) 100%)",
+            ].join(", "),
           }}
         />
 

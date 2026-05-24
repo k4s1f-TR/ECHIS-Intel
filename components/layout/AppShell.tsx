@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
 import {
@@ -45,6 +45,29 @@ export function AppShell() {
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
+
+  // Stable refs so the focus effects below only re-run when the selected ID
+  // changes, not when the rail mode changes (avoids spurious camera jumps
+  // when switching view modes while a selection is already active).
+  const activeRailModeRef = useRef(activeRailMode);
+  useEffect(() => { activeRailModeRef.current = activeRailMode; }, [activeRailMode]);
+
+  // When a Global View event is selected (from panel click or marker click),
+  // smoothly pan the globe to that marker's coordinates.
+  useEffect(() => {
+    if (!selectedId || activeRailModeRef.current !== "global") return;
+    const event = mockEvents.find((e) => e.id === selectedId);
+    if (!event?.coordinates) return;
+    globeMapRef.current?.focusMarker(event.coordinates.lng, event.coordinates.lat);
+  }, [selectedId]);
+
+  // When a SOCMINT report is selected, pan to its marker coordinates.
+  useEffect(() => {
+    if (!selectedSignalId || activeRailModeRef.current !== "signals") return;
+    const report = socmintReports.find((r) => r.id === selectedSignalId);
+    if (!report?.coordinates) return;
+    globeMapRef.current?.focusMarker(report.coordinates[0], report.coordinates[1]);
+  }, [selectedSignalId]);
 
   const displayedSignals = useMemo(
     () =>
@@ -231,6 +254,12 @@ export function AppShell() {
               activeView={activeView}
               globalMarkers={globalMarkers}
               signalsMarkers={signalsMarkers}
+              selectedGlobalId={selectedId}
+              selectedSignalsId={selectedSignalId}
+              onMarkerClick={(id, kind) => {
+                if (kind === "global") setSelectedId(id);
+                else if (kind === "signals") setSelectedSignalId(id);
+              }}
             />
             <div
               style={{
@@ -306,11 +335,11 @@ export function AppShell() {
             <div
               style={{
                 position: "absolute",
-                top: 0,
-                right: 0,
-                bottom: 0,
+                top: "16px",
+                right: "14px",
+                bottom: "10px",
                 width: "372px",
-                transform: activeMapRailMode === "signals" ? "translateX(0)" : "translateX(100%)",
+                transform: activeMapRailMode === "signals" ? "translateX(0)" : "translateX(calc(100% + 14px))",
                 opacity: activeMapRailMode === "signals" ? 1 : 0,
                 transition: "transform 180ms ease, opacity 120ms ease",
                 willChange: "transform",
