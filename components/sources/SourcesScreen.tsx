@@ -144,13 +144,13 @@ export function SourcesScreen() {
 
   return (
     <main
-      className="flex min-h-0 flex-1 overflow-hidden"
+      className="flex h-full max-h-full min-h-0 flex-1 overflow-hidden"
       style={{
         background:
           "radial-gradient(circle at 28% 18%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
       }}
     >
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1380px] flex-col gap-3 px-6 py-4">
+      <div className="mx-auto flex h-full max-h-full min-h-0 w-full max-w-[1380px] flex-col gap-3 px-6 py-4">
         <section className="flex flex-shrink-0 items-start justify-between gap-4">
           <div>
             <div className="mb-1.5 flex items-center gap-2">
