@@ -9,6 +9,11 @@ import {
 } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  createTaipanOsmGlobeStyle,
+  OSM_VECTOR_SOURCE_ID,
+  USE_TAIPAN_OSM_BASEMAP,
+} from "@/components/map/styles/taipanOsmGlobeStyle";
 import type { RegionKey } from "@/types/event";
 
 // ---------------------------------------------------------------------------
@@ -153,7 +158,7 @@ function registerPinIcon(map: maplibregl.Map): void {
 // Production should replace with first-party tile hosting or a contracted
 // provider before shipping.
 // ---------------------------------------------------------------------------
-const STYLE_URL =
+const CARTO_DARK_MATTER_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 // ---------------------------------------------------------------------------
@@ -679,6 +684,20 @@ function applyDarkTone(map: maplibregl.Map): void {
     const type = layer.type;
 
     try {
+      if (
+        USE_TAIPAN_OSM_BASEMAP &&
+        type === "symbol" &&
+        (id === "water_name" || /^place_/.test(id))
+      ) {
+        continue;
+      }
+      if (
+        USE_TAIPAN_OSM_BASEMAP &&
+        type === "line" &&
+        (id === "boundary_regional_admin" || id === "boundary_local_admin")
+      ) {
+        continue;
+      }
       // ── Background — land base for the whole globe ─────────────────────
       if (id === "background" && type === "background") {
         bgFound = true;
@@ -849,7 +868,7 @@ function applyCountryLabelWhitelist(map: maplibregl.Map): void {
   }
 
   // Step 2: add a dedicated whitelist layer drawing only the few
-  // globally-significant countries at low zoom.  Reuses CARTO's vector
+  // globally-significant countries at low zoom.  Reuses the loaded basemap
   // source so the data is guaranteed to be present.  Auto-cleaned by
   // its own maxzoom once the native layers fade in.
   if (
@@ -857,8 +876,9 @@ function applyCountryLabelWhitelist(map: maplibregl.Map): void {
     countrySourceLayer &&
     !map.getLayer(WHITELIST_LAYER_ID)
   ) {
+    const isOsmCountrySource = countrySource === OSM_VECTOR_SOURCE_ID;
     const fontProp = (countryFont as string[] | undefined) ?? [
-      "Open Sans Regular",
+      isOsmCountrySource ? "Noto Sans Regular" : "Open Sans Regular",
     ];
     try {
       map.addLayer({
@@ -872,7 +892,7 @@ function applyCountryLabelWhitelist(map: maplibregl.Map): void {
           "any",
           [
             "match",
-            ["coalesce", ["get", "name:en"], ""],
+            ["coalesce", ["get", "name_en"], ["get", "name:en"], ""],
             DEFAULT_VIEW_COUNTRIES,
             true,
             false,
@@ -902,22 +922,28 @@ function applyCountryLabelWhitelist(map: maplibregl.Map): void {
         layout: {
           "text-field": [
             "coalesce",
+            ["get", "name_en"],
             ["get", "name:en"],
             ["get", "name:latin"],
-            ["get", "name_en"],
             ["get", "name"],
             "",
           ],
           "text-font": fontProp,
-          "text-size": 12,
-          "text-letter-spacing": 0.1,
+          "text-size": isOsmCountrySource
+            ? ["interpolate", ["linear"], ["zoom"], 0, 11, 2.5, 12.5]
+            : 12,
+          "text-letter-spacing": isOsmCountrySource ? 0.11 : 0.1,
           "text-transform": "uppercase",
-          "text-padding": 4,
+          "text-max-width": isOsmCountrySource ? 7 : 8,
+          "text-padding": isOsmCountrySource ? 8 : 4,
         },
         paint: {
-          "text-color": LABEL_MAJOR,
+          "text-color": isOsmCountrySource
+            ? "rgba(196, 202, 198, 0.86)"
+            : LABEL_MAJOR,
           "text-halo-color": LABEL_HALO,
-          "text-halo-width": 1.2,
+          "text-halo-width": isOsmCountrySource ? 1 : 1.2,
+          "text-opacity": isOsmCountrySource ? 0.9 : 1,
         },
       } as unknown as maplibregl.LayerSpecification);
     } catch (e) {
@@ -1061,7 +1087,16 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       try {
         map = new maplibregl.Map({
           container,
-          style: STYLE_URL,
+          style: USE_TAIPAN_OSM_BASEMAP
+            ? createTaipanOsmGlobeStyle({
+                landFill: LAND_FILL,
+                landOverlay: LAND_OVERLAY,
+                waterFill: WATER_FILL,
+                waterwayFill: WATERWAY_FILL,
+                borderCountry: BORDER_COUNTRY,
+                labelHalo: LABEL_HALO,
+              })
+            : CARTO_DARK_MATTER_STYLE_URL,
           center: DEFAULT_GLOBE_VIEW.center,
           zoom: DEFAULT_GLOBE_VIEW.zoom,
           bearing: DEFAULT_GLOBE_VIEW.bearing,
@@ -1079,6 +1114,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         return;
       }
       mapRef.current = map;
+
+      if (USE_TAIPAN_OSM_BASEMAP) {
+        map.addControl(
+          new maplibregl.AttributionControl({ compact: true }),
+          "bottom-left",
+        );
+      }
 
       // Disable consumer-y double-click zoom; keep wheel + drag + pinch.
       map.doubleClickZoom.disable();
