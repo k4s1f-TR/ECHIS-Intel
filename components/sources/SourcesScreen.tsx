@@ -1,15 +1,17 @@
 "use client";
 
-import { Clock3, Database, ExternalLink, FlaskConical } from "lucide-react";
-import type { ReactNode } from "react";
+import { Clock3, Database, ExternalLink, FlaskConical, Radio, RefreshCw } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { mockEvents } from "@/data/mockEvents";
 import { mockSources } from "@/data/mockSources";
 import { candidateSourceDefinitions } from "@/data/sources/sourceDefinitions";
 import type {
   ExtractionMethod,
+  NormalizedSourceItem,
   SourceAccessType,
   SourceBasis,
   SourceCandidateStatus,
+  SourceDefinition,
   SourceRegionScope,
   SourceStatus as CandidateSourceStatus,
   SourceTargetScreen,
@@ -204,6 +206,220 @@ function SummaryCard({
   );
 }
 
+function formatPreviewDate(iso: string): string {
+  if (!iso) return "Date unavailable";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Date unavailable";
+  return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+}
+
+type PreviewState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; items: NormalizedSourceItem[]; collectedAt: string };
+
+function CandidateRssPreview({ source }: { source: SourceDefinition }) {
+  const [state, setState] = useState<PreviewState>({ status: "idle" });
+
+  const runPreview = async () => {
+    setState({ status: "loading" });
+    try {
+      const response = await fetch(
+        `/api/sources/rss-preview?sourceId=${encodeURIComponent(source.id)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        setState({ status: "error" });
+        return;
+      }
+      const data: unknown = await response.json();
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        Array.isArray((data as { items?: unknown }).items)
+      ) {
+        const parsed = data as { items: NormalizedSourceItem[]; collectedAt?: string };
+        setState({
+          status: "ready",
+          items: parsed.items.slice(0, 5),
+          collectedAt: parsed.collectedAt ?? "",
+        });
+      } else {
+        setState({ status: "error" });
+      }
+    } catch {
+      setState({ status: "error" });
+    }
+  };
+
+  return (
+    <div
+      className="mt-3 rounded-[8px]"
+      style={{
+        background: "rgba(255,255,255,0.018)",
+        border: "1px solid rgba(255,255,255,0.05)",
+      }}
+    >
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+      >
+        <div className="flex items-center gap-2">
+          <Radio size={12} style={{ color: "rgba(147,197,253,0.78)" }} />
+          <span
+            className="font-semibold uppercase"
+            style={{ color: "rgba(140,140,140,0.85)", fontSize: "10px", letterSpacing: "0.09em" }}
+          >
+            RSS Preview
+          </span>
+          <span
+            className="rounded px-1.5 py-0.5 font-semibold uppercase"
+            style={{
+              color: "rgba(147,197,253,0.85)",
+              background: "rgba(30,64,175,0.14)",
+              border: "1px solid rgba(96,165,250,0.18)",
+              fontSize: "9px",
+              letterSpacing: "0.08em",
+              lineHeight: 1.4,
+            }}
+          >
+            Preview Only · Not Persisted · Not Production Ingestion
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={runPreview}
+          disabled={state.status === "loading"}
+          className="inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-semibold uppercase transition-colors"
+          style={{
+            color: state.status === "loading" ? "rgba(150,150,150,0.7)" : "rgba(215,215,215,0.92)",
+            background: state.status === "loading" ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            fontSize: "10px",
+            letterSpacing: "0.08em",
+            cursor: state.status === "loading" ? "wait" : "pointer",
+          }}
+        >
+          <RefreshCw
+            size={11}
+            className={state.status === "loading" ? "animate-spin" : undefined}
+            style={{ opacity: state.status === "loading" ? 0.7 : 0.85 }}
+          />
+          {state.status === "ready" ? "Refresh Preview" : "Preview RSS"}
+        </button>
+      </div>
+
+      <div className="px-3 py-2.5">
+        {state.status === "idle" && (
+          <p style={{ color: "rgba(125,125,125,0.85)", fontSize: "11px", lineHeight: 1.5 }}>
+            On-demand preview. Click <span style={{ color: "rgba(190,190,190,0.92)" }}>Preview RSS</span>{" "}
+            to fetch up to 5 items from this candidate feed. Nothing is stored.
+          </p>
+        )}
+
+        {state.status === "loading" && (
+          <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
+            Fetching preview…
+          </p>
+        )}
+
+        {state.status === "error" && (
+          <p
+            className="rounded px-2.5 py-2"
+            style={{
+              color: "rgba(248,180,180,0.92)",
+              background: "rgba(127,29,29,0.12)",
+              border: "1px solid rgba(248,113,113,0.18)",
+              fontSize: "11px",
+              lineHeight: 1.5,
+            }}
+          >
+            Preview unavailable. The candidate source remains registered.
+          </p>
+        )}
+
+        {state.status === "ready" && state.items.length === 0 && (
+          <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
+            No items returned by this candidate feed at preview time.
+          </p>
+        )}
+
+        {state.status === "ready" && state.items.length > 0 && (
+          <>
+            <div
+              className="mb-2 flex flex-wrap items-center gap-2"
+              style={{ color: "rgba(120,120,120,0.85)", fontSize: "10.5px" }}
+            >
+              <span>Source Count: {state.items.length}</span>
+              <span>·</span>
+              <span>Collected: {formatPreviewDate(state.collectedAt)}</span>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {state.items.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded px-2.5 py-2"
+                  style={{
+                    background: "rgba(255,255,255,0.012)",
+                    border: "1px solid rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1"
+                      style={{
+                        color: "rgba(220,220,220,0.95)",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <span>{item.title}</span>
+                      <ExternalLink size={11} style={{ color: "rgba(147,197,253,0.7)", flexShrink: 0 }} />
+                    </a>
+                    <span style={{ color: "rgba(115,115,115,0.85)", fontSize: "10.5px" }}>
+                      {formatPreviewDate(item.publishedAt)}
+                    </span>
+                  </div>
+                  <div
+                    className="mb-1.5 flex flex-wrap items-center gap-2"
+                    style={{ color: "rgba(140,140,140,0.85)", fontSize: "10.5px" }}
+                  >
+                    <span>{item.sourceName}</span>
+                  </div>
+                  {item.summary && (
+                    <p
+                      className="mb-2"
+                      style={{ color: "rgba(180,180,180,0.88)", fontSize: "11.5px", lineHeight: 1.5 }}
+                    >
+                      {item.summary}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    <TextPill>
+                      Extraction Method: {EXTRACTION_METHOD_LABELS[item.extractionMethod]}
+                    </TextPill>
+                    <TextPill>
+                      Verification Status: {CANDIDATE_VERIFICATION_LABELS[item.verificationStatus]}
+                    </TextPill>
+                    <TextPill>
+                      Source Basis: {SOURCE_BASIS_LABELS[item.sourceBasis]}
+                    </TextPill>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CandidateField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -238,7 +454,7 @@ export function SourcesScreen() {
           "radial-gradient(circle at 28% 18%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
       }}
     >
-      <div className="mx-auto flex h-full max-h-full min-h-0 w-full max-w-[1380px] flex-col gap-3 px-6 py-4">
+      <div className="sources-registry-scrollbar mx-auto flex min-h-0 w-full max-w-[1380px] flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-6 py-4">
         <section className="flex flex-shrink-0 items-start justify-between gap-4">
           <div>
             <div className="mb-1.5 flex items-center gap-2">
@@ -294,7 +510,7 @@ export function SourcesScreen() {
                 lineHeight: 1.4,
               }}
             >
-              Not Live · Static Frontend Only
+              Preview Only · Not Persisted · Not Production Ingestion
             </span>
           </div>
           <div
@@ -307,8 +523,9 @@ export function SourcesScreen() {
             }}
           >
             These are candidate / test source records held for review. They are
-            not approved production / live sources. No live fetching, parsing,
-            scraping, API ingestion, or backend integration is connected.
+            not approved production sources. RSS preview is on-demand only;
+            preview items are not stored, scheduled, indexed, or ingested into a
+            production pipeline.
           </div>
           <div className="flex flex-col">
             {candidateSourceDefinitions.map((source, index) => (
@@ -403,13 +620,16 @@ export function SourcesScreen() {
                     {source.notes}
                   </p>
                 )}
+                {source.accessType === "rss" && source.candidateFeedUrl && (
+                  <CandidateRssPreview source={source} />
+                )}
               </article>
             ))}
           </div>
         </section>
 
         <section
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[10px]"
+          className="flex flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
           style={{
             background: "rgba(12,12,12,0.96)",
             border: "1px solid rgba(255,255,255,0.07)",
@@ -435,7 +655,7 @@ export function SourcesScreen() {
             <span className="text-right">Events</span>
           </div>
 
-          <div className="sources-registry-scrollbar min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col">
             {mockSources.map((source, index) => (
               <article
                 key={source.id}
