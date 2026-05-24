@@ -1,0 +1,88 @@
+import type { NormalizedSourceItem } from "./sourceTypes";
+
+// Static sample items for the candidate/test sources. These are mock placeholders
+// for UI scaffolding only. They are not live, not current, not verified, not
+// fetched, and must not be treated as real reporting.
+
+export const mockNormalizedSourceItems: NormalizedSourceItem[] = [
+  {
+    id: "sample-trt-haber-dunya-001",
+    sourceId: "trt-haber-dunya",
+    sourceName: "TRT Haber - Dünya",
+    title: "Sample world-desk headline (placeholder)",
+    summary:
+      "Sample/mock placeholder entry used for UI scaffolding. No live RSS fetching is performed in this step.",
+    url: "https://www.trthaber.com/",
+    publishedAt: "2026-01-01T00:00:00Z",
+    collectedAt: "2026-01-01T00:00:00Z",
+    sourceType: "rss",
+    sourceStatus: "public_news_source",
+    verificationStatus: "source_reported",
+    sourceBasis: "single_public_source",
+    extractionMethod: "rss_summary",
+    relatedCountries: [],
+    relatedRegions: ["global"],
+    category: "Public News",
+    isSample: true,
+  },
+  {
+    id: "sample-trt-haber-dunya-002",
+    sourceId: "trt-haber-dunya",
+    sourceName: "TRT Haber - Dünya",
+    title: "Sample regional summary entry (placeholder)",
+    summary:
+      "Sample/mock manual entry retained only as a static UI example. Do not treat as factual reporting.",
+    url: "https://www.trthaber.com/",
+    publishedAt: "2026-01-01T00:00:00Z",
+    collectedAt: "2026-01-01T00:00:00Z",
+    sourceType: "rss",
+    sourceStatus: "public_news_source",
+    verificationStatus: "manual_sample",
+    sourceBasis: "manual_sample",
+    extractionMethod: "manual_sample",
+    relatedCountries: [],
+    relatedRegions: ["global"],
+    category: "Public News",
+    isSample: true,
+  },
+  {
+    id: "sample-aljazeera-middle-east-001",
+    sourceId: "aljazeera-middle-east",
+    sourceName: "Al Jazeera - Middle East",
+    title: "Sample Middle East desk headline (placeholder)",
+    summary:
+      "Sample/mock placeholder entry used for UI scaffolding. No live RSS fetching or filtering is performed in this step.",
+    url: "https://www.aljazeera.com/middle-east/",
+    publishedAt: "2026-01-01T00:00:00Z",
+    collectedAt: "2026-01-01T00:00:00Z",
+    sourceType: "rss",
+    sourceStatus: "public_news_source",
+    verificationStatus: "source_reported",
+    sourceBasis: "single_public_source",
+    extractionMethod: "rss_summary",
+    relatedCountries: [],
+    relatedRegions: ["middle_east"],
+    category: "Public News",
+    isSample: true,
+  },
+  {
+    id: "sample-aljazeera-middle-east-002",
+    sourceId: "aljazeera-middle-east",
+    sourceName: "Al Jazeera - Middle East",
+    title: "Sample regional brief entry (placeholder)",
+    summary:
+      "Sample/mock manual entry retained only as a static UI example. Do not treat as factual reporting.",
+    url: "https://www.aljazeera.com/middle-east/",
+    publishedAt: "2026-01-01T00:00:00Z",
+    collectedAt: "2026-01-01T00:00:00Z",
+    sourceType: "rss",
+    sourceStatus: "public_news_source",
+    verificationStatus: "manual_sample",
+    sourceBasis: "manual_sample",
+    extractionMethod: "manual_sample",
+    relatedCountries: [],
+    relatedRegions: ["middle_east"],
+    category: "Public News",
+    isSample: true,
+  },
+];
