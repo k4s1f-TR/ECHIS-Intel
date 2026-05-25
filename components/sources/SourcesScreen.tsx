@@ -181,25 +181,25 @@ function SummaryCard({
 }) {
   return (
     <div
-      className="min-w-0 rounded-lg px-3 py-2.5"
+      className="min-w-0 rounded-md px-2.5 py-2"
       style={{
         background: "rgba(14,14,14,0.78)",
         border: "1px solid rgba(255,255,255,0.06)",
       }}
     >
-      <div className="mb-1.5 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-1.5">
         <span
           className="h-1.5 w-1.5 rounded-full"
-          style={{ background: tone, boxShadow: `0 0 8px ${tone}` }}
+          style={{ background: tone, boxShadow: `0 0 6px ${tone}` }}
         />
         <span
           className="truncate font-semibold uppercase"
-          style={{ color: "rgba(105,105,105,0.9)", fontSize: "10px", letterSpacing: "0.08em" }}
+          style={{ color: "rgba(105,105,105,0.9)", fontSize: "9px", letterSpacing: "0.08em" }}
         >
           {label}
         </span>
       </div>
-      <span className="font-semibold" style={{ color: "rgba(230,230,230,0.94)", fontSize: "22px" }}>
+      <span className="font-semibold" style={{ color: "rgba(230,230,230,0.94)", fontSize: "18px" }}>
         {value}
       </span>
     </div>
@@ -448,31 +448,31 @@ export function SourcesScreen() {
 
   return (
     <main
-      className="flex h-full max-h-full min-h-0 flex-1 overflow-hidden"
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
       style={{
         background:
           "radial-gradient(circle at 28% 18%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
       }}
     >
-      <div className="sources-registry-scrollbar mx-auto flex min-h-0 w-full max-w-[1380px] flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-6 py-4">
-        <section className="flex flex-shrink-0 items-start justify-between gap-4">
+      <div className="sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 pb-2.5 pt-2.5">
+        <section className="flex flex-shrink-0 items-start justify-between gap-3">
           <div>
-            <div className="mb-1.5 flex items-center gap-2">
-              <Database size={15} style={{ color: "rgba(147,197,253,0.88)" }} />
+            <div className="mb-1 flex items-center gap-1.5">
+              <Database size={12} style={{ color: "rgba(147,197,253,0.88)" }} />
               <span
                 className="font-semibold uppercase"
-                style={{ color: "rgba(147,147,147,0.82)", fontSize: "10.5px", letterSpacing: "0.12em" }}
+                style={{ color: "rgba(147,147,147,0.82)", fontSize: "9.5px", letterSpacing: "0.12em" }}
               >
                 Source Registry
               </span>
             </div>
-            <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "22px" }}>
+            <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "18px" }}>
               Sources Overview
             </h1>
           </div>
         </section>
 
-        <section className="grid flex-shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <section className="grid flex-shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
           <SummaryCard label="Total Sources" value={totalSources} tone="rgba(147,197,253,0.9)" />
           <SummaryCard label="Active Sources" value={activeSources} tone="rgba(74,222,128,0.9)" />
           <SummaryCard label="Future Sources" value={futureSources} tone="rgba(96,165,250,0.9)" />

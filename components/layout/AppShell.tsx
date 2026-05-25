@@ -361,7 +361,7 @@ export function AppShell() {
         onTabSelect={handleTopTabSelect}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <LeftRail
           activeView={activeSection === "dashboard" && activeTopTab === "situation" ? activeRailMode : null}
           activeBookmarks={activeSection === "bookmarks"}
@@ -370,7 +370,7 @@ export function AppShell() {
           onHome={handleHomeReset}
         />
 
-        <div className="relative flex-1 overflow-hidden">
+        <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             className="absolute inset-0"
             style={{
