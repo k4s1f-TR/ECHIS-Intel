@@ -54,6 +54,34 @@ export type SourceTargetScreen =
 
 export type SourceLanguage = "tr" | "en" | "ar" | "fr" | "es" | "ru" | "de";
 
+/**
+ * Thematic profile of a source.
+ * Controls topic-filter strictness and marker-placement strategy.
+ */
+export type SourceProfile =
+  | "general_news"       // mainstream news — full topic scoring applied
+  | "official_diplomatic" // government / institution press feeds — always passed
+  | "conflict_crisis";   // humanitarian / conflict-focused — lighter topic filter
+
+/**
+ * How RSS items from this source are placed on the globe as markers.
+ *  item_location   — deterministic location matching from item text (default)
+ *  source_location — fixed coordinates from sourceLocation (official sources)
+ */
+export type MarkerLocationStrategy = "item_location" | "source_location";
+
+/**
+ * Fixed geographic anchor for official/institutional sources.
+ * Used when markerLocationStrategy === "source_location".
+ */
+export type SourceLocation = {
+  /** Human-readable label shown in the marker popup. */
+  label: string;
+  country: string;
+  lat: number;
+  lng: number;
+};
+
 export type SourceDefinition = {
   id: string;
   name: string;
@@ -70,6 +98,12 @@ export type SourceDefinition = {
   regionScope: SourceRegionScope;
   targetScreens: SourceTargetScreen[];
   notes?: string;
+  /** Thematic profile — drives topic filter and marker strategy. */
+  sourceProfile?: SourceProfile;
+  /** How items from this source generate globe markers. */
+  markerLocationStrategy?: MarkerLocationStrategy;
+  /** Fixed anchor coordinates; required when markerLocationStrategy === "source_location". */
+  sourceLocation?: SourceLocation;
 };
 
 export type NormalizedSourceItem = {
@@ -90,4 +124,13 @@ export type NormalizedSourceItem = {
   relatedRegions: SourceRegionScope[];
   category: string;
   isSample: boolean;
+  /** Copied from SourceDefinition at parse time; drives topic filter. */
+  sourceProfile?: SourceProfile;
+  /** Copied from SourceDefinition at parse time; drives marker placement. */
+  markerLocationStrategy?: MarkerLocationStrategy;
+  /**
+   * Pre-computed marker anchor for source_location sources.
+   * Undefined for item_location sources (location matched from item text).
+   */
+  sourceLocationForMarker?: { lat: number; lng: number; locationName: string };
 };

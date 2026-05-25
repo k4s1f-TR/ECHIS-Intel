@@ -63,9 +63,9 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "israel", "israeli", "tel aviv", "jerusalem", "haifa", "netanyahu",
-      // Turkish — post-normalise: İsrail→israel (so already covered),
-      // but "israil" is the common Turkish ASCII spelling used in headlines
+      // Turkish
       "israil",
+      "kudus",   // Kudüs → Jerusalem
     ],
   },
   {
@@ -75,8 +75,9 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "lebanon", "lebanese", "beirut",
-      // Turkish — Lübnan → after normalizeText → "lubnan"
-      "lübnan",
+      // Turkish
+      "lübnan", "lubnan",
+      "beyrut",  // Beyrut → Beirut
     ],
   },
   {
@@ -85,9 +86,12 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 38.9,
     aliases: [
       // English
-      "syria", "syrian", "damascus",
+      "syria", "syrian", "damascus", "aleppo", "homs", "idlib", "raqqa", "deir ez-zor",
       // Turkish
       "suriye", "suriyeli",
+      "halep",   // Halep → Aleppo
+      "humus",   // Humus → Homs  (boundary-safe: "humus" won't fire inside real words)
+      "rakka",   // Rakka → Raqqa
     ],
   },
   {
@@ -97,8 +101,12 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "iraq", "iraqi", "baghdad", "basra", "mosul", "kirkuk", "erbil",
-      // Turkish — "irak" (different from "iraq")
+      "fallujah", "ramadi", "tikrit", "sulaymaniyah",
+      // Turkish
       "irak",
+      "bagdat",  // Bağdat → Baghdad
+      "musul",   // Musul → Mosul
+      "kerkuk",  // Kerkük → Kirkuk
     ],
   },
   {
@@ -107,7 +115,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 48.5,
     aliases: [
       // English + Turkish (same word)
-      "yemen", "yemeni", "sanaa", "sana'a", "aden", "houthi",
+      "yemen", "yemeni", "sanaa", "sana'a", "aden", "houthi", "hodeidah", "taiz",
       // Turkish
       "husiler",
     ],
@@ -117,10 +125,11 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lat: 32.4,
     lng: 53.7,
     aliases: [
-      // English + Turkish (İran → normalised → "iran")
-      "iran", "iranian", "tehran",
-      // Turkish ASCII variant used in some headlines
+      // English
+      "iran", "iranian", "tehran", "isfahan", "mashhad", "shiraz", "qom",
+      // Turkish
       "iranli",
+      "tahran",  // Tahran → Tehran
     ],
   },
   {
@@ -129,8 +138,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 35.0,
     aliases: [
       // English
-      "turkey", "turkish", "istanbul", "ankara", "erdogan",
-      // Turkish — Türkiye → normaliseText → "turkiye"
+      "turkey", "turkish", "istanbul", "ankara", "erdogan", "izmir", "gaziantep", "bursa",
+      // Turkish
       "türkiye", "turkiye",
     ],
   },
@@ -140,7 +149,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 46.7,
     aliases: [
       // English
-      "saudi arabia", "saudi", "riyadh", "mecca", "medina", "jeddah",
+      "saudi arabia", "saudi", "riyadh", "mecca", "medina", "jeddah", "neom",
       // Turkish
       "suudi arabistan", "suudi",
     ],
@@ -153,7 +162,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       // English
       "jordan", "jordanian", "amman",
       // Turkish
-      "ürdün",
+      "ürdün", "urdun",
     ],
   },
   {
@@ -163,8 +172,9 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "egypt", "egyptian", "cairo", "alexandria",
-      // Turkish — Mısır → normaliseText → "misir"
+      // Turkish
       "mısır", "misir",
+      "kahire",  // Kahire → Cairo
     ],
   },
   {
@@ -197,6 +207,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "ukraine", "ukrainian", "kyiv", "kiev", "kharkiv", "mariupol", "kherson",
+      "zaporizhzhia", "odessa", "lviv", "dnipro", "donetsk", "luhansk", "bakhmut",
       // Turkish
       "ukrayna",
     ],
@@ -207,9 +218,10 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 105.3,
     aliases: [
       // English
-      "russia", "russian", "moscow", "kremlin", "putin",
+      "russia", "russian", "moscow", "kremlin", "putin", "saint petersburg",
       // Turkish
-      "rusya", "rus ",
+      "rusya", "rus",
+      "moskova",  // Moskova → Moscow
     ],
   },
   // ── Western powers ──────────────────────────────────────────────────────
@@ -219,9 +231,9 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: -77.0,
     aliases: [
       // English
-      "united states", "washington d.c.", "pentagon",
+      "united states", "washington d.c.", "pentagon", "white house",
       // Turkish
-      "abd ", "amerikan", "amerikalı",
+      "abd", "amerikan", "amerikalı", "amerikanin",
     ],
   },
   {
@@ -230,9 +242,32 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: -0.1,
     aliases: [
       // English
-      "united kingdom", "britain", "london",
+      "united kingdom", "britain", "british", "london",
       // Turkish
       "ingiltere", "ingiliz",
+      "londra",   // Londra → London
+    ],
+  },
+  {
+    name: "France",
+    lat: 48.8,
+    lng: 2.3,
+    aliases: [
+      // English
+      "france", "french", "paris", "macron", "elysee",
+      // Turkish
+      "fransa", "fransiz",
+    ],
+  },
+  {
+    name: "Germany",
+    lat: 52.5,
+    lng: 13.4,
+    aliases: [
+      // English
+      "germany", "german", "berlin", "bundestag", "scholz", "merz",
+      // Turkish
+      "almanya", "alman",
     ],
   },
   // ── Asia ────────────────────────────────────────────────────────────────
@@ -242,9 +277,10 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 104.2,
     aliases: [
       // English
-      "china", "chinese", "beijing", "shanghai",
+      "china", "chinese", "beijing", "shanghai", "hong kong",
       // Turkish
-      "cin ", "cinli",
+      "cin", "cinli",
+      "pekin",   // Pekin → Beijing
     ],
   },
   {
@@ -253,9 +289,10 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 67.7,
     aliases: [
       // English
-      "afghanistan", "afghan", "kabul", "taliban",
+      "afghanistan", "afghan", "kabul", "taliban", "kandahar", "herat",
       // Turkish
       "afganistan", "afgan",
+      "kabil",   // Kabil → Kabul
     ],
   },
   {
@@ -264,8 +301,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 69.3,
     aliases: [
       // English
-      "pakistan", "pakistani", "islamabad", "karachi",
-      // Turkish (same word)
+      "pakistan", "pakistani", "islamabad", "karachi", "lahore", "peshawar",
+      // Turkish
       "pakistanli",
     ],
   },
@@ -275,9 +312,100 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 78.9,
     aliases: [
       // English
-      "india", "indian", "new delhi", "mumbai",
+      "india", "indian", "new delhi", "mumbai", "modi",
       // Turkish
-      "hindistan", "hint ",
+      "hindistan", "hint",
+    ],
+  },
+  {
+    name: "North Korea",
+    lat: 40.3,
+    lng: 127.5,
+    aliases: [
+      // English
+      "north korea", "north korean", "pyongyang", "kim jong",
+      // Turkish
+      "kuzey kore",
+    ],
+  },
+  // ── Europe / Caucasus ────────────────────────────────────────────────────
+  {
+    // EU member; ongoing partition dispute (Turkish-Cypriot / Greek-Cypriot)
+    name: "Cyprus",
+    lat: 35.1,
+    lng: 33.4,
+    aliases: [
+      // English
+      "cyprus", "cypriot", "nicosia", "lefkosia",
+      // Turkish
+      "kibris", "kibrista", "kibristan", "kibrisli",
+    ],
+  },
+  {
+    // Armenia-Turkey normalization, Nagorno-Karabakh context
+    name: "Armenia",
+    lat: 40.1,
+    lng: 45.0,
+    aliases: [
+      // English
+      "armenia", "armenian", "yerevan", "nagorno", "karabakh",
+      // Turkish
+      "ermenistan", "ermeni", "yerevan", "daglik karabag",
+    ],
+  },
+  {
+    name: "Azerbaijan",
+    lat: 40.1,
+    lng: 47.6,
+    aliases: [
+      // English
+      "azerbaijan", "azerbaijani", "baku", "karabakh",
+      // Turkish
+      "azerbaycan", "azeri", "baku",
+    ],
+  },
+  {
+    name: "Georgia",
+    lat: 42.3,
+    lng: 43.4,
+    aliases: [
+      // English
+      "georgia", "georgian", "tbilisi",
+      // Turkish
+      "gurcistan", "tiflis",
+    ],
+  },
+  {
+    name: "Serbia",
+    lat: 44.0,
+    lng: 21.0,
+    aliases: [
+      // English
+      "serbia", "serbian", "belgrade",
+      // Turkish
+      "sirbistan", "belgrad",
+    ],
+  },
+  {
+    name: "Kosovo",
+    lat: 42.6,
+    lng: 20.9,
+    aliases: [
+      // English
+      "kosovo", "pristina",
+      // Turkish
+      "kosova",
+    ],
+  },
+  {
+    name: "Greece",
+    lat: 39.1,
+    lng: 21.8,
+    aliases: [
+      // English
+      "greece", "greek", "athens",
+      // Turkish
+      "yunanistan", "yunan", "atina",
     ],
   },
   // ── Africa ──────────────────────────────────────────────────────────────
@@ -287,7 +415,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 30.2,
     aliases: [
       "sudan", "sudanese", "khartoum",
-      // Turkish (same word)
+      // Turkish
       "sudanli",
     ],
   },
@@ -296,9 +424,10 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lat: 26.3,
     lng: 17.2,
     aliases: [
-      "libya", "libyan", "tripoli",
+      // English
+      "libya", "libyan", "tripoli", "benghazi",
       // Turkish
-      "libya", "trablus",
+      "trablus", "bingazi",
     ],
   },
   {
@@ -319,6 +448,32 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "ethiopia", "ethiopian", "addis ababa",
       // Turkish
       "etiyopya",
+    ],
+  },
+  {
+    name: "Mali",
+    lat: 17.6,
+    lng: -4.0,
+    aliases: [
+      "mali", "malian", "bamako",
+    ],
+  },
+  {
+    name: "Niger",
+    lat: 17.6,
+    lng: 8.1,
+    aliases: [
+      "niger", "nigerien", "niamey",
+      // Turkish
+      "nijer",
+    ],
+  },
+  {
+    name: "Democratic Republic of Congo",
+    lat: -4.0,
+    lng: 21.8,
+    aliases: [
+      "congo", "congolese", "kinshasa", "drc",
     ],
   },
 ] as const;
@@ -368,10 +523,44 @@ function normalizeText(text: string): string {
 // Normalise every alias in the dictionary once at module load, not on each
 // call.  This keeps rssItemsToMarkers() O(items × dictionary × aliases) with
 // no extra per-call allocation.
+// .trim() removes trailing-space workarounds (e.g. "cin ", "abd ") that were
+// used to approximate word boundaries — matchesLocationAlias() now handles
+// boundary checking with proper lookahead/lookbehind.
 const NORMALIZED_DICTIONARY = LOCATION_DICTIONARY.map((entry) => ({
   ...entry,
-  aliases: entry.aliases.map(normalizeText),
+  aliases: entry.aliases.map((a) => normalizeText(a).trim()),
 }));
+
+/**
+ * Boundary-aware alias match — replaces naive `text.includes(alias)`.
+ *
+ * After normalizeText() both corpus text and alias are ASCII-safe (combining
+ * diacritics stripped, dotless-ı mapped to i).  We use negative
+ * lookbehind/lookahead `(?<![a-z0-9])alias(?![a-z0-9])` so that a short
+ * alias like "cin" (Çin → China) cannot fire as a substring inside an
+ * unrelated word like "icin" (için → "for" in Turkish).
+ *
+ * What counts as a boundary:
+ *   - start / end of string
+ *   - space, punctuation (including Turkish apostrophes ' and ')
+ *   - anything that is NOT an ASCII letter or digit
+ *
+ * This intentionally allows inflected forms such as "cin'de", "cin ile",
+ * "cin sınırı" to match the "cin" alias while rejecting "için", "seçin",
+ * "biçim", "içinden".
+ *
+ * Regex metacharacters in the alias (e.g. "." in "washington d.c.",
+ * "'" in "sana'a") are escaped before use.
+ */
+function matchesLocationAlias(normalizedText: string, normalizedAlias: string): boolean {
+  if (!normalizedAlias) return false;
+  // Escape regex metacharacters present in some aliases (dots, apostrophes).
+  const escaped = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Lookbehind: not preceded by a Latin letter or digit.
+  // Lookahead:  not followed by a Latin letter or digit.
+  const re = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`);
+  return re.test(normalizedText);
+}
 
 /**
  * Convert RSS preview items to globe MarkerFeatures, grouped by location.
@@ -393,13 +582,45 @@ export function rssItemsToMarkers(items: NormalizedSourceItem[]): RssMarkerFeatu
   const grouped = new Map<string, RssMarkerFeature>();
 
   for (const item of items) {
+    // ── Official diplomatic sources: fixed institution location ─────────────
+    // Items from official_diplomatic + source_location sources are grouped
+    // under one institution marker per sourceId (not per geographic location).
+    // This keeps e.g. all Turkish MFA press releases under a single Ankara pin
+    // and all EU Council releases under a single Brussels pin, even if multiple
+    // official sources share the same city.
+    if (
+      item.markerLocationStrategy === "source_location" &&
+      item.sourceLocationForMarker
+    ) {
+      // ID is institution-scoped — one pin per source/institution.
+      const markerId = `rss-official::${item.sourceId}`;
+      const existing = grouped.get(markerId);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        grouped.set(markerId, {
+          id: markerId,
+          lng: item.sourceLocationForMarker.lng,
+          lat: item.sourceLocationForMarker.lat,
+          locationName: item.sourceLocationForMarker.locationName,
+          items: [item],
+        });
+      }
+      continue; // skip item-location matching for this item
+    }
+
+    // ── General news / conflict-crisis sources: item-level location ─────────
+    // Location matching uses only item-level fields (title + per-item summary).
+    // Source-level metadata (notes, feed description, regionScope) is
+    // intentionally excluded — generic source text such as "Türkiye haberleri"
+    // would cause every item from a Turkish source to spuriously match Türkiye.
     const searchText = normalizeText(`${item.title} ${item.summary}`);
 
     let matched: (typeof NORMALIZED_DICTIONARY)[number] | null = null;
 
     outer: for (const entry of NORMALIZED_DICTIONARY) {
       for (const alias of entry.aliases) {
-        if (searchText.includes(alias)) {
+        if (matchesLocationAlias(searchText, alias)) {
           matched = entry;
           break outer;
         }

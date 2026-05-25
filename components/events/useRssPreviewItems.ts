@@ -1,39 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * useRssPreviewItems — thin consumer hook over the shared RssPreviewStore.
+ *
+ * Previously this hook owned its own fetch lifecycle.  It now reads from the
+ * centrally managed RssPreviewStore so that:
+ *   - Sources panel "Preview RSS" refreshes → Global View feed + markers update.
+ *   - Global View feed + markers always reflect the same combinedItems array.
+ *   - No duplicate network requests for the same source.
+ *
+ * The hook interface is intentionally unchanged so existing callers
+ * (RssGlobalFeedPanel, AppShell) require no modification.
+ */
+
+import { useMemo } from "react";
 import type { NormalizedSourceItem } from "@/data/sources/sourceTypes";
-
-// ---------------------------------------------------------------------------
-// Shared RSS preview fetch hook.
-//
-// Fetches preview items from both candidate RSS sources on mount, merges them,
-// and sorts by publishedAt descending.  Shared between RssGlobalFeedPanel
-// (feed list) and AppShell (globe markers) so the same data drives both
-// surfaces without duplicating fetch logic.
-//
-// Preview-only: items are not persisted, stored, or used outside of the
-// Global View screen.
-// ---------------------------------------------------------------------------
-
-const PREVIEW_SOURCE_IDS = ["trt-haber-dunya", "aljazeera-middle-east"] as const;
-
-interface RssPreviewApiResponse {
-  sourceId: string;
-  items?: NormalizedSourceItem[];
-  error?: string;
-  previewOnly: boolean;
-}
-
-async function fetchSourceItems(sourceId: string): Promise<NormalizedSourceItem[]> {
-  const res = await fetch(
-    `/api/sources/rss-preview?sourceId=${encodeURIComponent(sourceId)}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) throw new Error(`upstream_${res.status}`);
-  const data: RssPreviewApiResponse = await res.json();
-  if (data.error) throw new Error(data.error);
-  return Array.isArray(data.items) ? data.items : [];
-}
+import {
+  RSS_PREVIEW_DEFAULT_SOURCE_IDS,
+  useRssPreviewStore,
+} from "./RssPreviewStore";
+import { isGlobalViewRelevantRssItem } from "@/lib/sources/rssTopicFilter";
 
 export type RssLoadState = "loading" | "loaded" | "partial" | "error";
 
@@ -42,46 +28,72 @@ export interface UseRssPreviewResult {
   loadState: RssLoadState;
 }
 
+/**
+ * Maximum age of an RSS item for Global View display and marker generation.
+ * Items older than this are excluded from the live feed and marker flow.
+ * Sources panel preview is not affected (it reads itemsBySourceId directly).
+ */
+const GLOBAL_VIEW_MAX_ITEM_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 export function useRssPreviewItems(): UseRssPreviewResult {
-  const [items, setItems] = useState<NormalizedSourceItem[]>([]);
-  const [loadState, setLoadState] = useState<RssLoadState>("loading");
+  const {
+    combinedItems,
+    loadingBySourceId,
+    errorBySourceId,
+    itemsBySourceId,
+  } = useRssPreviewStore();
 
-  useEffect(() => {
-    let cancelled = false;
+  // loadState is computed from the unfiltered combinedItems so that a
+  // successful fetch (even if all items happen to be old) is not reported
+  // as an error state — the feed just shows empty rather than spinning.
+  const loadState = useMemo((): RssLoadState => {
+    const isAnyLoading = RSS_PREVIEW_DEFAULT_SOURCE_IDS.some(
+      (id) => loadingBySourceId[id] ?? false,
+    );
+    const isAnyError = RSS_PREVIEW_DEFAULT_SOURCE_IDS.some(
+      (id) => (errorBySourceId[id] ?? null) !== null,
+    );
+    const hasAnyItems = combinedItems.length > 0;
+    const hasAllSources = RSS_PREVIEW_DEFAULT_SOURCE_IDS.every(
+      (id) => itemsBySourceId[id] !== undefined,
+    );
 
-    Promise.allSettled(PREVIEW_SOURCE_IDS.map(fetchSourceItems)).then((results) => {
-      if (cancelled) return;
+    // Before any fetch result arrives (initial render or truly empty) treat
+    // as loading so the feed skeleton shows immediately.
+    if (!hasAnyItems && !isAnyError && !isAnyLoading) return "loading";
+    if (isAnyLoading && !hasAnyItems) return "loading";
+    if (!isAnyLoading && !hasAnyItems) return "error";
+    if (hasAnyItems && (isAnyError || !hasAllSources)) return "partial";
+    return "loaded";
+  }, [combinedItems, loadingBySourceId, errorBySourceId, itemsBySourceId]);
 
-      const merged: NormalizedSourceItem[] = [];
-      let succeeded = 0;
-
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          merged.push(...result.value);
-          succeeded++;
-        }
-      }
-
-      if (succeeded === 0) {
-        setLoadState("error");
-        return;
-      }
-
-      merged.sort((a, b) => {
-        if (!a.publishedAt && !b.publishedAt) return 0;
-        if (!a.publishedAt) return 1;
-        if (!b.publishedAt) return -1;
-        return b.publishedAt.localeCompare(a.publishedAt);
-      });
-
-      setItems(merged);
-      setLoadState(succeeded < PREVIEW_SOURCE_IDS.length ? "partial" : "loaded");
+  // Apply recency filter for Global View and RSS marker flow.
+  //
+  // We compare publishedAt against the item's own collectedAt (the server
+  // timestamp set at fetch time) rather than Date.now() so the computation
+  // is pure — it depends only on item data, not on wall-clock time during
+  // render. Semantically: "was this item fresh when the feed was collected?"
+  //
+  // Items without parseable dates are kept (unknown date ≠ stale).
+  const freshItems = useMemo((): NormalizedSourceItem[] => {
+    return combinedItems.filter((item) => {
+      if (!item.publishedAt || !item.collectedAt) return true;
+      const published = new Date(item.publishedAt).getTime();
+      const collected = new Date(item.collectedAt).getTime();
+      if (Number.isNaN(published) || Number.isNaN(collected)) return true;
+      return collected - published < GLOBAL_VIEW_MAX_ITEM_AGE_MS;
     });
+  }, [combinedItems]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Apply Global View topic filter after recency filter.
+  // Keeps only items relevant to diplomacy, foreign policy, defense/public
+  // institutions, international system, and conflict diplomacy.
+  // Sources panel is not affected (it reads itemsBySourceId directly from
+  // the store, bypassing this hook entirely).
+  const topicItems = useMemo(
+    () => freshItems.filter(isGlobalViewRelevantRssItem),
+    [freshItems],
+  );
 
-  return { items, loadState };
+  return { items: topicItems, loadState };
 }

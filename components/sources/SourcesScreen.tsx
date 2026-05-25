@@ -1,13 +1,13 @@
 "use client";
 
 import { Clock3, Database, ExternalLink, FlaskConical, Radio, RefreshCw } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { useRssPreviewStore } from "@/components/events/RssPreviewStore";
 import { mockEvents } from "@/data/mockEvents";
 import { mockSources } from "@/data/mockSources";
 import { candidateSourceDefinitions } from "@/data/sources/sourceDefinitions";
 import type {
   ExtractionMethod,
-  NormalizedSourceItem,
   SourceAccessType,
   SourceBasis,
   SourceCandidateStatus,
@@ -213,45 +213,70 @@ function formatPreviewDate(iso: string): string {
   return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 }
 
-type PreviewState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "ready"; items: NormalizedSourceItem[]; collectedAt: string };
+/**
+ * Maps a structured reason code (returned by the rss-preview API) to a
+ * human-readable diagnostic line shown in the Sources panel error state.
+ * Falls back to a generic message for unknown codes so new reasons don't
+ * silently break the UI.
+ */
+function previewErrorMessage(reason: string | null): string {
+  if (!reason) return "Preview unavailable. The candidate source remains registered.";
+  // HTTP status variants: upstream_404, upstream_403, upstream_500 …
+  if (reason.startsWith("upstream_")) {
+    const code = reason.slice("upstream_".length);
+    if (code === "404")
+      return "Feed URL not found (404). The feed path may have moved or been removed.";
+    if (code === "403")
+      return "Feed access denied (403). The source may require authentication or block automated requests.";
+    if (code === "301" || code === "302")
+      return `Feed URL redirects (${code}). The registered URL may be outdated.`;
+    if (code.startsWith("5"))
+      return `Feed server error (${code}). The source may be temporarily unavailable.`;
+    return `Feed server returned HTTP ${code}. The feed URL may be incorrect.`;
+  }
+  switch (reason) {
+    case "timeout":
+      return "Feed request timed out. The source server may be slow or unreachable from this deployment.";
+    case "missing_feed_url":
+      return "No feed URL is configured for this candidate source.";
+    case "parse_failed":
+      return "Feed content could not be parsed. The URL may return HTML or a non-RSS/Atom document.";
+    case "empty_response":
+      return "Feed returned no content. The URL may be valid but currently empty.";
+    default:
+      return "Preview unavailable. The candidate source remains registered.";
+  }
+}
 
+/**
+ * CandidateRssPreview — Sources panel preview card.
+ *
+ * Uses the shared RssPreviewStore so "Preview RSS" updates both the Sources
+ * card AND the Global View Live Feed / RSS markers in the same operation.
+ */
 function CandidateRssPreview({ source }: { source: SourceDefinition }) {
-  const [state, setState] = useState<PreviewState>({ status: "idle" });
+  const {
+    previewSource,
+    loadingBySourceId,
+    errorBySourceId,
+    itemsBySourceId,
+    collectedAtBySourceId,
+  } = useRssPreviewStore();
 
-  const runPreview = async () => {
-    setState({ status: "loading" });
-    try {
-      const response = await fetch(
-        `/api/sources/rss-preview?sourceId=${encodeURIComponent(source.id)}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) {
-        setState({ status: "error" });
-        return;
-      }
-      const data: unknown = await response.json();
-      if (
-        typeof data === "object" &&
-        data !== null &&
-        Array.isArray((data as { items?: unknown }).items)
-      ) {
-        const parsed = data as { items: NormalizedSourceItem[]; collectedAt?: string };
-        setState({
-          status: "ready",
-          items: parsed.items.slice(0, 5),
-          collectedAt: parsed.collectedAt ?? "",
-        });
-      } else {
-        setState({ status: "error" });
-      }
-    } catch {
-      setState({ status: "error" });
-    }
-  };
+  const isLoading = loadingBySourceId[source.id] ?? false;
+  const hasError =
+    (errorBySourceId[source.id] ?? null) !== null && !isLoading;
+  const items = itemsBySourceId[source.id];
+  const hasItems = items !== undefined && items.length > 0;
+  const collectedAt = collectedAtBySourceId[source.id] ?? "";
+
+  // Derive a display status that mirrors the old local PreviewState shape.
+  type DisplayStatus = "idle" | "loading" | "error" | "ready_empty" | "ready";
+  let displayStatus: DisplayStatus = "idle";
+  if (isLoading) displayStatus = "loading";
+  else if (hasError) displayStatus = "error";
+  else if (items !== undefined && !hasItems) displayStatus = "ready_empty";
+  else if (hasItems) displayStatus = "ready";
 
   return (
     <div
@@ -289,43 +314,46 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
         </div>
         <button
           type="button"
-          onClick={runPreview}
-          disabled={state.status === "loading"}
+          onClick={() => void previewSource(source.id)}
+          disabled={isLoading}
           className="inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-semibold uppercase transition-colors"
           style={{
-            color: state.status === "loading" ? "rgba(150,150,150,0.7)" : "rgba(215,215,215,0.92)",
-            background: state.status === "loading" ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)",
+            color: isLoading ? "rgba(150,150,150,0.7)" : "rgba(215,215,215,0.92)",
+            background: isLoading
+              ? "rgba(255,255,255,0.02)"
+              : "rgba(255,255,255,0.045)",
             border: "1px solid rgba(255,255,255,0.08)",
             fontSize: "10px",
             letterSpacing: "0.08em",
-            cursor: state.status === "loading" ? "wait" : "pointer",
+            cursor: isLoading ? "wait" : "pointer",
           }}
         >
           <RefreshCw
             size={11}
-            className={state.status === "loading" ? "animate-spin" : undefined}
-            style={{ opacity: state.status === "loading" ? 0.7 : 0.85 }}
+            className={isLoading ? "animate-spin" : undefined}
+            style={{ opacity: isLoading ? 0.7 : 0.85 }}
           />
-          {state.status === "ready" ? "Refresh Preview" : "Preview RSS"}
+          {displayStatus === "ready" ? "Refresh Preview" : "Preview RSS"}
         </button>
       </div>
 
       <div className="px-3 py-2.5">
-        {state.status === "idle" && (
+        {displayStatus === "idle" && (
           <p style={{ color: "rgba(125,125,125,0.85)", fontSize: "11px", lineHeight: 1.5 }}>
-            On-demand preview. Click <span style={{ color: "rgba(190,190,190,0.92)" }}>Preview RSS</span>{" "}
-            to fetch up to 5 items from this candidate feed. Nothing is stored.
+            On-demand preview. Click{" "}
+            <span style={{ color: "rgba(190,190,190,0.92)" }}>Preview RSS</span>{" "}
+            to fetch up to 50 items from this candidate feed. Nothing is stored.
           </p>
         )}
 
-        {state.status === "loading" && (
+        {displayStatus === "loading" && (
           <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
             Fetching preview…
           </p>
         )}
 
-        {state.status === "error" && (
-          <p
+        {displayStatus === "error" && (
+          <div
             className="rounded px-2.5 py-2"
             style={{
               color: "rgba(248,180,180,0.92)",
@@ -335,28 +363,39 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
               lineHeight: 1.5,
             }}
           >
-            Preview unavailable. The candidate source remains registered.
-          </p>
+            <span style={{ fontWeight: 600 }}>Preview unavailable.</span>{" "}
+            {previewErrorMessage(errorBySourceId[source.id] ?? null)}
+          </div>
         )}
 
-        {state.status === "ready" && state.items.length === 0 && (
+        {displayStatus === "ready_empty" && (
           <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
             No items returned by this candidate feed at preview time.
           </p>
         )}
 
-        {state.status === "ready" && state.items.length > 0 && (
+        {displayStatus === "ready" && items && (
           <>
             <div
               className="mb-2 flex flex-wrap items-center gap-2"
               style={{ color: "rgba(120,120,120,0.85)", fontSize: "10.5px" }}
             >
-              <span>Source Count: {state.items.length}</span>
+              <span>Items: {items.length}</span>
               <span>·</span>
-              <span>Collected: {formatPreviewDate(state.collectedAt)}</span>
+              <span>Collected: {formatPreviewDate(collectedAt)}</span>
             </div>
-            <ul className="flex flex-col gap-2">
-              {state.items.map((item) => (
+            <ul
+              className="flex flex-col gap-2"
+              style={{
+                maxHeight: "420px",
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: "4px",
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(255,255,255,0.08) transparent",
+              }}
+            >
+              {items.map((item) => (
                 <li
                   key={item.id}
                   className="rounded px-2.5 py-2"
@@ -379,7 +418,10 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
                       }}
                     >
                       <span>{item.title}</span>
-                      <ExternalLink size={11} style={{ color: "rgba(147,197,253,0.7)", flexShrink: 0 }} />
+                      <ExternalLink
+                        size={11}
+                        style={{ color: "rgba(147,197,253,0.7)", flexShrink: 0 }}
+                      />
                     </a>
                     <span style={{ color: "rgba(115,115,115,0.85)", fontSize: "10.5px" }}>
                       {formatPreviewDate(item.publishedAt)}
@@ -394,17 +436,23 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
                   {item.summary && (
                     <p
                       className="mb-2"
-                      style={{ color: "rgba(180,180,180,0.88)", fontSize: "11.5px", lineHeight: 1.5 }}
+                      style={{
+                        color: "rgba(180,180,180,0.88)",
+                        fontSize: "11.5px",
+                        lineHeight: 1.5,
+                      }}
                     >
                       {item.summary}
                     </p>
                   )}
                   <div className="flex flex-wrap gap-1.5">
                     <TextPill>
-                      Extraction Method: {EXTRACTION_METHOD_LABELS[item.extractionMethod]}
+                      Extraction Method:{" "}
+                      {EXTRACTION_METHOD_LABELS[item.extractionMethod]}
                     </TextPill>
                     <TextPill>
-                      Verification Status: {CANDIDATE_VERIFICATION_LABELS[item.verificationStatus]}
+                      Verification Status:{" "}
+                      {CANDIDATE_VERIFICATION_LABELS[item.verificationStatus]}
                     </TextPill>
                     <TextPill>
                       Source Basis: {SOURCE_BASIS_LABELS[item.sourceBasis]}

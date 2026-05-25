@@ -1,5 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { RssPreviewProvider } from "@/components/events/RssPreviewStore";
 
 export default function Home() {
-  return <AppShell />;
+  return (
+    <RssPreviewProvider>
+      <AppShell />
+    </RssPreviewProvider>
+  );
 }

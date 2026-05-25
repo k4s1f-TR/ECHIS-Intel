@@ -574,7 +574,7 @@ const LOAD_TIMEOUT_MS = 9000;
 //   • INTERACTION_IDLE_DELAY_MS  — longer, after raw user input
 // ---------------------------------------------------------------------------
 const AUTO_ROTATE_DEG_PER_SEC = 1.5;
-const CENTRAL_VIEW_IDLE_DELAY_MS = 5_000;
+const CENTRAL_VIEW_IDLE_DELAY_MS = 3_000;
 const INTERACTION_IDLE_DELAY_MS = 15_000;
 // Duration of the Central View easeTo (kept in sync with applyDefaultGlobeView).
 const CENTRAL_VIEW_ANIM_MS = 1200;
