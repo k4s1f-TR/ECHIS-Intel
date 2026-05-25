@@ -12,6 +12,11 @@ interface MarkerInfoPopupProps {
   accent?: string;
   getPosition: () => { x: number; y: number } | null;
   onClose: () => void;
+  /** Pager props — only rendered when itemCount > 1. */
+  itemIndex?: number;
+  itemCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 export function MarkerInfoPopup({
@@ -23,7 +28,15 @@ export function MarkerInfoPopup({
   accent = "#3b82f6",
   getPosition,
   onClose,
+  itemIndex,
+  itemCount,
+  onPrev,
+  onNext,
 }: MarkerInfoPopupProps) {
+  const showPager = itemCount !== undefined && itemCount > 1;
+  const currentDisplay = (itemIndex ?? 0) + 1;
+  const isFirst = (itemIndex ?? 0) === 0;
+  const isLast = itemCount !== undefined && (itemIndex ?? 0) >= itemCount - 1;
   const [position, setPosition] = useState(() => getPosition());
 
   useEffect(() => {
@@ -129,6 +142,78 @@ export function MarkerInfoPopup({
             </div>
           )}
         </div>
+
+        {showPager && (
+          <div
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+              padding: "7px 11px 9px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <p
+              className="uppercase tracking-widest"
+              style={{
+                fontSize: 8.5,
+                fontWeight: 800,
+                letterSpacing: "0.13em",
+                color: "rgba(148,163,184,0.55)",
+                marginBottom: 5,
+                lineHeight: 1,
+              }}
+            >
+              Report{" "}
+              <span style={{ color: "rgba(205,220,240,0.78)" }}>
+                {String(currentDisplay).padStart(2, "0")}
+              </span>
+              {" / "}
+              {String(itemCount).padStart(2, "0")}
+            </p>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                disabled={isFirst}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPrev?.();
+                }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: isFirst ? "rgba(80,95,115,0.4)" : "rgba(148,163,184,0.82)",
+                  background: "transparent",
+                  border: "none",
+                  padding: "2px 0",
+                  cursor: isFirst ? "default" : "pointer",
+                  letterSpacing: "0.01em",
+                }}
+              >
+                ‹ Previous
+              </button>
+              <button
+                type="button"
+                disabled={isLast}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNext?.();
+                }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: isLast ? "rgba(80,95,115,0.4)" : "rgba(148,163,184,0.82)",
+                  background: "transparent",
+                  border: "none",
+                  padding: "2px 0",
+                  cursor: isLast ? "default" : "pointer",
+                  letterSpacing: "0.01em",
+                }}
+              >
+                Next ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div
         style={{

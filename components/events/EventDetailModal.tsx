@@ -62,7 +62,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
       className="absolute inset-0 z-50"
       style={{
         display: "grid",
-        gridTemplateColumns: "220px minmax(0, 1fr) 422px",
+        gridTemplateColumns: "220px minmax(0, 1fr) 400px",
         alignItems: "center",
         justifyItems: "center",
         padding: 24,

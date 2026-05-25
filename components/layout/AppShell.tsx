@@ -12,7 +12,9 @@ import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard"
 import { MapControls } from "@/components/map/MapControls";
 import { MarkerInfoPopup } from "@/components/map/MarkerInfoPopup";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
-import { RightEventsPanel } from "@/components/events/RightEventsPanel";
+import { RssGlobalFeedPanel } from "@/components/events/RssGlobalFeedPanel";
+import { useRssPreviewItems } from "@/components/events/useRssPreviewItems";
+import { rssItemsToMarkers, type RssMarkerFeature } from "@/data/sources/rssMarkerAdapter";
 import { EventDetailModal } from "@/components/events/EventDetailModal";
 import { BookmarksView } from "@/components/events/BookmarksView";
 import { useBookmarks } from "@/components/events/useBookmarks";
@@ -50,8 +52,33 @@ export function AppShell() {
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
   const [signalDetailOpen, setSignalDetailOpen] = useState(false);
+  // Single source of truth for the active RSS item across feed, marker popup,
+  // and pager.  All three UI surfaces read from / write to this one value so
+  // they can never disagree.
+  const [selectedRssItemId, setSelectedRssItemId] = useState<string | null>(null);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
+
+  // RSS preview items — same data that drives the right-side feed list.
+  // Used here to produce globe markers without a second network fetch.
+  const { items: rssItems } = useRssPreviewItems();
+  const rssMarkers = useMemo<RssMarkerFeature[]>(
+    () => rssItemsToMarkers(rssItems),
+    [rssItems],
+  );
+
+  // O(1) lookup: RSS item id → { markerId, itemIndex }.
+  // Used by the feed-click handler to find the correct marker and item position
+  // without scanning the rssMarkers array on every click.
+  const rssItemKeyToMarker = useMemo(() => {
+    const map = new Map<string, { markerId: string; itemIndex: number }>();
+    for (const m of rssMarkers) {
+      m.items.forEach((item, idx) => {
+        map.set(item.id, { markerId: m.id, itemIndex: idx });
+      });
+    }
+    return map;
+  }, [rssMarkers]);
 
   // Stable refs so the focus effects below only re-run when the selected ID
   // changes, not when the rail mode changes (avoids spurious camera jumps
@@ -75,6 +102,7 @@ export function AppShell() {
     if (!report?.coordinates) return;
     globeMapRef.current?.focusMarker(report.coordinates[0], report.coordinates[1]);
   }, [selectedSignalId]);
+
 
   const displayedSignals = useMemo(
     () =>
@@ -129,21 +157,42 @@ export function AppShell() {
     [displayedEvents, markerPopup],
   );
 
-  // GeoJSON-ready marker payloads for the MapLibre globe.  Global View
-  // pulls from displayedEvents (already filtered by region/category);
-  // SOCMINT pulls from displayedSignals.  Empty arrays are valid — the
-  // globe simply renders no points.
-  const globalMarkers = useMemo<MarkerFeature[]>(
+  // RSS marker popup — used when the clicked marker belongs to an RSS item
+  // rather than a mock event (markerPopupEvent will be null in that case).
+  const markerPopupRssMarker = useMemo(
     () =>
-      displayedEvents
-        .filter((e) => e.coordinates !== undefined)
-        .map((e) => ({
-          id: e.id,
-          lng: e.coordinates!.lng,
-          lat: e.coordinates!.lat,
-          severity: e.severity,
-        })),
-    [displayedEvents],
+      markerPopup?.kind === "global" && markerPopupEvent === null
+        ? (rssMarkers.find((m) => m.id === markerPopup.id) ?? null)
+        : null,
+    [markerPopup, markerPopupEvent, rssMarkers],
+  );
+  // Derive the pager index from selectedRssItemId so the feed highlight and
+  // the popup "REPORT XX / NN" label always agree.  Falls back to 0 when the
+  // selected item is not part of this marker (e.g. a no-location item was
+  // selected after the popup was already open).
+  const markerPopupRssItemIndex = useMemo(() => {
+    if (!markerPopupRssMarker || !selectedRssItemId) return 0;
+    const idx = markerPopupRssMarker.items.findIndex(
+      (it) => it.id === selectedRssItemId,
+    );
+    return idx >= 0 ? idx : 0;
+  }, [markerPopupRssMarker, selectedRssItemId]);
+
+  const markerPopupRssItem = useMemo(
+    () =>
+      markerPopupRssMarker
+        ? (markerPopupRssMarker.items[markerPopupRssItemIndex] ?? null)
+        : null,
+    [markerPopupRssMarker, markerPopupRssItemIndex],
+  );
+
+  // Global View markers — RSS-derived only.
+  // Mock event markers are not shown in Global View; the globe renders only
+  // items that have a deterministic location match in the RSS preview feed.
+  // SOCMINT markers are untouched (separate signalsMarkers array below).
+  const globalMarkers = useMemo<MarkerFeature[]>(
+    () => rssMarkers,
+    [rssMarkers],
   );
 
   const signalsMarkers = useMemo<MarkerFeature[]>(
@@ -232,14 +281,9 @@ export function AppShell() {
     if (activeTopTab === "politics" && category !== "politics") {
       setActiveTopTab("situation");
     }
-    const nextDisplayedEvents =
-      category === "all" ? baseEvents : baseEvents.filter((e) => e.category === category);
-
-    if (selectedId !== null && !nextDisplayedEvents.some((e) => e.id === selectedId)) {
-      setSelectedId(null);
-      setEventDetailOpen(false);
-      setMarkerPopup(null);
-    }
+    setSelectedId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
   }
 
   function handleTopTabSelect(tab: ActiveTopTab) {
@@ -247,6 +291,7 @@ export function AppShell() {
       setActiveSection("sources");
       setActiveTopTab("sources");
       setActiveRailMode(null);
+      setSelectedId(null);
       setEventDetailOpen(false);
       setMarkerPopup(null);
       setSelectedSignalId(null);
@@ -285,12 +330,6 @@ export function AppShell() {
     handleViewChange("situation");
   }
 
-  function handleGlobalEventSelect(id: string) {
-    setSelectedId(id);
-    setMarkerPopup(null);
-    setEventDetailOpen(true);
-  }
-
   function handleSignalSelect(id: string) {
     setSelectedSignalId(id);
     setMarkerPopup(null);
@@ -301,6 +340,17 @@ export function AppShell() {
     setSelectedId(id);
     setEventDetailOpen(false);
     setMarkerPopup({ kind: "global", id });
+    // For RSS markers: default to the first item unless the currently selected
+    // item already belongs to this marker (e.g. user re-clicks the same pin).
+    const rssMarker = rssMarkers.find((m) => m.id === id);
+    if (rssMarker) {
+      const currentBelongs = rssMarker.items.some(
+        (it) => it.id === selectedRssItemId,
+      );
+      if (!currentBelongs) {
+        setSelectedRssItemId(rssMarker.items[0]?.id ?? null);
+      }
+    }
   }
 
   function handleSignalMarkerSelect(id: string) {
@@ -312,6 +362,7 @@ export function AppShell() {
   function handleMarkerPopupClose() {
     if (markerPopup?.kind === "global") {
       setSelectedId(null);
+      setSelectedRssItemId(null);
     }
     if (markerPopup?.kind === "signals") {
       setSelectedSignalId(null);
@@ -340,6 +391,15 @@ export function AppShell() {
         ) ?? null
       );
     }
+    // RSS marker: use adapter-resolved coordinates directly.
+    if (markerPopup?.kind === "global" && markerPopupRssMarker) {
+      return (
+        globeMapRef.current?.projectMarker(
+          markerPopupRssMarker.lng,
+          markerPopupRssMarker.lat,
+        ) ?? null
+      );
+    }
     if (markerPopup?.kind === "signals" && markerPopupSignal?.coordinates) {
       return (
         globeMapRef.current?.projectMarker(
@@ -349,7 +409,7 @@ export function AppShell() {
       );
     }
     return null;
-  }, [markerPopup, markerPopupEvent, markerPopupSignal]);
+  }, [markerPopup, markerPopupEvent, markerPopupRssMarker, markerPopupSignal]);
 
   return (
     <div
@@ -460,13 +520,36 @@ export function AppShell() {
                 pointerEvents: activeMapRailMode === "global" ? "auto" : "none",
               }}
             >
-              <RightEventsPanel
-                events={displayedEvents}
-                selectedId={selectedId}
-                onSelect={handleGlobalEventSelect}
-                isBookmarked={isBookmarked}
-                onToggleBookmark={toggleBookmark}
-              />
+              {activeMapRailMode === "global" && (
+                <RssGlobalFeedPanel
+                  selectedMarkerId={selectedRssItemId}
+                  onItemSelect={(itemId) => {
+                    const entry = rssItemKeyToMarker.get(itemId);
+                    if (entry) {
+                      // Item has a deterministic location — sync popup + globe.
+                      // Set selectedRssItemId first so the derived index is
+                      // already correct when the popup re-renders.
+                      setSelectedRssItemId(itemId);
+                      const grouped = rssMarkers.find(
+                        (m) => m.id === entry.markerId,
+                      );
+                      if (grouped) {
+                        setSelectedId(entry.markerId);
+                        setEventDetailOpen(false);
+                        setMarkerPopup({ kind: "global", id: entry.markerId });
+                        globeMapRef.current?.focusMarker(
+                          grouped.lng,
+                          grouped.lat,
+                        );
+                      }
+                    } else {
+                      // No location match — update feed highlight only;
+                      // do not open or change the marker popup.
+                      setSelectedRssItemId(itemId);
+                    }
+                  }}
+                />
+              )}
             </div>
             {activeMapRailMode === "global" && eventDetailOpen && selectedGlobalEvent && (
               <EventDetailModal
@@ -484,6 +567,30 @@ export function AppShell() {
                 accent="#3b82f6"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
+              />
+            )}
+            {activeMapRailMode === "global" && markerPopupRssItem && markerPopupRssMarker && (
+              <MarkerInfoPopup
+                title={markerPopupRssItem.title}
+                location={markerPopupRssMarker.locationName}
+                summary={markerPopupRssItem.summary}
+                source={markerPopupRssItem.sourceName}
+                time={markerPopupRssItem.publishedAt}
+                accent="#60a5fa"
+                getPosition={getMarkerPopupPosition}
+                onClose={handleMarkerPopupClose}
+                itemIndex={markerPopupRssItemIndex}
+                itemCount={markerPopupRssMarker.items.length}
+                onPrev={() => {
+                  const prev =
+                    markerPopupRssMarker.items[markerPopupRssItemIndex - 1];
+                  if (prev) setSelectedRssItemId(prev.id);
+                }}
+                onNext={() => {
+                  const next =
+                    markerPopupRssMarker.items[markerPopupRssItemIndex + 1];
+                  if (next) setSelectedRssItemId(next.id);
+                }}
               />
             )}
             <div
