@@ -224,6 +224,24 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "moskova",  // Moskova → Moscow
     ],
   },
+  // ── East Asia ──────────────────────────────────────────────────────────
+  // China is placed before the Western-powers block so that China-US tension
+  // stories ("Çin ile ABD arasında…") produce a China marker rather than a
+  // US marker when both countries are mentioned.
+  {
+    name: "China",
+    lat: 35.9,
+    lng: 104.2,
+    aliases: [
+      // English
+      "china", "chinese", "beijing", "shanghai", "hong kong",
+      "taiwan", "taiwanese",  // Taiwan conflict = China story geopolitically
+      // Turkish
+      "cin", "cinli",
+      "pekin",   // Pekin → Beijing
+      "tayvan",  // Tayvan → Taiwan
+    ],
+  },
   // ── Western powers ──────────────────────────────────────────────────────
   {
     name: "United States",
@@ -271,18 +289,6 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     ],
   },
   // ── Asia ────────────────────────────────────────────────────────────────
-  {
-    name: "China",
-    lat: 35.9,
-    lng: 104.2,
-    aliases: [
-      // English
-      "china", "chinese", "beijing", "shanghai", "hong kong",
-      // Turkish
-      "cin", "cinli",
-      "pekin",   // Pekin → Beijing
-    ],
-  },
   {
     name: "Afghanistan",
     lat: 33.9,
@@ -614,15 +620,39 @@ export function rssItemsToMarkers(items: NormalizedSourceItem[]): RssMarkerFeatu
     // Source-level metadata (notes, feed description, regionScope) is
     // intentionally excluded — generic source text such as "Türkiye haberleri"
     // would cause every item from a Turkish source to spuriously match Türkiye.
-    const searchText = normalizeText(`${item.title} ${item.summary}`);
+    //
+    // Two-pass strategy (title-priority):
+    //   Pass 1 — title only.   A title match is a strong topical signal; it
+    //             avoids summary noise like "Damascus officials met in Beirut"
+    //             (a Syria story) producing a Lebanon marker just because Beirut
+    //             appears in the text body.
+    //   Pass 2 — title + summary combined, only when pass 1 yields no match.
+    //             Ensures items with short/vague titles still get a location
+    //             if the summary provides a clear geographic signal.
+    const normalizedTitle   = normalizeText(item.title   ?? "");
+    const normalizedSummary = normalizeText(item.summary ?? "");
+    const searchText        = `${normalizedTitle} ${normalizedSummary}`;
 
     let matched: (typeof NORMALIZED_DICTIONARY)[number] | null = null;
 
+    // Pass 1: title only
     outer: for (const entry of NORMALIZED_DICTIONARY) {
       for (const alias of entry.aliases) {
-        if (matchesLocationAlias(searchText, alias)) {
+        if (matchesLocationAlias(normalizedTitle, alias)) {
           matched = entry;
           break outer;
+        }
+      }
+    }
+
+    // Pass 2: combined title + summary (fallback)
+    if (matched === null) {
+      outer: for (const entry of NORMALIZED_DICTIONARY) {
+        for (const alias of entry.aliases) {
+          if (matchesLocationAlias(searchText, alias)) {
+            matched = entry;
+            break outer;
+          }
         }
       }
     }
