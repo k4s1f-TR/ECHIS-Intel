@@ -63,6 +63,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "israel", "israeli", "tel aviv", "jerusalem", "haifa", "netanyahu",
+      "benjamin netanyahu",
       // Turkish
       "israil",
       "kudus",   // Kudüs → Jerusalem
@@ -127,6 +128,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "iran", "iranian", "tehran", "isfahan", "mashhad", "shiraz", "qom",
+      "khamenei", "ali khamenei", "pezeshkian", "masoud pezeshkian",
       // Turkish
       "iranli",
       "tahran",  // Tahran → Tehran
@@ -138,7 +140,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 35.0,
     aliases: [
       // English
-      "turkey", "turkish", "istanbul", "ankara", "erdogan", "izmir", "gaziantep", "bursa",
+      "turkey", "turkish", "istanbul", "ankara", "erdogan",
+      "recep tayyip erdogan", "izmir", "gaziantep", "bursa",
       // Turkish
       "türkiye", "turkiye",
     ],
@@ -208,6 +211,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       // English
       "ukraine", "ukrainian", "kyiv", "kiev", "kharkiv", "mariupol", "kherson",
       "zaporizhzhia", "odessa", "lviv", "dnipro", "donetsk", "luhansk", "bakhmut",
+      "zelensky", "zelenskyy", "zelenskiy", "volodymyr zelenskyy",
       // Turkish
       "ukrayna",
     ],
@@ -218,7 +222,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 105.3,
     aliases: [
       // English
-      "russia", "russian", "moscow", "kremlin", "putin", "saint petersburg",
+      "russia", "russian", "moscow", "kremlin", "putin", "vladimir putin",
+      "saint petersburg",
       // Turkish
       "rusya", "rus",
       "moskova",  // Moskova → Moscow
@@ -250,6 +255,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: [
       // English
       "united states", "washington d.c.", "pentagon", "white house",
+      "donald trump", "trump", "joe biden", "biden",
+      "president trump", "president biden",
       // Turkish
       "abd", "amerikan", "amerikalı", "amerikanin",
     ],
@@ -272,7 +279,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 2.3,
     aliases: [
       // English
-      "france", "french", "paris", "macron", "elysee",
+      "france", "french", "paris", "macron", "emmanuel macron", "elysee",
       // Turkish
       "fransa", "fransiz",
     ],
@@ -283,7 +290,8 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     lng: 13.4,
     aliases: [
       // English
-      "germany", "german", "berlin", "bundestag", "scholz", "merz",
+      "germany", "german", "berlin", "bundestag", "scholz",
+      "olaf scholz", "merz", "friedrich merz",
       // Turkish
       "almanya", "alman",
     ],
@@ -537,6 +545,55 @@ const NORMALIZED_DICTIONARY = LOCATION_DICTIONARY.map((entry) => ({
   aliases: entry.aliases.map((a) => normalizeText(a).trim()),
 }));
 
+const COUNTRY_FALLBACK_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  "Democratic Republic of Congo": ["congo (drc)", "dr congo", "drc"],
+  "United States": ["usa", "us"],
+  "United Kingdom": ["uk", "great britain"],
+  UAE: ["united arab emirates"],
+  "TÃ¼rkiye": ["turkiye", "turkey"],
+};
+
+const LOCATION_BY_COUNTRY_FALLBACK = new Map<string, (typeof NORMALIZED_DICTIONARY)[number]>();
+const SOURCE_ATTRIBUTION_VERBS = [
+  "uyardi",
+  "acikladi",
+  "duyurdu",
+  "bildirdi",
+  "savundu",
+  "tehdit etti",
+  "vuracagiz",
+  "hedef alacagiz",
+  "dedi",
+  "soyledi",
+  "warned",
+  "said",
+  "says",
+  "announced",
+  "declared",
+  "threatened",
+  "vowed",
+  "claimed",
+  "claims",
+  "stated",
+  "promised",
+  "will strike",
+] as const;
+
+for (const entry of NORMALIZED_DICTIONARY) {
+  LOCATION_BY_COUNTRY_FALLBACK.set(normalizeText(entry.name).trim(), entry);
+  for (const alias of entry.aliases) {
+    LOCATION_BY_COUNTRY_FALLBACK.set(alias, entry);
+  }
+}
+
+for (const [countryName, aliases] of Object.entries(COUNTRY_FALLBACK_ALIASES)) {
+  const entry = LOCATION_BY_COUNTRY_FALLBACK.get(normalizeText(countryName).trim());
+  if (!entry) continue;
+  for (const alias of aliases) {
+    LOCATION_BY_COUNTRY_FALLBACK.set(normalizeText(alias).trim(), entry);
+  }
+}
+
 /**
  * Boundary-aware alias match — replaces naive `text.includes(alias)`.
  *
@@ -566,6 +623,70 @@ function matchesLocationAlias(normalizedText: string, normalizedAlias: string): 
   // Lookahead:  not followed by a Latin letter or digit.
   const re = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`);
   return re.test(normalizedText);
+}
+
+function startsWithLocationAlias(normalizedText: string, normalizedAlias: string): boolean {
+  if (!normalizedAlias) return false;
+  const escaped = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${escaped}(?![a-z0-9])`);
+  return re.test(normalizedText);
+}
+
+function matchLocationFromRelatedCountries(
+  relatedCountries: string[] | undefined,
+): (typeof NORMALIZED_DICTIONARY)[number] | null {
+  if (!Array.isArray(relatedCountries) || relatedCountries.length === 0) {
+    return null;
+  }
+
+  for (const country of relatedCountries) {
+    const normalizedCountry = normalizeText(country).trim();
+    const matched = LOCATION_BY_COUNTRY_FALLBACK.get(normalizedCountry);
+    if (matched) return matched;
+  }
+
+  return null;
+}
+
+function titleSignalsSourceAttributedStatement(
+  item: NormalizedSourceItem,
+  normalizedTitle: string,
+): (typeof NORMALIZED_DICTIONARY)[number] | null {
+  const relatedCountryEntry = matchLocationFromRelatedCountries(item.relatedCountries);
+  if (!relatedCountryEntry || item.sourceType !== "api") return null;
+
+  const mentionsRelatedCountry = relatedCountryEntry.aliases.some((alias) =>
+    matchesLocationAlias(normalizedTitle, alias),
+  );
+  if (!mentionsRelatedCountry) return null;
+
+  const hasAttributionVerb = SOURCE_ATTRIBUTION_VERBS.some((verb) =>
+    normalizedTitle.includes(verb),
+  );
+  return hasAttributionVerb ? relatedCountryEntry : null;
+}
+
+function detectLeadingAttributedLocation(
+  normalizedTitle: string,
+): (typeof NORMALIZED_DICTIONARY)[number] | null {
+  let bestMatch: { entry: (typeof NORMALIZED_DICTIONARY)[number]; aliasLength: number } | null = null;
+
+  for (const entry of NORMALIZED_DICTIONARY) {
+    for (const alias of entry.aliases) {
+      if (!startsWithLocationAlias(normalizedTitle, alias)) continue;
+
+      const hasAttributionVerb = SOURCE_ATTRIBUTION_VERBS.some((verb) =>
+        normalizedTitle.slice(0, 96).includes(verb),
+      );
+      if (!hasAttributionVerb) continue;
+
+      if (!bestMatch || alias.length > bestMatch.aliasLength) {
+        bestMatch = { entry, aliasLength: alias.length };
+      }
+    }
+  }
+
+  return bestMatch?.entry ?? null;
 }
 
 /**
@@ -633,14 +754,18 @@ export function rssItemsToMarkers(items: NormalizedSourceItem[]): RssMarkerFeatu
     const normalizedSummary = normalizeText(item.summary ?? "");
     const searchText        = `${normalizedTitle} ${normalizedSummary}`;
 
-    let matched: (typeof NORMALIZED_DICTIONARY)[number] | null = null;
+    let matched =
+      detectLeadingAttributedLocation(normalizedTitle) ??
+      titleSignalsSourceAttributedStatement(item, normalizedTitle);
 
     // Pass 1: title only
-    outer: for (const entry of NORMALIZED_DICTIONARY) {
-      for (const alias of entry.aliases) {
-        if (matchesLocationAlias(normalizedTitle, alias)) {
-          matched = entry;
-          break outer;
+    if (matched === null) {
+      outer: for (const entry of NORMALIZED_DICTIONARY) {
+        for (const alias of entry.aliases) {
+          if (matchesLocationAlias(normalizedTitle, alias)) {
+            matched = entry;
+            break outer;
+          }
         }
       }
     }
@@ -655,6 +780,10 @@ export function rssItemsToMarkers(items: NormalizedSourceItem[]): RssMarkerFeatu
           }
         }
       }
+    }
+
+    if (matched === null) {
+      matched = matchLocationFromRelatedCountries(item.relatedCountries);
     }
 
     if (matched !== null) {

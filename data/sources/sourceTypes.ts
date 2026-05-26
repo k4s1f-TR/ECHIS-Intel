@@ -1,7 +1,6 @@
-// Source candidate foundation types.
-// These types support the first RSS candidate/test phase but are intentionally
-// generic so future adapters (RSS, API, static, GDELT, CISA KEV, NVD, GDACS,
-// ReliefWeb, etc.) can share the same shape.
+// Source foundation types.
+// These types are intentionally generic so future adapters (RSS, API, static,
+// GDELT, CISA KEV, NVD, GDACS, ReliefWeb, etc.) can share the same shape.
 
 export type SourceAccessType = "rss" | "api" | "static" | "manual";
 
@@ -13,6 +12,7 @@ export type SourceCandidateStatus =
 
 export type SourceStatus =
   | "public_news_source"
+  | "established_media"
   | "official_feed"
   | "community_signal"
   | "reference_dataset";
@@ -56,17 +56,17 @@ export type SourceLanguage = "tr" | "en" | "ar" | "fr" | "es" | "ru" | "de";
 
 /**
  * Thematic profile of a source.
- * Controls topic-filter strictness and marker-placement strategy.
+ * Supports downstream classification and marker-placement strategy.
  */
 export type SourceProfile =
-  | "general_news"       // mainstream news — full topic scoring applied
-  | "official_diplomatic" // government / institution press feeds — always passed
-  | "conflict_crisis";   // humanitarian / conflict-focused — lighter topic filter
+  | "general_news"
+  | "official_diplomatic"
+  | "conflict_crisis";
 
 /**
- * How RSS items from this source are placed on the globe as markers.
- *  item_location   — deterministic location matching from item text (default)
- *  source_location — fixed coordinates from sourceLocation (official sources)
+ * How source items are placed on the globe as markers.
+ *  item_location   - deterministic location matching from item text (default)
+ *  source_location - fixed coordinates from sourceLocation (official sources)
  */
 export type MarkerLocationStrategy = "item_location" | "source_location";
 
@@ -98,7 +98,7 @@ export type SourceDefinition = {
   regionScope: SourceRegionScope;
   targetScreens: SourceTargetScreen[];
   notes?: string;
-  /** Thematic profile — drives topic filter and marker strategy. */
+  /** Thematic profile for downstream classification and marker behavior. */
   sourceProfile?: SourceProfile;
   /** How items from this source generate globe markers. */
   markerLocationStrategy?: MarkerLocationStrategy;
@@ -120,11 +120,12 @@ export type NormalizedSourceItem = {
   verificationStatus: VerificationStatus;
   sourceBasis: SourceBasis;
   extractionMethod: ExtractionMethod;
+  sourceLanguage?: SourceLanguage;
   relatedCountries: string[];
   relatedRegions: SourceRegionScope[];
   category: string;
   isSample: boolean;
-  /** Copied from SourceDefinition at parse time; drives topic filter. */
+  /** Copied from SourceDefinition at parse time for downstream classification. */
   sourceProfile?: SourceProfile;
   /** Copied from SourceDefinition at parse time; drives marker placement. */
   markerLocationStrategy?: MarkerLocationStrategy;

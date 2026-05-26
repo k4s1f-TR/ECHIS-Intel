@@ -1,13 +1,70 @@
 import type { SourceDefinition } from "./sourceTypes";
 
-// Initial candidate / test source definitions for the first RSS test phase.
-// These are NOT approved production sources. They are static frontend records
-// only. No live fetching, scraping, parsing, or API ingestion is performed.
+// Live external source definitions used by the on-demand source feed layer.
+// Records here can be fetched directly by the app and shared across the
+// Global View feed, marker flow, and Sources screen.
 
 export const candidateSourceDefinitions: SourceDefinition[] = [
   {
+    id: "gdelt-geopolitical",
+    name: "GDELT",
+    category: "Global Events",
+    accessType: "api",
+    candidateStatus: "candidate_test",
+    sourceStatus: "reference_dataset",
+    verificationStatus: "multi_source_reference",
+    sourceBasis: "multiple_public_sources",
+    extractionMethod: "api_result",
+    baseUrl: "https://api.gdeltproject.org/",
+    language: "en",
+    regionScope: "global",
+    targetScreens: ["monitor", "intel_watch"],
+    sourceProfile: "general_news",
+    markerLocationStrategy: "item_location",
+    notes:
+      "GDELT DOC 2.0 API provides live geopolitical article coverage without an API key. " +
+      "Returned items are normalized into the shared source feed pipeline and used by the map marker flow.",
+  },
+  {
+    id: "reliefweb-crises",
+    name: "ReliefWeb",
+    category: "Conflict & Crisis",
+    accessType: "rss",
+    candidateStatus: "candidate_test",
+    sourceStatus: "reference_dataset",
+    verificationStatus: "multi_source_reference",
+    sourceBasis: "multiple_public_sources",
+    extractionMethod: "rss_summary",
+    baseUrl: "https://reliefweb.int/",
+    candidateFeedUrl: "https://reliefweb.int/updates/rss.xml",
+    language: "en",
+    regionScope: "global",
+    targetScreens: ["monitor", "intel_watch"],
+    sourceProfile: "conflict_crisis",
+    markerLocationStrategy: "item_location",
+    notes: "UN OCHA ReliefWeb — conflict/crisis reports via public RSS feed. API mode (richer country data) pending appname approval at apidoc.reliefweb.int.",
+  },
+  {
+    id: "guardian-world",
+    name: "The Guardian",
+    category: "Editorial News",
+    accessType: "api",
+    candidateStatus: "candidate_test",
+    sourceStatus: "established_media",
+    verificationStatus: "source_reported",
+    sourceBasis: "single_public_source",
+    extractionMethod: "api_result",
+    baseUrl: "https://www.theguardian.com/",
+    language: "en",
+    regionScope: "global",
+    targetScreens: ["monitor"],
+    sourceProfile: "general_news",
+    markerLocationStrategy: "item_location",
+    notes: "Guardian Open Platform — world/politics/global-development sections, free developer key.",
+  },
+  {
     id: "trt-haber-dunya",
-    name: "TRT Haber - Dünya",
+    name: "TRT Haber - Dunya",
     category: "Public News",
     accessType: "rss",
     candidateStatus: "candidate_test",
@@ -23,7 +80,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes:
-      "Candidate Turkish-language world-news RSS feed. Treat as test source only; live fetching is not implemented.",
+      "Integrated Turkish-language world news RSS source used in the live source feed.",
   },
   {
     id: "aljazeera-middle-east",
@@ -43,11 +100,11 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes:
-      "Candidate English-language Middle East RSS source. all.xml is a candidate feed URL; live filtering and live fetching are not implemented in this step.",
+      "Integrated English-language Middle East RSS source used in the live source feed.",
   },
   {
     id: "bbc-turkce",
-    name: "BBC Türkçe",
+    name: "BBC Turkce",
     category: "Public News",
     accessType: "rss",
     candidateStatus: "candidate_test",
@@ -63,13 +120,11 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes:
-      "Candidate Turkish-language BBC news RSS feed. Preview only; live fetching not implemented for production.",
+      "Integrated Turkish-language BBC news RSS source used in the live source feed.",
   },
-
-  // ── General News ────────────────────────────────────────────────────────
   {
     id: "dw-turkce",
-    name: "DW Türkçe",
+    name: "DW Turkce",
     category: "Public News",
     accessType: "rss",
     candidateStatus: "candidate_test",
@@ -85,13 +140,11 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes:
-      "Candidate Turkish-language Deutsche Welle news RSS feed. Preview only.",
+      "Integrated Turkish-language Deutsche Welle RSS source used in the live source feed.",
   },
-
-  // ── Conflict / Crisis ────────────────────────────────────────────────────
   {
     id: "crisis-group-crisiswatch",
-    name: "International Crisis Group — CrisisWatch",
+    name: "International Crisis Group - CrisisWatch",
     category: "Conflict / Crisis",
     accessType: "rss",
     candidateStatus: "candidate_test",
@@ -107,6 +160,6 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceProfile: "conflict_crisis",
     markerLocationStrategy: "item_location",
     notes:
-      "Candidate International Crisis Group RSS feed covering active conflict situations globally.",
+      "Integrated conflict and crisis RSS source with global coverage.",
   },
 ];

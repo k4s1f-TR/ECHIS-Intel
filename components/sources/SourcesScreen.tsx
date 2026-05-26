@@ -80,7 +80,7 @@ const ACCESS_TYPE_LABELS: Record<SourceAccessType, string> = {
 };
 
 const CANDIDATE_STATUS_LABELS: Record<SourceCandidateStatus, string> = {
-  candidate_test: "Candidate / Test",
+  candidate_test: "Operational",
   review_more: "Review More",
   later: "Later",
   rejected: "Rejected",
@@ -88,6 +88,7 @@ const CANDIDATE_STATUS_LABELS: Record<SourceCandidateStatus, string> = {
 
 const CANDIDATE_SOURCE_STATUS_LABELS: Record<CandidateSourceStatus, string> = {
   public_news_source: "Public News Source",
+  established_media: "Established Media",
   official_feed: "Official Feed",
   community_signal: "Community Signal",
   reference_dataset: "Reference Dataset",
@@ -220,7 +221,7 @@ function formatPreviewDate(iso: string): string {
  * silently break the UI.
  */
 function previewErrorMessage(reason: string | null): string {
-  if (!reason) return "Preview unavailable. The candidate source remains registered.";
+  if (!reason) return "Feed unavailable. The source remains registered.";
   // HTTP status variants: upstream_404, upstream_403, upstream_500 …
   if (reason.startsWith("upstream_")) {
     const code = reason.slice("upstream_".length);
@@ -234,25 +235,32 @@ function previewErrorMessage(reason: string | null): string {
       return `Feed server error (${code}). The source may be temporarily unavailable.`;
     return `Feed server returned HTTP ${code}. The feed URL may be incorrect.`;
   }
+  // ReliefWeb / HDX WAF checks
+  if (reason.includes("bot activity") || reason.includes("Blocked due to")) {
+    return "Request blocked by ReliefWeb (HDX) bot-protection. This is a server-side IP or User-Agent filter — retrying usually resolves it. If persistent, contact hdx@un.org to whitelist the deployment.";
+  }
+  if (reason.includes("appname") || reason.includes("approved")) {
+    return "ReliefWeb API requires an approved appname. Register 'taipanmonitor' at apidoc.reliefweb.int/parameters#appname — approval is free and typically instant.";
+  }
   switch (reason) {
     case "timeout":
       return "Feed request timed out. The source server may be slow or unreachable from this deployment.";
     case "missing_feed_url":
-      return "No feed URL is configured for this candidate source.";
+      return "No feed URL is configured for this source.";
     case "parse_failed":
       return "Feed content could not be parsed. The URL may return HTML or a non-RSS/Atom document.";
     case "empty_response":
       return "Feed returned no content. The URL may be valid but currently empty.";
     default:
-      return "Preview unavailable. The candidate source remains registered.";
+      return "Feed unavailable. The source remains registered.";
   }
 }
 
 /**
- * CandidateRssPreview — Sources panel preview card.
+ * CandidateRssPreview — Sources panel live feed card.
  *
- * Uses the shared RssPreviewStore so "Preview RSS" updates both the Sources
- * card AND the Global View Live Feed / RSS markers in the same operation.
+ * Uses the shared RssPreviewStore so a manual refresh updates both the Sources
+ * card and the Global View live feed / marker flow in the same operation.
  */
 function CandidateRssPreview({ source }: { source: SourceDefinition }) {
   const {
@@ -269,6 +277,7 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
   const items = itemsBySourceId[source.id];
   const hasItems = items !== undefined && items.length > 0;
   const collectedAt = collectedAtBySourceId[source.id] ?? "";
+  const feedLabel = source.accessType === "api" ? "API Feed" : "RSS Feed";
 
   // Derive a display status that mirrors the old local PreviewState shape.
   type DisplayStatus = "idle" | "loading" | "error" | "ready_empty" | "ready";
@@ -296,7 +305,7 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
             className="font-semibold uppercase"
             style={{ color: "rgba(140,140,140,0.85)", fontSize: "10px", letterSpacing: "0.09em" }}
           >
-            RSS Preview
+            {feedLabel}
           </span>
           <span
             className="rounded px-1.5 py-0.5 font-semibold uppercase"
@@ -309,7 +318,7 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
               lineHeight: 1.4,
             }}
           >
-            Preview Only · Not Persisted · Not Production Ingestion
+            Live Fetch | Local Cache | Map Synced
           </span>
         </div>
         <button
@@ -333,22 +342,22 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
             className={isLoading ? "animate-spin" : undefined}
             style={{ opacity: isLoading ? 0.7 : 0.85 }}
           />
-          {displayStatus === "ready" ? "Refresh Preview" : "Preview RSS"}
+          {displayStatus === "ready" ? "Refresh Feed" : "Load Feed"}
         </button>
       </div>
 
       <div className="px-3 py-2.5">
         {displayStatus === "idle" && (
           <p style={{ color: "rgba(125,125,125,0.85)", fontSize: "11px", lineHeight: 1.5 }}>
-            On-demand preview. Click{" "}
-            <span style={{ color: "rgba(190,190,190,0.92)" }}>Preview RSS</span>{" "}
-            to fetch up to 50 items from this candidate feed. Nothing is stored.
+            On-demand live fetch. Click{" "}
+            <span style={{ color: "rgba(190,190,190,0.92)" }}>Load Feed</span>{" "}
+            to fetch the latest items from this source and sync them into the live feed and map.
           </p>
         )}
 
         {displayStatus === "loading" && (
           <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
-            Fetching preview…
+            Fetching live feed...
           </p>
         )}
 
@@ -363,14 +372,14 @@ function CandidateRssPreview({ source }: { source: SourceDefinition }) {
               lineHeight: 1.5,
             }}
           >
-            <span style={{ fontWeight: 600 }}>Preview unavailable.</span>{" "}
+            <span style={{ fontWeight: 600 }}>Feed unavailable.</span>{" "}
             {previewErrorMessage(errorBySourceId[source.id] ?? null)}
           </div>
         )}
 
         {displayStatus === "ready_empty" && (
           <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
-            No items returned by this candidate feed at preview time.
+            No items were returned by this source at fetch time.
           </p>
         )}
 
@@ -544,7 +553,7 @@ export function SourcesScreen() {
                 className="font-semibold uppercase"
                 style={{ color: "rgba(147,147,147,0.85)", fontSize: "10.5px", letterSpacing: "0.1em" }}
               >
-                Candidate / Test Sources
+                Live Source Integrations
               </span>
             </div>
             <span
@@ -558,7 +567,7 @@ export function SourcesScreen() {
                 lineHeight: 1.4,
               }}
             >
-              Preview Only · Not Persisted · Not Production Ingestion
+              Live Fetch | Local Cache | Map Synced
             </span>
           </div>
           <div
@@ -570,10 +579,9 @@ export function SourcesScreen() {
               borderBottom: "1px solid rgba(255,255,255,0.04)",
             }}
           >
-            These are candidate / test source records held for review. They are
-            not approved production sources. RSS preview is on-demand only;
-            preview items are not stored, scheduled, indexed, or ingested into a
-            production pipeline.
+            These records are active external source integrations used by the
+            live source feed. Manual refresh updates the Sources screen, the
+            Global View feed, and the map marker flow together.
           </div>
           <div className="flex flex-col">
             {candidateSourceDefinitions.map((source, index) => (
@@ -668,7 +676,7 @@ export function SourcesScreen() {
                     {source.notes}
                   </p>
                 )}
-                {source.accessType === "rss" && source.candidateFeedUrl && (
+                {(source.accessType === "api" || source.candidateFeedUrl) && (
                   <CandidateRssPreview source={source} />
                 )}
               </article>

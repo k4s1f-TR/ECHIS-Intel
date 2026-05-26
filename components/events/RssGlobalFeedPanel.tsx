@@ -30,6 +30,25 @@ function formatPublishedFull(iso: string): string {
   return d.toUTCString().replace(/ GMT$/, " UTC");
 }
 
+function extractionLabel(item: NormalizedSourceItem): string {
+  switch (item.extractionMethod) {
+    case "api_result":
+      return "API Result";
+    case "official_json":
+      return "Official JSON";
+    case "keyword_match":
+      return "Keyword Match";
+    case "manual_sample":
+      return "Manual Sample";
+    default:
+      return "RSS Summary";
+  }
+}
+
+function transportLabel(item: NormalizedSourceItem): string {
+  return item.sourceType === "api" ? "API Feed" : "RSS Feed";
+}
+
 function ProvenanceChip({
   children,
   dimmed = false,
@@ -243,7 +262,7 @@ function RssItemDetailModal({
                     lineHeight: 1,
                   }}
                 >
-                  RSS Preview - {item.sourceName}
+                  Live Feed - {item.sourceName}
                 </span>
               </div>
               <h2
@@ -310,7 +329,7 @@ function RssItemDetailModal({
 
           {item.summary && (
             <section className="mt-5">
-              <SectionLabel accent>RSS Summary</SectionLabel>
+              <SectionLabel accent>Source Summary</SectionLabel>
               <p
                 style={{
                   marginTop: 10,
@@ -330,7 +349,7 @@ function RssItemDetailModal({
                   fontStyle: "italic",
                 }}
               >
-                Summary extracted from RSS feed only. Full article was not fetched.
+                Summary reflects the source payload available in this feed.
               </p>
             </section>
           )}
@@ -346,9 +365,9 @@ function RssItemDetailModal({
             }}
           >
             <ProvenanceChip>Source-Reported</ProvenanceChip>
-            <ProvenanceChip>RSS Summary</ProvenanceChip>
-            <ProvenanceChip dimmed>Preview Only</ProvenanceChip>
-            <ProvenanceChip dimmed>Not Persisted</ProvenanceChip>
+            <ProvenanceChip>{extractionLabel(item)}</ProvenanceChip>
+            <ProvenanceChip dimmed>{transportLabel(item)}</ProvenanceChip>
+            <ProvenanceChip dimmed>Local Cache</ProvenanceChip>
           </section>
 
           <section
@@ -433,6 +452,7 @@ function RssFeedCard({
 
   return (
     <div
+      data-rss-item-id={item.id}
       role="button"
       tabIndex={0}
       onClick={onCardClick}
@@ -562,8 +582,8 @@ function RssFeedCard({
 
       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
         <ProvenanceChip>Source-Reported</ProvenanceChip>
-        <ProvenanceChip dimmed>RSS Summary</ProvenanceChip>
-        <ProvenanceChip dimmed>Preview Only</ProvenanceChip>
+        <ProvenanceChip dimmed>{extractionLabel(item)}</ProvenanceChip>
+        <ProvenanceChip dimmed>{transportLabel(item)}</ProvenanceChip>
       </div>
     </div>
   );
@@ -601,7 +621,7 @@ function LoadingSkeleton() {
             animation: "pulse 1.6s ease-in-out infinite",
           }}
         />
-        <span style={{ fontSize: "10.5px" }}>Fetching RSS preview...</span>
+        <span style={{ fontSize: "10.5px" }}>Fetching live feed...</span>
       </div>
     </div>
   );
@@ -616,6 +636,15 @@ export function RssGlobalFeedPanel({
 }) {
   const { items, loadState } = useRssPreviewItems();
   const [selectedItem, setSelectedItem] = useState<NormalizedSourceItem | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!selectedMarkerId || !scrollRef.current) return;
+    const el = scrollRef.current.querySelector<HTMLElement>(
+      `[data-rss-item-id="${selectedMarkerId}"]`,
+    );
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedMarkerId]);
 
   function handleToggle(item: NormalizedSourceItem) {
     setSelectedItem((prev) => (prev?.id === item.id ? null : item));
@@ -672,7 +701,7 @@ export function RssGlobalFeedPanel({
                 border: "1px solid rgba(59,130,246,0.14)",
               }}
             >
-              RSS Preview
+              Live Sources
             </span>
           </div>
         </div>
@@ -682,16 +711,17 @@ export function RssGlobalFeedPanel({
         {loadState === "error" && (
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-center px-6">
             <span style={{ fontSize: "12px", fontWeight: 500, color: "rgba(110,110,110,0.85)" }}>
-              Source preview unavailable.
+              Source feed unavailable.
             </span>
             <span style={{ fontSize: "10.5px", color: "rgba(70,70,70,0.9)" }}>
-              No RSS preview items available.
+              No live source items available.
             </span>
           </div>
         )}
 
         {(loadState === "loaded" || loadState === "partial") && (
           <div
+            ref={scrollRef}
             className="min-h-0 flex-1 overflow-y-auto"
             style={{
               padding: "8px 10px",
@@ -705,7 +735,7 @@ export function RssGlobalFeedPanel({
             {items.length === 0 ? (
               <div className="flex flex-1 items-center justify-center">
                 <span style={{ fontSize: "11px", color: "rgba(70,70,70,0.9)" }}>
-                  No RSS preview items available.
+                  No live source items available.
                 </span>
               </div>
             ) : (
@@ -730,7 +760,7 @@ export function RssGlobalFeedPanel({
             style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
           >
             <span style={{ fontSize: "9.5px", color: "rgba(60,60,60,0.85)" }}>
-              {items.length} items - not persisted
+              {items.length} items - locally cached
             </span>
             <span
               style={{
@@ -741,7 +771,7 @@ export function RssGlobalFeedPanel({
                 textTransform: "uppercase",
               }}
             >
-              RSS Summary
+              Auto Refresh
             </span>
           </div>
         )}

@@ -350,6 +350,7 @@ export function AppShell() {
       if (!currentBelongs) {
         setSelectedRssItemId(rssMarker.items[0]?.id ?? null);
       }
+      globeMapRef.current?.focusMarker(rssMarker.lng, rssMarker.lat);
     }
   }
 
