@@ -4,36 +4,102 @@ import type {
 } from "@/data/sources/sourceTypes";
 
 const FETCH_TIMEOUT_MS = 12_000;
-const MAX_ITEMS = 100;
 const MAX_TITLE_LENGTH = 300;
 
-const GDELT_QUERY_TERMS = [
-  "diplomacy",
-  "military",
-  "conflict",
-  "defense",
-  "sanctions",
-  "intelligence",
-  "foreign minister",
-  "ceasefire",
-  "NATO",
-  "United Nations",
-].join(" OR ");
+// ---------------------------------------------------------------------------
+// Category-based query system
+// ---------------------------------------------------------------------------
 
-export function buildGdeltUrl(
-  timespan = "24h",
-  maxRecords = MAX_ITEMS,
-): string {
-  const params = new URLSearchParams({
-    query: `(${GDELT_QUERY_TERMS})`,
-    mode: "ArtList",
-    format: "json",
-    maxrecords: String(Math.min(maxRecords, 250)),
-    timespan: timespan,
-    sort: "DateDesc",
-  });
-  return `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
+interface GdeltCategory {
+  id: string;
+  label: string;
+  query: string;
+  maxRecords: number;
 }
+
+const GDELT_CATEGORIES: GdeltCategory[] = [
+  {
+    id: "war_conflict",
+    label: "War & Conflict",
+    maxRecords: 25,
+    query: [
+      "war", "warfare", "armed conflict", "battle", "combat",
+      "airstrike", "air strike", "bombing", "bombardment", "shelling",
+      "artillery", "rocket attack", "missile strike", "drone strike",
+      "casualties", "death toll", "killed in action",
+      "offensive", "counteroffensive", "frontline",
+      "siege", "occupation", "invasion", "incursion",
+      "clashes", "skirmish", "escalation",
+      "ceasefire violation", "truce",
+      "insurgency", "insurgent", "militia", "rebel", "guerrilla",
+      "terrorist attack", "suicide bombing",
+      "hostage", "kidnapping",
+      "genocide", "ethnic cleansing", "war crime", "atrocity", "massacre",
+      "chemical weapon", "nuclear threat",
+    ].map((t) => `"${t}"`).join(" OR "),
+  },
+  {
+    id: "diplomacy",
+    label: "Diplomacy",
+    maxRecords: 20,
+    query: [
+      "diplomacy", "diplomatic", "foreign minister", "foreign affairs",
+      "foreign secretary", "secretary of state",
+      "ambassador", "embassy", "consulate",
+      "summit", "bilateral talks", "multilateral",
+      "peace talks", "peace negotiations", "peace process", "peace agreement",
+      "treaty", "accord", "pact",
+      "diplomatic relations", "diplomatic crisis",
+      "expel diplomat", "recall ambassador",
+      "state visit", "official visit",
+      "UN General Assembly", "UN Security Council",
+      "resolution", "veto",
+      "foreign policy", "international relations",
+      "mediation", "envoy", "special envoy",
+      "normalization", "rapprochement",
+    ].map((t) => `"${t}"`).join(" OR "),
+  },
+  {
+    id: "defense_military",
+    label: "Defense & Military",
+    maxRecords: 15,
+    query: [
+      "defense ministry", "ministry of defense", "armed forces",
+      "military exercise", "joint exercise", "war games", "military drill",
+      "arms deal", "arms sale", "weapons transfer", "military aid",
+      "defense budget", "defense spending",
+      "military base", "aircraft carrier", "fighter jet",
+      "submarine", "warship", "destroyer",
+      "missile defense", "air defense",
+      "NATO exercise", "military alliance",
+      "conscription", "mobilization",
+      "military coup", "martial law",
+      "arms embargo", "military buildup",
+      "defense pact", "troops deployment",
+    ].map((t) => `"${t}"`).join(" OR "),
+  },
+  {
+    id: "intel_security",
+    label: "Intelligence & Security",
+    maxRecords: 15,
+    query: [
+      "intelligence agency", "espionage", "spy",
+      "counterintelligence", "surveillance",
+      "cyber attack", "cyber warfare", "cyberattack", "hacking", "state-sponsored",
+      "ransomware", "classified", "leak", "whistleblower",
+      "covert operation", "clandestine",
+      "reconnaissance", "drone surveillance", "satellite imagery",
+      "sanctions evasion", "terror financing",
+      "nuclear program", "ballistic missile", "enrichment",
+      "WMD", "chemical weapons", "IAEA", "nonproliferation",
+      "Mossad", "CIA", "MI6", "FSB", "ISI",
+    ].map((t) => `"${t}"`).join(" OR "),
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Country lookup tables
+// ---------------------------------------------------------------------------
 
 const FIPS_TO_COUNTRY: Record<string, string> = {
   AF: "Afghanistan", AL: "Albania", AG: "Algeria", AO: "Angola",
@@ -73,6 +139,78 @@ const FIPS_TO_COUNTRY: Record<string, string> = {
   UZ: "Uzbekistan", VE: "Venezuela", VM: "Vietnam",
   YM: "Yemen", ZA: "Zambia", ZI: "Zimbabwe",
 };
+
+const FIPS_TO_COORDS: Record<string, { lat: number; lng: number }> = {
+  AF: { lat: 33.93, lng: 67.71 }, AL: { lat: 41.15, lng: 20.17 },
+  AG: { lat: 28.03, lng: 1.66 }, AO: { lat: -11.2, lng: 17.87 },
+  AR: { lat: -38.42, lng: -63.62 }, AM: { lat: 40.07, lng: 45.04 },
+  AS: { lat: -25.27, lng: 133.78 }, AU: { lat: 47.52, lng: 14.55 },
+  AJ: { lat: 40.14, lng: 47.58 }, BA: { lat: 26.0, lng: 50.55 },
+  BG: { lat: 23.68, lng: 90.36 }, BO: { lat: 53.71, lng: 27.95 },
+  BE: { lat: 50.50, lng: 4.47 }, BR: { lat: -14.24, lng: -51.93 },
+  BU: { lat: 42.73, lng: 25.49 }, BM: { lat: 21.92, lng: 95.96 },
+  BY: { lat: -3.37, lng: 29.92 }, CB: { lat: 12.57, lng: 104.99 },
+  CM: { lat: 7.37, lng: 12.35 }, CA: { lat: 56.13, lng: -106.35 },
+  CD: { lat: 15.45, lng: 18.73 }, CI: { lat: -35.68, lng: -71.54 },
+  CH: { lat: 35.86, lng: 104.19 }, CO: { lat: 4.57, lng: -74.3 },
+  CG: { lat: -4.04, lng: 21.76 }, CF: { lat: -0.23, lng: 15.83 },
+  HR: { lat: 45.10, lng: 15.20 }, CU: { lat: 21.52, lng: -77.78 },
+  CY: { lat: 35.13, lng: 33.43 }, EZ: { lat: 49.82, lng: 15.47 },
+  DA: { lat: 56.26, lng: 9.50 }, DJ: { lat: 11.83, lng: 42.59 },
+  DR: { lat: 18.74, lng: -70.16 }, EC: { lat: -1.83, lng: -78.18 },
+  EG: { lat: 26.82, lng: 30.8 }, ES: { lat: 13.79, lng: -88.9 },
+  ER: { lat: 15.18, lng: 39.78 }, EN: { lat: 58.60, lng: 25.01 },
+  ET: { lat: 9.15, lng: 40.49 }, FI: { lat: 61.92, lng: 25.75 },
+  FR: { lat: 46.23, lng: 2.21 }, GA: { lat: 13.44, lng: -15.31 },
+  GG: { lat: 42.32, lng: 43.36 }, GM: { lat: 51.17, lng: 10.45 },
+  GH: { lat: 7.95, lng: -1.02 }, GR: { lat: 39.07, lng: 21.82 },
+  GT: { lat: 15.78, lng: -90.23 }, GV: { lat: 9.95, lng: -11.49 },
+  HA: { lat: 18.97, lng: -72.29 }, HO: { lat: 15.20, lng: -86.24 },
+  HU: { lat: 47.16, lng: 19.50 }, IN: { lat: 20.59, lng: 78.96 },
+  ID: { lat: -0.79, lng: 113.92 }, IR: { lat: 32.43, lng: 53.69 },
+  IZ: { lat: 33.22, lng: 43.68 }, EI: { lat: 53.41, lng: -8.24 },
+  IS: { lat: 31.05, lng: 34.85 }, IT: { lat: 41.87, lng: 12.57 },
+  JA: { lat: 36.20, lng: 138.25 }, JO: { lat: 30.59, lng: 36.24 },
+  KZ: { lat: 48.02, lng: 66.92 }, KE: { lat: -0.02, lng: 37.91 },
+  KN: { lat: 40.34, lng: 127.51 }, KS: { lat: 35.91, lng: 127.77 },
+  KU: { lat: 29.31, lng: 47.48 }, KG: { lat: 41.20, lng: 74.76 },
+  LA: { lat: 19.86, lng: 102.5 }, LG: { lat: 56.88, lng: 24.60 },
+  LE: { lat: 33.85, lng: 35.86 }, LY: { lat: 26.34, lng: 17.23 },
+  LH: { lat: 55.17, lng: 23.88 }, LU: { lat: 49.82, lng: 6.13 },
+  MK: { lat: 41.61, lng: 21.75 }, MA: { lat: -18.77, lng: 46.87 },
+  ML: { lat: 17.57, lng: -3.99 }, MO: { lat: 31.79, lng: -7.09 },
+  MZ: { lat: -18.67, lng: 35.53 }, NP: { lat: 28.39, lng: 84.12 },
+  NL: { lat: 52.13, lng: 5.29 }, NZ: { lat: -40.90, lng: 174.89 },
+  NG: { lat: 17.61, lng: 8.08 }, NI: { lat: 9.08, lng: 8.68 },
+  NO: { lat: 60.47, lng: 8.47 }, MU: { lat: 21.51, lng: 55.92 },
+  PK: { lat: 30.38, lng: 69.35 }, PM: { lat: 8.54, lng: -80.78 },
+  PE: { lat: -9.19, lng: -75.02 }, RP: { lat: 12.88, lng: 121.77 },
+  PL: { lat: 51.92, lng: 19.15 }, PO: { lat: 39.40, lng: -8.22 },
+  QA: { lat: 25.35, lng: 51.18 }, RO: { lat: 45.94, lng: 24.97 },
+  RS: { lat: 61.52, lng: 105.32 }, RW: { lat: -1.94, lng: 29.87 },
+  SA: { lat: 23.89, lng: 45.08 }, SG: { lat: 14.50, lng: -14.45 },
+  RI: { lat: 44.02, lng: 21.01 }, SL: { lat: 8.46, lng: -11.78 },
+  SN: { lat: 1.35, lng: 103.82 }, LO: { lat: 48.67, lng: 19.70 },
+  SI: { lat: 46.15, lng: 14.99 }, SO: { lat: 5.15, lng: 46.20 },
+  SF: { lat: -30.56, lng: 22.94 }, SP: { lat: 40.46, lng: -3.75 },
+  CE: { lat: 7.87, lng: 80.77 }, SU: { lat: 12.86, lng: 30.22 },
+  OD: { lat: 6.88, lng: 31.31 }, SW: { lat: 60.13, lng: 18.64 },
+  SZ: { lat: 46.82, lng: 8.23 }, SY: { lat: 34.80, lng: 38.99 },
+  TW: { lat: 23.70, lng: 120.96 }, TI: { lat: 38.86, lng: 71.28 },
+  TZ: { lat: -6.37, lng: 34.89 }, TH: { lat: 15.87, lng: 100.99 },
+  TO: { lat: 8.62, lng: 0.82 }, TS: { lat: 33.89, lng: 9.54 },
+  TU: { lat: 38.96, lng: 35.24 }, TX: { lat: 38.97, lng: 59.56 },
+  UG: { lat: 1.37, lng: 32.29 }, UP: { lat: 48.38, lng: 31.17 },
+  AE: { lat: 23.42, lng: 53.85 }, UK: { lat: 55.38, lng: -3.44 },
+  US: { lat: 37.09, lng: -95.71 }, UZ: { lat: 41.38, lng: 64.59 },
+  VE: { lat: 6.42, lng: -66.59 }, VM: { lat: 14.06, lng: 108.28 },
+  YM: { lat: 15.55, lng: 48.52 }, ZA: { lat: -13.13, lng: 27.85 },
+  ZI: { lat: -19.02, lng: 29.15 },
+};
+
+// ---------------------------------------------------------------------------
+// Type helpers
+// ---------------------------------------------------------------------------
 
 interface GdeltArticle {
   url: string;
@@ -133,56 +271,93 @@ function parseGdeltDate(seendate: string): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// URL builder (exported for tests / gdelt route)
+// ---------------------------------------------------------------------------
+
+export function buildGdeltUrl(
+  queryString: string,
+  timespan = "24h",
+  maxRecords = 25,
+): string {
+  const params = new URLSearchParams({
+    query: `(${queryString})`,
+    mode: "ArtList",
+    format: "json",
+    maxrecords: String(Math.min(maxRecords, 250)),
+    timespan: timespan,
+    sort: "DateDesc",
+  });
+  return `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Main fetch function — parallel category queries
+// ---------------------------------------------------------------------------
+
 export async function fetchGdeltArticles(
   source: SourceDefinition,
   timespan = "24h",
 ): Promise<NormalizedSourceItem[]> {
-  const url = buildGdeltUrl(timespan, MAX_ITEMS);
+  // Fetch all categories in parallel
+  const categoryResults = await Promise.allSettled(
+    GDELT_CATEGORIES.map(async (cat) => {
+      const url = buildGdeltUrl(cat.query, timespan, cat.maxRecords);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  let data: GdeltApiResponse;
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "TaipanMonitor/1.0 (OSINT dashboard, on-demand)",
-      },
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(`upstream_${response.status}`);
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "TaipanMonitor/1.0",
+          },
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) return [];
+        const data: GdeltApiResponse = await response.json();
+        return (data.articles ?? []).map((article) => ({
+          ...article,
+          _category: cat.label,
+        }));
+      } finally {
+        clearTimeout(timer);
+      }
+    }),
+  );
+
+  // Flatten and deduplicate by URL
+  const seen = new Set<string>();
+  const allArticles: (GdeltArticle & { _category: string })[] = [];
+  for (const result of categoryResults) {
+    if (result.status === "fulfilled") {
+      for (const article of result.value) {
+        if (article.url && !seen.has(article.url)) {
+          seen.add(article.url);
+          allArticles.push(article);
+        }
+      }
     }
-    data = await response.json();
-  } finally {
-    clearTimeout(timer);
-  }
-
-  const articles = data.articles;
-  if (!Array.isArray(articles) || articles.length === 0) {
-    return [];
   }
 
   const collectedAt = new Date().toISOString();
   const items: NormalizedSourceItem[] = [];
 
-  for (const article of articles) {
+  for (const article of allArticles) {
     if (!article.title || !article.url) continue;
 
     const title = clamp(article.title.trim(), MAX_TITLE_LENGTH);
     const publishedAt = parseGdeltDate(article.seendate);
-
     const fipsCode = (article.sourcecountry || "").toUpperCase();
     const countryName = FIPS_TO_COUNTRY[fipsCode];
     const relatedCountries = countryName ? [countryName] : [];
-
-    const id = `${source.id}::${article.url}`;
+    const coords = FIPS_TO_COORDS[fipsCode];
 
     items.push({
-      id,
+      id: `${source.id}::${article.url}`,
       sourceId: source.id,
       sourceName: `${source.name} — ${article.domain}`,
       title,
@@ -198,10 +373,14 @@ export async function fetchGdeltArticles(
       sourceLanguage: normalizeSourceLanguage(article.language),
       relatedCountries,
       relatedRegions: [source.regionScope],
-      category: source.category,
+      category: article._category,
       isSample: false,
       sourceProfile: source.sourceProfile,
       markerLocationStrategy: source.markerLocationStrategy,
+      sourceLocationForMarker:
+        coords && countryName
+          ? { lat: coords.lat, lng: coords.lng, locationName: countryName }
+          : undefined,
     });
   }
 

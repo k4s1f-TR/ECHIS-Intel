@@ -13,6 +13,7 @@ export type SourceCandidateStatus =
 export type SourceStatus =
   | "public_news_source"
   | "established_media"
+  | "official_government"
   | "official_feed"
   | "community_signal"
   | "reference_dataset";
@@ -20,17 +21,20 @@ export type SourceStatus =
 export type VerificationStatus =
   | "source_reported"
   | "official_entry"
+  | "official_statement"
   | "multi_source_reference"
   | "manual_sample";
 
 export type SourceBasis =
   | "single_public_source"
   | "single_official_source"
+  | "official_source"
   | "multiple_public_sources"
   | "manual_sample";
 
 export type ExtractionMethod =
   | "rss_summary"
+  | "rss_feed"
   | "official_json"
   | "manual_sample"
   | "keyword_match"
@@ -38,6 +42,7 @@ export type ExtractionMethod =
 
 export type SourceRegionScope =
   | "global"
+  | "north_america"
   | "middle_east"
   | "europe"
   | "asia_pacific"

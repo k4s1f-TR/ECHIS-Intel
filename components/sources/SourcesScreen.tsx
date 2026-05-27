@@ -89,6 +89,7 @@ const CANDIDATE_STATUS_LABELS: Record<SourceCandidateStatus, string> = {
 const CANDIDATE_SOURCE_STATUS_LABELS: Record<CandidateSourceStatus, string> = {
   public_news_source: "Public News Source",
   established_media: "Established Media",
+  official_government: "Official Government",
   official_feed: "Official Feed",
   community_signal: "Community Signal",
   reference_dataset: "Reference Dataset",
@@ -97,6 +98,7 @@ const CANDIDATE_SOURCE_STATUS_LABELS: Record<CandidateSourceStatus, string> = {
 const CANDIDATE_VERIFICATION_LABELS: Record<CandidateVerificationStatus, string> = {
   source_reported: "Source Reported",
   official_entry: "Official Entry",
+  official_statement: "Official Statement",
   multi_source_reference: "Multi-Source Reference",
   manual_sample: "Manual Sample",
 };
@@ -104,12 +106,14 @@ const CANDIDATE_VERIFICATION_LABELS: Record<CandidateVerificationStatus, string>
 const SOURCE_BASIS_LABELS: Record<SourceBasis, string> = {
   single_public_source: "Single Public Source",
   single_official_source: "Single Official Source",
+  official_source: "Official Source",
   multiple_public_sources: "Multiple Public Sources",
   manual_sample: "Manual Sample",
 };
 
 const EXTRACTION_METHOD_LABELS: Record<ExtractionMethod, string> = {
   rss_summary: "RSS Summary",
+  rss_feed: "RSS Feed",
   official_json: "Official JSON",
   manual_sample: "Manual Sample",
   keyword_match: "Keyword Match",
@@ -127,6 +131,7 @@ const TARGET_SCREEN_LABELS: Record<SourceTargetScreen, string> = {
 
 const REGION_SCOPE_LABELS: Record<SourceRegionScope, string> = {
   global: "Global",
+  north_america: "North America",
   middle_east: "Middle East",
   europe: "Europe",
   asia_pacific: "Asia-Pacific",

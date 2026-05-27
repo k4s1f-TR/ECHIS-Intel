@@ -13,6 +13,10 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   "reliefweb-crises",
+  "defense-news-global",
+  "dod-news",
+  "brookings-foreign-policy",
+  "csis-analysis",
   "trt-haber-dunya",
   "aljazeera-middle-east",
   "bbc-turkce",
