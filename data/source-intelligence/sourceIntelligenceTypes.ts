@@ -134,6 +134,50 @@ export type GeoBasisType =
   | "target_country"
   | "mentioned_country";
 
+export type GeoResolutionMethod =
+  | "institution_location"
+  | "payload_coordinates"
+  | "event_location_phrase"
+  | "official_actor_phrase"
+  | "country_actor_phrase"
+  | "target_country_phrase"
+  | "negotiation_location_phrase"
+  | "headline_location_prefix"
+  | "mentioned_location_phrase"
+  | "source_country_fallback";
+
+export type GeoEvidenceRole =
+  | "event_location"
+  | "official_actor"
+  | "country_actor"
+  | "target"
+  | "venue"
+  | "mentioned_only"
+  | "payload_coordinates"
+  | "institution_location"
+  | "source_country_fallback";
+
+export type GeoEvidenceStrength = "strong" | "moderate" | "weak";
+
+export type GeoEvidence = {
+  role: GeoEvidenceRole;
+  method: GeoResolutionMethod;
+  locationLabel?: string;
+  countryCode?: string;
+  region?: string;
+  matchedText?: string;
+  evidenceText: string;
+  strength: GeoEvidenceStrength;
+  acceptedForMarker: boolean;
+  rejectionReason?:
+    | "mentioned_only"
+    | "domain_mismatch"
+    | "weak_evidence"
+    | "ambiguous_candidates"
+    | "untrusted_payload"
+    | "fallback_only";
+};
+
 export type GeoBasis = {
   type: GeoBasisType;
   reason:
@@ -151,6 +195,9 @@ export type GeoBasis = {
   city?: string;
   region?: string;
   label?: string;
+  resolutionMethod?: GeoResolutionMethod;
+  evidence?: string[];
+  evidenceDetails?: GeoEvidence[];
 };
 
 export type SourceFilterMatch = {

@@ -15,6 +15,7 @@ import { useSourceIntelligenceStore } from "@/components/source-intelligence/Sou
 import { sourceRegistry } from "@/data/source-intelligence/sourceRegistry";
 import type {
   CollectionMethod,
+  IntelligenceEventCandidate,
   SourceDefinition,
   SourceStatus,
   SourceType,
@@ -318,6 +319,133 @@ function Field({
   );
 }
 
+function compactList(values?: string[]): string | undefined {
+  if (!values || values.length === 0) return undefined;
+  return values.slice(0, 4).join(", ") + (values.length > 4 ? ` +${values.length - 4}` : "");
+}
+
+function NeedsLocationReview({
+  items,
+}: {
+  items: IntelligenceEventCandidate[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section
+      className="flex flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
+      style={{
+        background: "rgba(12,12,12,0.96)",
+        border: "1px solid rgba(255,255,255,0.07)",
+      }}
+    >
+      <div
+        className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <AlertTriangle size={12} style={{ color: "rgba(248,113,113,0.78)" }} />
+          <span
+            className="truncate font-semibold uppercase"
+            style={{
+              color: "rgba(158,168,184,0.86)",
+              fontSize: "10px",
+              letterSpacing: "0.1em",
+            }}
+          >
+            Needs Location Review
+          </span>
+        </div>
+        <Pill tone="amber">{items.length} feed-only until resolved</Pill>
+      </div>
+
+      <div className="max-h-[360px] overflow-y-auto">
+        {items.map((item) => {
+          const evidence = item.geoBasis?.evidenceDetails ?? [];
+          const mentioned = compactList(item.item.mentionedCountries);
+          const regions = compactList(item.item.mentionedRegions);
+          const persons = compactList(item.item.persons);
+          const institutions = compactList(item.item.institutions);
+
+          return (
+            <article
+              key={item.id}
+              className="px-4 py-3"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
+            >
+              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                    <Pill tone="amber">{labelFor(item.primaryDomain)}</Pill>
+                    <Pill>{item.sourceName}</Pill>
+                    <Pill>{labelFor(item.sourceBasis)}</Pill>
+                  </div>
+                  <div
+                    className="line-clamp-2 font-semibold"
+                    style={{
+                      color: "rgba(235,240,245,0.94)",
+                      fontSize: "12.5px",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                </div>
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded"
+                    title="Open original source"
+                    style={{
+                      color: "rgba(148,163,184,0.82)",
+                      background: "rgba(255,255,255,0.035)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                    }}
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
+
+              <div className="mt-2 grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4">
+                <Field label="Mentioned Countries">{mentioned ?? "None extracted"}</Field>
+                <Field label="Regions">{regions ?? "None extracted"}</Field>
+                <Field label="Persons">{persons ?? "None extracted"}</Field>
+                <Field label="Institutions">{institutions ?? "None extracted"}</Field>
+              </div>
+
+              <div className="mt-2">
+                <Field label="Geo Decision">
+                  {evidence.length > 0 ? (
+                    <span className="flex min-w-0 flex-wrap gap-1">
+                      {evidence.slice(0, 4).map((entry, index) => (
+                        <Pill
+                          key={`${entry.method}-${entry.evidenceText}-${index}`}
+                          tone={entry.acceptedForMarker ? "green" : "amber"}
+                        >
+                          {labelFor(entry.role)} / {labelFor(entry.method)}
+                          {entry.rejectionReason
+                            ? ` / ${labelFor(entry.rejectionReason)}`
+                            : ""}
+                        </Pill>
+                      ))}
+                      {evidence.length > 4 && <Pill>+{evidence.length - 4}</Pill>}
+                    </span>
+                  ) : (
+                    "No marker-grade geo evidence extracted"
+                  )}
+                </Field>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SourceRow({
   source,
   itemCount,
@@ -596,9 +724,14 @@ export function SourcesScreen() {
   const markerReadyEvents = eventCandidates.filter(
     (item) => item.markerEligibility === "eligible",
   ).length;
-  const needsLocationEvents = eventCandidates.filter(
-    (item) => item.markerEligibility === "needs_location",
-  ).length;
+  const needsLocationItems = useMemo(
+    () =>
+      eventCandidates.filter(
+        (item) => item.markerEligibility === "needs_location",
+      ),
+    [eventCandidates],
+  );
+  const needsLocationEvents = needsLocationItems.length;
   const failedSources = sources.filter(
     (source) => (errorBySourceId[source.id] ?? null) !== null,
   ).length;
@@ -679,6 +812,8 @@ export function SourcesScreen() {
             tone="rgba(248,113,113,0.88)"
           />
         </section>
+
+        <NeedsLocationReview items={needsLocationItems} />
 
         <section
           className="flex min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[8px]"

@@ -1,4 +1,6 @@
 import { containsNormalizedPhrase, normalizeFilterText } from "../filters/normalizeFilterText";
+import { worldCapitals } from "../../worldCapitals";
+import type { GeoResolutionMethod } from "../sourceIntelligenceTypes";
 
 export type ResolvedLocation = {
   latitude: number;
@@ -10,11 +12,31 @@ export type ResolvedLocation = {
 
 type LocationEntry = ResolvedLocation & {
   aliases: readonly string[];
+  isGlobalCapitalEntry?: boolean;
 };
 
 type LocationMatch = {
   entry: LocationEntry;
   score: number;
+};
+
+export type LocationResolutionMethod = Extract<
+  GeoResolutionMethod,
+  | "event_location_phrase"
+  | "official_actor_phrase"
+  | "country_actor_phrase"
+  | "target_country_phrase"
+  | "negotiation_location_phrase"
+  | "headline_location_prefix"
+  | "mentioned_location_phrase"
+>;
+
+export type LocationResolutionCandidate = {
+  location: ResolvedLocation;
+  method: LocationResolutionMethod;
+  score: number;
+  matchedAlias: string;
+  evidence: string[];
 };
 
 const TURKISH_POSSESSIVE_LINKERS = [
@@ -23,6 +45,38 @@ const TURKISH_POSSESSIVE_LINKERS = [
   "nun",
   "un",
   "s",
+] as const;
+
+const TURKISH_CASE_LINKERS = [
+  "a",
+  "e",
+  "ya",
+  "ye",
+  "da",
+  "de",
+  "dan",
+  "den",
+  "daki",
+  "deki",
+  "taki",
+  "teki",
+] as const;
+
+const DIRECTIONAL_LOCATION_MODIFIERS = [
+  "north",
+  "northern",
+  "south",
+  "southern",
+  "east",
+  "eastern",
+  "west",
+  "western",
+  "central",
+  "kuzey",
+  "guney",
+  "dogu",
+  "bati",
+  "orta",
 ] as const;
 
 const OFFICIAL_ACTOR_PHRASES = [
@@ -41,6 +95,16 @@ const OFFICIAL_ACTOR_PHRASES = [
   "cabinet",
   "diplomatic mission",
   "embassy",
+  "leader",
+  "mps",
+  "mp",
+  "lawmakers",
+  "parliament",
+  "corps",
+  "army",
+  "military",
+  "combat medics",
+  "foreign spy chief",
   "disisleri bakanligi",
   "disisleri bakani",
   "savunma bakanligi",
@@ -56,7 +120,39 @@ const OFFICIAL_ACTOR_PHRASES = [
   "diplomatik misyon",
 ] as const;
 
-const LOCATION_CONTEXT_BEFORE = [
+const COUNTRY_ACTOR_ACTIONS = [
+  "cuts ties",
+  "cut ties",
+  "denies",
+  "denied",
+  "accuses",
+  "accused",
+  "reaffirms",
+  "reaffirm",
+  "votes",
+  "vote",
+  "overturning",
+  "set to dominate",
+  "inch closer",
+  "launches strikes",
+  "rejects",
+  "preparing",
+  "to take",
+  "will take",
+  "says",
+  "said",
+  "announced",
+  "agreed",
+  "agreeing",
+  "denies agreeing",
+  "karar aldi",
+  "reddetti",
+  "sucladi",
+  "acikladi",
+  "oyladi",
+] as const;
+
+const EVENT_LOCATION_BEFORE = [
   "in",
   "near",
   "around",
@@ -65,27 +161,46 @@ const LOCATION_CONTEXT_BEFORE = [
   "from",
   "toward",
   "towards",
-  "on",
-  "against",
   "over",
   "at",
   "within",
   "into",
   "outside",
   "off",
-  "uzerine",
-  "karsi",
   "de",
   "da",
   "den",
   "dan",
 ] as const;
 
-const LOCATION_CONTEXT_AFTER = [
+const EVENT_LOCATION_AFTER = [
+  "da",
+  "de",
+  "daki",
+  "deki",
+  "taki",
+  "teki",
+  "yakini",
+  "yakininda",
+  "civarinda",
+  "bolgesinde",
+  "sinirinda",
+  "kiyisinda",
+  "aciklarinda",
   "war",
   "conflict",
+  "combat zone",
+  "combat zones",
   "crisis",
   "ceasefire",
+  "fight",
+  "force",
+  "stability force",
+  "tension",
+  "dispute",
+  "patrol",
+  "drill",
+  "exercise",
   "border",
   "front",
   "frontline",
@@ -96,11 +211,6 @@ const LOCATION_CONTEXT_AFTER = [
   "region",
   "province",
   "capital",
-  "government",
-  "ministry",
-  "army",
-  "military",
-  "forces",
   "airstrike",
   "strike",
   "missile",
@@ -117,18 +227,102 @@ const LOCATION_CONTEXT_AFTER = [
   "hava",
   "sahasi",
   "toprak",
-  "hukumet",
-  "bakanlik",
-  "ordusu",
-  "askeri",
   "saldiri",
   "ateskes",
+  "talimati",
+  "talimat",
+  "isgal",
+  "isgal alani",
+  "istikrar gucu",
+  "gucu",
+  "gerilim",
+  "ihtilaf",
+  "devriye",
+  "tatbikat",
   "kriz",
   "savasi",
   "savas",
   "yaptirim",
   "muzakere",
   "zirve",
+  "refugee returns",
+  "returns dashboard",
+  "dashboard",
+  "elections",
+  "election",
+  "insecurity",
+  "train station",
+  "stabbing",
+  "terror",
+  "partnership",
+  "funding",
+  "hospital care",
+  "malnutrition",
+  "refugee",
+  "refugees",
+  "desplazamientos",
+  "confinamientos",
+  "people of",
+  "municipio de",
+  "department of",
+] as const;
+
+const NEGOTIATION_TERMS = [
+  "talks",
+  "negotiations",
+  "summit",
+  "meeting",
+  "mediation",
+  "ceasefire talks",
+  "peace talks",
+  "muzakere",
+  "muzakereler",
+  "gorusme",
+  "gorusmeler",
+  "zirve",
+  "arabuluculuk",
+  "ateskes gorusmeleri",
+] as const;
+
+const TARGET_ACTION_BEFORE = [
+  "against",
+  "on",
+  "targeting",
+  "hits",
+  "hit",
+  "strikes",
+  "strike",
+  "attacks",
+  "attack",
+  "sanctions",
+  "embargo",
+  "karsi",
+  "hedef alan",
+  "hedefledi",
+  "vurulan",
+  "vurdu",
+  "saldirdi",
+  "yaptirim",
+  "ambargo",
+  "blacklist",
+  "adds",
+  "add",
+] as const;
+
+const TARGET_ACTION_AFTER = [
+  "sanctions",
+  "embargo",
+  "targeted",
+  "hit",
+  "struck",
+  "attacked",
+  "vuruldu",
+  "hedef alindi",
+  "yaptirim",
+  "ambargo",
+  "blacklist",
+  "blacklisted",
+  "sanctions law",
 ] as const;
 
 const WEAK_STANDALONE_ALIASES = new Set(
@@ -174,18 +368,60 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function phraseAlternation(values: readonly string[]): string {
+  return values
+    .map((value) => normalizeFilterText(value))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join("|");
+}
+
+function containsAnyPhrase(normalizedText: string, phrases: readonly string[]): boolean {
+  return phrases.some((phrase) => containsNormalizedPhrase(normalizedText, phrase));
+}
+
+function optionalDirectionalModifier(): string {
+  const modifiers = phraseAlternation(DIRECTIONAL_LOCATION_MODIFIERS);
+  return `(?:the\\s+)?(?:(?:${modifiers})\\s+)?`;
+}
+
 function hasContextualSingleAlias(normalizedText: string, normalizedAlias: string): boolean {
   const escapedAlias = escapeRegExp(normalizedAlias);
-  const before = LOCATION_CONTEXT_BEFORE.join("|");
-  const after = LOCATION_CONTEXT_AFTER.join("|");
+  const before = phraseAlternation(EVENT_LOCATION_BEFORE);
+  const after = phraseAlternation(EVENT_LOCATION_AFTER);
+  const directional = optionalDirectionalModifier();
 
   return (
-    new RegExp(`(^|\\s)(${before})\\s+${escapedAlias}(?=\\s|$)`).test(
+    new RegExp(`(^|\\s)(${before})\\s+${directional}${escapedAlias}(?=\\s|$)`).test(
       normalizedText,
     ) ||
     new RegExp(`(^|\\s)${escapedAlias}\\s+(${after})(?=\\s|$)`).test(
       normalizedText,
     )
+  );
+}
+
+function hasEventLocationPhrase(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  const escapedAlias = escapeRegExp(normalizedAlias);
+  const before = phraseAlternation(EVENT_LOCATION_BEFORE);
+  const after = phraseAlternation(EVENT_LOCATION_AFTER);
+  const caseLinker = TURKISH_CASE_LINKERS.join("|");
+  const directional = optionalDirectionalModifier();
+
+  return (
+    new RegExp(`(^|\\s)(${before})\\s+${directional}${escapedAlias}(?=\\s|$)`).test(
+      normalizedText,
+    ) ||
+    new RegExp(`(^|\\s)people\\s+of\\s+the\\s+${escapedAlias}(?=\\s|$)`).test(
+      normalizedText,
+    ) ||
+    new RegExp(
+      `(^|\\s)${escapedAlias}(?:\\s+(?:${caseLinker}))?\\s+(${after})(?=\\s|$)`,
+    ).test(normalizedText)
   );
 }
 
@@ -206,8 +442,61 @@ function hasOfficialActorPhraseAfter(
   });
 }
 
-function scoreLocationEntry(normalizedText: string, entry: LocationEntry): number {
-  const matchedAliases = entry.aliases
+function hasHeadlineLocationPrefix(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  const escapedAlias = escapeRegExp(normalizedAlias);
+  return (
+    new RegExp(`^${escapedAlias}(?=\\s|$)`).test(normalizedText) ||
+    new RegExp(`^(world|global|update|flash update)\\s+${escapedAlias}(?=\\s|$)`).test(
+      normalizedText,
+    )
+  );
+}
+
+function hasCountryActorAction(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  const escapedAlias = escapeRegExp(normalizedAlias);
+  const actions = phraseAlternation(COUNTRY_ACTOR_ACTIONS);
+  const modifier = optionalDirectionalModifier();
+  return new RegExp(
+    `(^|\\s)${modifier}${escapedAlias}\\s+(${actions})(?=\\s|$)`,
+  ).test(normalizedText);
+}
+
+function hasNegotiationLocationPhrase(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  if (!containsAnyPhrase(normalizedText, NEGOTIATION_TERMS)) return false;
+  return hasEventLocationPhrase(normalizedText, normalizedAlias);
+}
+
+function hasTargetCountryPhrase(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  const escapedAlias = escapeRegExp(normalizedAlias);
+  const before = phraseAlternation(TARGET_ACTION_BEFORE);
+  const after = phraseAlternation(TARGET_ACTION_AFTER);
+  const caseLinker = TURKISH_CASE_LINKERS.join("|");
+  const directional = optionalDirectionalModifier();
+
+  return (
+    new RegExp(
+      `(^|\\s)(${before})(?:\\s+(?:${caseLinker}))?\\s+${directional}${escapedAlias}(?=\\s|$)`,
+    ).test(normalizedText) ||
+    new RegExp(
+      `(^|\\s)${escapedAlias}(?:\\s+(?:${caseLinker}))?\\s+(${after})(?=\\s|$)`,
+    ).test(normalizedText)
+  );
+}
+
+function aliasMatches(normalizedText: string, entry: LocationEntry) {
+  return entry.aliases
     .map((alias) => ({
       raw: alias,
       normalized: normalizeFilterText(alias),
@@ -218,6 +507,10 @@ function scoreLocationEntry(normalizedText: string, entry: LocationEntry): numbe
         alias.normalized &&
         containsNormalizedPhrase(normalizedText, alias.raw),
     );
+}
+
+function scoreLocationEntry(normalizedText: string, entry: LocationEntry): number {
+  const matchedAliases = aliasMatches(normalizedText, entry);
 
   if (matchedAliases.length === 0) return 0;
 
@@ -249,17 +542,10 @@ function scoreOfficialActorEntry(
   normalizedText: string,
   entry: LocationEntry,
 ): number {
-  const aliases = entry.aliases
-    .map((alias) => ({
-      raw: alias,
-      normalized: normalizeFilterText(alias),
-      tokens: tokenCount(alias),
-    }))
-    .filter((alias) => alias.normalized);
+  const aliases = aliasMatches(normalizedText, entry);
 
   let score = 0;
   for (const alias of aliases) {
-    if (!containsNormalizedPhrase(normalizedText, alias.raw)) continue;
     if (!hasOfficialActorPhraseAfter(normalizedText, alias.normalized)) continue;
     score = Math.max(score, alias.tokens >= 2 ? 95 : 85);
   }
@@ -268,6 +554,69 @@ function scoreOfficialActorEntry(
 }
 
 const LOCATION_DICTIONARY: readonly LocationEntry[] = [
+  {
+    label: "Middle East",
+    latitude: 29.8,
+    longitude: 44.0,
+    region: "Middle East",
+    aliases: ["middle east", "mena", "orta dogu", "ortadogu"],
+  },
+  {
+    label: "Red Sea",
+    latitude: 19.0,
+    longitude: 38.8,
+    region: "Red Sea",
+    aliases: ["red sea", "kizildeniz", "kizil deniz", "bab el mandeb", "bab al mandab"],
+  },
+  {
+    label: "Black Sea",
+    latitude: 43.4,
+    longitude: 34.3,
+    region: "Black Sea",
+    aliases: ["black sea", "karadeniz", "kerch strait", "kerc bogazi"],
+  },
+  {
+    label: "Caucasus",
+    latitude: 42.2,
+    longitude: 44.8,
+    region: "Caucasus",
+    aliases: ["caucasus", "south caucasus", "kafkasya", "guney kafkasya"],
+  },
+  {
+    label: "Balkans",
+    latitude: 43.5,
+    longitude: 21.0,
+    region: "Balkans",
+    aliases: ["balkans", "western balkans", "balkanlar", "bati balkanlar"],
+  },
+  {
+    label: "Sahel",
+    latitude: 15.8,
+    longitude: 2.5,
+    region: "Sahel",
+    aliases: ["sahel", "sahel region", "sahel bolgesi"],
+  },
+  {
+    label: "Horn of Africa",
+    latitude: 8.4,
+    longitude: 46.3,
+    region: "Horn of Africa",
+    aliases: ["horn of africa", "afrika boynuzu"],
+  },
+  {
+    label: "South China Sea",
+    latitude: 12.0,
+    longitude: 114.0,
+    region: "South China Sea",
+    aliases: ["south china sea", "guney cin denizi"],
+  },
+  {
+    label: "Indo-Pacific",
+    latitude: 5.0,
+    longitude: 110.0,
+    region: "Indo-Pacific",
+    aliases: ["indo pacific", "indo-pacific", "hint pasifik"],
+  },
   {
     label: "Palestine / Gaza",
     latitude: 31.5,
@@ -287,14 +636,38 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     latitude: 33.9,
     longitude: 35.5,
     countryCode: "LB",
-    aliases: ["lebanon", "lebanese", "lubnan", "beirut", "beyrut", "hezbollah", "hizbullah"],
+    aliases: [
+      "lebanon",
+      "lebanese",
+      "lubnan",
+      "south lebanon",
+      "southern lebanon",
+      "guney lubnan",
+      "beirut",
+      "beyrut",
+      "tyre",
+      "sour",
+      "sur",
+      "hezbollah",
+      "hizbullah",
+    ],
   },
   {
     label: "Syria",
     latitude: 34.8,
     longitude: 38.9,
     countryCode: "SY",
-    aliases: ["syria", "syrian", "suriye", "damascus", "sam", "aleppo", "halep", "idlib"],
+    aliases: [
+      "syria",
+      "syrian",
+      "syrian arab republic",
+      "suriye",
+      "damascus",
+      "sam",
+      "aleppo",
+      "halep",
+      "idlib",
+    ],
   },
   {
     label: "Iraq",
@@ -308,7 +681,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     latitude: 15.6,
     longitude: 48.5,
     countryCode: "YE",
-    aliases: ["yemen", "yemeni", "sanaa", "aden", "houthi", "houthis", "husiler", "red sea", "kizildeniz"],
+    aliases: ["yemen", "yemeni", "sanaa", "aden", "houthi", "houthis", "husiler"],
   },
   {
     label: "Iran",
@@ -339,6 +712,55 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: ["egypt", "egyptian", "misir", "cairo", "kahire", "sinai"],
   },
   {
+    label: "Jordan",
+    latitude: 30.6,
+    longitude: 36.2,
+    countryCode: "JO",
+    aliases: ["jordan", "jordanian", "urdun", "amman"],
+  },
+  {
+    label: "Qatar",
+    latitude: 25.35,
+    longitude: 51.18,
+    countryCode: "QA",
+    aliases: ["qatar", "qatari", "katar", "doha"],
+  },
+  {
+    label: "Oman",
+    latitude: 21.5,
+    longitude: 55.9,
+    countryCode: "OM",
+    aliases: ["oman", "omani", "umman", "muscat", "maskat"],
+  },
+  {
+    label: "United Arab Emirates",
+    latitude: 23.4,
+    longitude: 53.8,
+    countryCode: "AE",
+    aliases: [
+      "united arab emirates",
+      "uae",
+      "emirates",
+      "bae",
+      "abu dhabi",
+      "dubai",
+    ],
+  },
+  {
+    label: "Cyprus",
+    latitude: 35.1,
+    longitude: 33.4,
+    countryCode: "CY",
+    aliases: ["cyprus", "kibris", "nicosia", "lefkosia"],
+  },
+  {
+    label: "Greece",
+    latitude: 39.0,
+    longitude: 22.0,
+    countryCode: "GR",
+    aliases: ["greece", "greek", "yunanistan", "atina", "athens", "aegean"],
+  },
+  {
     label: "Ukraine",
     latitude: 48.4,
     longitude: 31.2,
@@ -357,7 +779,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     latitude: 35.9,
     longitude: 104.2,
     countryCode: "CN",
-    aliases: ["china", "chinese", "cin", "beijing", "pekin", "xi jinping", "south china sea", "guney cin denizi"],
+    aliases: ["china", "chinese", "cin", "beijing", "pekin", "xi jinping"],
   },
   {
     label: "Taiwan",
@@ -392,7 +814,7 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     latitude: 37.1,
     longitude: -95.7,
     countryCode: "US",
-    aliases: ["united states", "usa", "u s", "america", "american", "abd", "washington", "white house", "biden", "trump"],
+    aliases: ["united states", "usa", "us", "u s", "america", "american", "abd", "washington", "white house", "biden", "trump"],
   },
   {
     label: "United Kingdom",
@@ -413,7 +835,70 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     latitude: 51.2,
     longitude: 10.5,
     countryCode: "DE",
-    aliases: ["germany", "german", "almanya", "berlin", "scholz"],
+    aliases: ["germany", "german", "german netherlands", "almanya", "berlin", "scholz"],
+  },
+  {
+    label: "Netherlands",
+    latitude: 52.1,
+    longitude: 5.3,
+    countryCode: "NL",
+    aliases: ["netherlands", "dutch", "holland", "hollanda", "the hague", "amsterdam"],
+  },
+  {
+    label: "Switzerland",
+    latitude: 46.8,
+    longitude: 8.2,
+    countryCode: "CH",
+    aliases: ["switzerland", "swiss", "isvicre", "zurich", "geneva", "bern"],
+  },
+  {
+    label: "Hungary",
+    latitude: 47.2,
+    longitude: 19.5,
+    countryCode: "HU",
+    aliases: ["hungary", "hungarian", "macaristan", "budapest", "orban"],
+  },
+  {
+    label: "Estonia",
+    latitude: 58.6,
+    longitude: 25.0,
+    countryCode: "EE",
+    aliases: ["estonia", "estonian", "estonya", "tallinn"],
+  },
+  {
+    label: "Latvia",
+    latitude: 56.9,
+    longitude: 24.6,
+    countryCode: "LV",
+    aliases: ["latvia", "latvian", "letonya", "riga"],
+  },
+  {
+    label: "Poland",
+    latitude: 51.9,
+    longitude: 19.1,
+    countryCode: "PL",
+    aliases: ["poland", "polish", "polonya", "warsaw", "varsova"],
+  },
+  {
+    label: "Belarus",
+    latitude: 53.7,
+    longitude: 28.0,
+    countryCode: "BY",
+    aliases: ["belarus", "belarusian", "minsk"],
+  },
+  {
+    label: "Romania",
+    latitude: 45.9,
+    longitude: 25.0,
+    countryCode: "RO",
+    aliases: ["romania", "romanian", "romanya", "bucharest", "bukres"],
+  },
+  {
+    label: "Moldova",
+    latitude: 47.4,
+    longitude: 28.4,
+    countryCode: "MD",
+    aliases: ["moldova", "moldovan", "chisinau", "transnistria"],
   },
   {
     label: "Brussels / NATO-EU",
@@ -444,6 +929,27 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: ["india", "indian", "hindistan", "new delhi", "modi", "kashmir"],
   },
   {
+    label: "Armenia",
+    latitude: 40.1,
+    longitude: 45.0,
+    countryCode: "AM",
+    aliases: ["armenia", "armenian", "ermenistan", "yerevan"],
+  },
+  {
+    label: "Azerbaijan",
+    latitude: 40.1,
+    longitude: 47.6,
+    countryCode: "AZ",
+    aliases: ["azerbaijan", "azerbaijani", "azerbaycan", "baku", "karabakh", "karabag"],
+  },
+  {
+    label: "Georgia",
+    latitude: 42.3,
+    longitude: 43.4,
+    countryCode: "GE",
+    aliases: ["georgia", "georgian", "gurcistan", "tbilisi", "abkhazia", "south ossetia"],
+  },
+  {
     label: "Myanmar",
     latitude: 21.9,
     longitude: 95.9,
@@ -463,6 +969,26 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     longitude: 40.5,
     countryCode: "ET",
     aliases: ["ethiopia", "ethiopian", "etiyopya", "addis ababa", "tigray"],
+  },
+  {
+    label: "Democratic Republic of the Congo",
+    latitude: -2.9,
+    longitude: 23.7,
+    countryCode: "CD",
+    aliases: [
+      "democratic republic of the congo",
+      "dr congo",
+      "drc",
+      "congo kinshasa",
+      "kinshasa",
+    ],
+  },
+  {
+    label: "Uganda",
+    latitude: 1.4,
+    longitude: 32.3,
+    countryCode: "UG",
+    aliases: ["uganda", "ugandan", "kampala"],
   },
   {
     label: "Somalia",
@@ -499,13 +1025,205 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     countryCode: "VE",
     aliases: ["venezuela", "venezuelan", "caracas", "maduro"],
   },
+  {
+    label: "Guatemala",
+    latitude: 15.8,
+    longitude: -90.2,
+    countryCode: "GT",
+    aliases: ["guatemala", "guatemalan", "guatemala city"],
+  },
+  {
+    label: "Colombia",
+    latitude: 4.6,
+    longitude: -74.3,
+    countryCode: "CO",
+    aliases: [
+      "colombia",
+      "colombian",
+      "bogota",
+      "antioquia",
+      "briceno",
+      "briceño",
+    ],
+  },
+];
+
+const manualEntryKeys = new Set(
+  LOCATION_DICTIONARY.flatMap((entry) => [
+    normalizeFilterText(entry.label),
+    ...entry.aliases.map((alias) => normalizeFilterText(alias)),
+  ]).filter(Boolean),
+);
+
+const GLOBAL_CAPITAL_LOCATION_ENTRIES: readonly LocationEntry[] = worldCapitals
+  .filter((entry) => !manualEntryKeys.has(normalizeFilterText(entry.country)))
+  .map((entry) => ({
+    label: entry.country,
+    latitude: entry.coordinates[1],
+    longitude: entry.coordinates[0],
+    aliases: [entry.country, entry.capital],
+    isGlobalCapitalEntry: true,
+  }));
+
+const ALL_LOCATION_ENTRIES: readonly LocationEntry[] = [
+  ...LOCATION_DICTIONARY,
+  ...GLOBAL_CAPITAL_LOCATION_ENTRIES,
 ];
 
 const entriesByCountryCode = new Map(
-  LOCATION_DICTIONARY.flatMap((entry) =>
+  ALL_LOCATION_ENTRIES.flatMap((entry) =>
     entry.countryCode ? [[entry.countryCode, entry] as const] : [],
   ),
 );
+
+function candidateFor(
+  entry: LocationEntry,
+  method: LocationResolutionMethod,
+  score: number,
+  matchedAlias: string,
+  evidence: string[],
+): LocationResolutionCandidate {
+  return {
+    location: { ...entry },
+    method,
+    score,
+    matchedAlias,
+    evidence,
+  };
+}
+
+export function findLocationResolutionCandidates(
+  text: string,
+): LocationResolutionCandidate[] {
+  const normalized = normalizeFilterText(text);
+  if (!normalized) return [];
+
+  const candidates: LocationResolutionCandidate[] = [];
+
+  for (const entry of ALL_LOCATION_ENTRIES) {
+    const aliases = aliasMatches(normalized, entry);
+    if (aliases.length === 0) continue;
+    let hasRoleEvidenceForEntry = false;
+
+    for (const alias of aliases) {
+      const isWeak = WEAK_STANDALONE_ALIASES.has(alias.normalized);
+
+      if (hasOfficialActorPhraseAfter(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "official_actor_phrase",
+            alias.tokens >= 2 ? 96 : 90,
+            alias.raw,
+            [`official actor phrase: ${alias.raw}`],
+          ),
+        );
+      }
+
+      if (!isWeak && hasHeadlineLocationPrefix(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "headline_location_prefix",
+            alias.tokens >= 2 ? 86 : 82,
+            alias.raw,
+            [`headline location prefix: ${alias.raw}`],
+          ),
+        );
+      }
+
+      if (!isWeak && hasCountryActorAction(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "country_actor_phrase",
+            alias.tokens >= 2 ? 90 : 84,
+            alias.raw,
+            [`country actor action: ${alias.raw}`],
+          ),
+        );
+      }
+
+      if (hasNegotiationLocationPhrase(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "negotiation_location_phrase",
+            alias.tokens >= 2 ? 97 : 91,
+            alias.raw,
+            [`negotiation venue phrase: ${alias.raw}`],
+          ),
+        );
+      }
+
+      if (hasEventLocationPhrase(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "event_location_phrase",
+            alias.tokens >= 2 ? 95 : 88,
+            alias.raw,
+            [`event location phrase: ${alias.raw}`],
+          ),
+        );
+      }
+
+      if (!isWeak && hasTargetCountryPhrase(normalized, alias.normalized)) {
+        hasRoleEvidenceForEntry = true;
+        candidates.push(
+          candidateFor(
+            entry,
+            "target_country_phrase",
+            alias.tokens >= 2 ? 90 : 84,
+            alias.raw,
+            [`target country phrase: ${alias.raw}`],
+          ),
+        );
+      }
+    }
+
+    const strongDistinctAliases = new Set(
+      aliases
+        .filter((alias) => !WEAK_STANDALONE_ALIASES.has(alias.normalized))
+        .map((alias) => alias.normalized),
+    );
+    const strongestAlias = aliases.sort((a, b) => b.tokens - a.tokens)[0];
+    if (
+      !hasRoleEvidenceForEntry &&
+      strongestAlias &&
+      (strongestAlias.tokens >= 2 || strongDistinctAliases.size >= 2)
+    ) {
+      candidates.push(
+        candidateFor(
+          entry,
+          "mentioned_location_phrase",
+          strongestAlias.tokens >= 2 ? 74 : 70,
+          strongestAlias.raw,
+          [`mentioned location phrase: ${strongestAlias.raw}`],
+        ),
+      );
+    }
+  }
+
+  const bestByMethodAndLocation = new Map<string, LocationResolutionCandidate>();
+  for (const candidate of candidates) {
+    const key = [
+      candidate.location.countryCode ?? candidate.location.label,
+      candidate.method,
+    ].join("::");
+    const existing = bestByMethodAndLocation.get(key);
+    if (!existing || candidate.score > existing.score) {
+      bestByMethodAndLocation.set(key, candidate);
+    }
+  }
+
+  return [...bestByMethodAndLocation.values()].sort((a, b) => b.score - a.score);
+}
 
 export function resolveLocationByCountryCode(
   countryCode: string | undefined,
@@ -520,7 +1238,7 @@ export function resolveLocationByText(text: string): ResolvedLocation | null {
   if (!normalized) return null;
 
   const matches: LocationMatch[] = [];
-  for (const entry of LOCATION_DICTIONARY) {
+  for (const entry of ALL_LOCATION_ENTRIES) {
     const score = scoreLocationEntry(normalized, entry);
     if (score >= 70) matches.push({ entry, score });
   }
@@ -536,7 +1254,7 @@ export function resolveOfficialActorLocation(
   if (!normalized) return null;
 
   const matches: LocationMatch[] = [];
-  for (const entry of LOCATION_DICTIONARY) {
+  for (const entry of ALL_LOCATION_ENTRIES) {
     const score = scoreOfficialActorEntry(normalized, entry);
     if (score >= 80) matches.push({ entry, score });
   }

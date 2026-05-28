@@ -23,6 +23,13 @@ function formatAge(iso?: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function formatPublishedFull(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toUTCString().replace(/ GMT$/, " UTC");
+}
+
 function labelFor(value: string): string {
   return value
     .replace(/_/g, " ")
@@ -50,6 +57,74 @@ function ProvenanceChip({
     >
       {children}
     </span>
+  );
+}
+
+function DetailGrid({ items }: { items: Array<[string, string | undefined]> }) {
+  const visible = items.filter(([, value]) => Boolean(value));
+  if (visible.length === 0) return null;
+
+  return (
+    <dl
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: "12px 14px",
+        marginTop: 12,
+      }}
+    >
+      {visible.map(([label, value]) => (
+        <div key={`${label}-${value}`} className="min-w-0">
+          <dt
+            className="uppercase"
+            style={{
+              color: "rgba(148,163,184,0.62)",
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: "0.11em",
+              lineHeight: 1,
+            }}
+          >
+            {label}
+          </dt>
+          <dd
+            className="mt-1.5 truncate"
+            title={value}
+            style={{
+              color: "rgba(220,228,238,0.9)",
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: 1.35,
+            }}
+          >
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SectionLabel({
+  children,
+  accent = false,
+}: {
+  children: React.ReactNode;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className="uppercase"
+      style={{
+        color: accent ? "rgba(205,225,255,0.9)" : "rgba(148,163,184,0.72)",
+        fontSize: 10,
+        fontWeight: 850,
+        letterSpacing: "0.12em",
+        lineHeight: 1,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -90,6 +165,21 @@ function SourceItemDetailModal({
   });
 
   const modalVisible = animationState === "open";
+  const modalTransform = modalVisible ? "scale(1)" : "scale(0.98)";
+  const metaItems: Array<[string, string | undefined]> = [
+    ["Source", item.sourceName],
+    ["Source ID", item.sourceId],
+    ["Domain", labelFor(item.primaryDomain)],
+    ["Published", formatAge(item.publishedAt)],
+    ["Date (UTC)", formatPublishedFull(item.publishedAt)],
+    ["Collection", labelFor(item.collectionMethod)],
+    ["Source Basis", labelFor(item.sourceBasis)],
+    ["Verification", labelFor(item.verificationStatus)],
+    ["Marker", labelFor(item.markerEligibility)],
+    ["Geo Basis", item.geoBasis?.label],
+    ["Geo Method", item.geoBasis?.resolutionMethod ? labelFor(item.geoBasis.resolutionMethod) : undefined],
+    ["Geo Evidence", item.geoBasis?.evidence?.join("; ")],
+  ];
 
   return createPortal(
     <div
@@ -113,10 +203,12 @@ function SourceItemDetailModal({
         role="dialog"
         style={{
           gridColumn: 2,
-          width: "min(560px, 100%)",
+          width: "min(540px, 100%)",
+          height: "min(560px, calc(100% - 48px))",
           maxHeight: "min(560px, calc(100% - 48px))",
           opacity: modalVisible ? 1 : 0,
-          transform: modalVisible ? "scale(1)" : "scale(0.98)",
+          transform: modalTransform,
+          transformOrigin: "50% 50%",
           transition: `opacity ${MODAL_ANIMATION_MS}ms ease, transform ${MODAL_ANIMATION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
           overflow: "hidden",
           borderRadius: 18,
@@ -130,7 +222,14 @@ function SourceItemDetailModal({
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div style={{ height: 3, background: "#60a5fa", opacity: 0.95 }} />
-        <div style={{ maxHeight: "557px", overflowY: "auto", padding: "18px 20px 20px" }}>
+        <div
+          style={{
+            height: "calc(100% - 3px)",
+            maxHeight: "calc(min(560px, calc(100vh - 48px)) - 3px)",
+            overflowY: "auto",
+            padding: "18px 20px 20px",
+          }}
+        >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2">
@@ -155,7 +254,7 @@ function SourceItemDetailModal({
                     lineHeight: 1,
                   }}
                 >
-                  {item.sourceName}
+                  Source Item Detail
                 </span>
               </div>
               <h2
@@ -166,76 +265,137 @@ function SourceItemDetailModal({
                   fontWeight: 850,
                 }}
               >
-                {item.title}
+                  {item.title}
               </h2>
+              <div
+                className="mt-2"
+                style={{
+                  color: "rgba(177,190,205,0.86)",
+                  fontSize: 13,
+                  fontWeight: 650,
+                  lineHeight: 1.25,
+                }}
+              >
+                {item.geoBasis?.label ?? item.sourceName}
+              </div>
             </div>
-            <button
-              aria-label="Close source item detail"
-              type="button"
-              onClick={requestClose}
-              className="flex items-center justify-center"
-              style={{
-                width: 28,
-                minWidth: 28,
-                height: 28,
-                padding: 0,
-                borderRadius: 6,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(190,205,220,0.82)",
-                cursor: "pointer",
-              }}
-            >
-              <X size={14} />
-            </button>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span
+                className="uppercase"
+                style={{
+                  borderRadius: 4,
+                  border: "1px solid rgba(96,165,250,0.34)",
+                  background: "rgba(96,165,250,0.1)",
+                  color: "rgba(205,225,255,0.95)",
+                  padding: "5px 7px",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: "0.08em",
+                  lineHeight: 1,
+                }}
+              >
+                {labelFor(item.sourceBasis)}
+              </span>
+              <button
+                aria-label="Close source item detail"
+                type="button"
+                onClick={requestClose}
+                className="flex items-center justify-center"
+                style={{
+                  width: 28,
+                  minWidth: 28,
+                  height: 28,
+                  padding: 0,
+                  borderRadius: 6,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "rgba(190,205,220,0.82)",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            <ProvenanceChip>{labelFor(item.primaryDomain)}</ProvenanceChip>
-            <ProvenanceChip>{labelFor(item.sourceBasis)}</ProvenanceChip>
-            <ProvenanceChip dimmed>{labelFor(item.collectionMethod)}</ProvenanceChip>
-            <ProvenanceChip dimmed>{labelFor(item.extractionMethod)}</ProvenanceChip>
-          </div>
+          <section
+            style={{
+              marginTop: 18,
+              padding: "12px 0",
+              borderTop: "1px solid rgba(255,255,255,0.09)",
+              borderBottom: "1px solid rgba(255,255,255,0.09)",
+            }}
+          >
+            <SectionLabel>Metadata</SectionLabel>
+            <DetailGrid items={metaItems} />
+          </section>
 
           {item.summary && (
-            <p
-              style={{
-                marginTop: 18,
-                color: "rgba(203,213,225,0.9)",
-                fontSize: 13,
-                fontWeight: 500,
-                lineHeight: 1.65,
-              }}
-            >
-              {item.summary}
-            </p>
+            <section className="mt-5">
+              <SectionLabel accent>Source Summary</SectionLabel>
+              <p
+                style={{
+                  marginTop: 10,
+                  color: "rgba(203,213,225,0.9)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  lineHeight: 1.65,
+                }}
+              >
+                {item.summary}
+              </p>
+            </section>
           )}
 
-          <div className="mt-4 flex flex-wrap gap-1.5">
+          <section
+            style={{
+              marginTop: 18,
+              paddingTop: 14,
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+            }}
+          >
+            <ProvenanceChip>{labelFor(item.primaryDomain)}</ProvenanceChip>
+            <ProvenanceChip>{labelFor(item.extractionMethod)}</ProvenanceChip>
+            <ProvenanceChip dimmed>{labelFor(item.collectionMethod)}</ProvenanceChip>
             {item.tags.map((tag) => (
               <ProvenanceChip key={tag} dimmed>
                 {tag}
               </ProvenanceChip>
             ))}
-          </div>
+          </section>
 
-          {item.url && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-5 inline-flex items-center gap-1.5"
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: "rgba(96,165,250,0.82)",
-                textDecoration: "none",
-              }}
-            >
-              <ExternalLink size={12} />
-              Open original source
-            </a>
-          )}
+          <section
+            style={{
+              marginTop: 14,
+              paddingTop: 14,
+              borderTop: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            {item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "rgba(96,165,250,0.8)",
+                  textDecoration: "none",
+                }}
+              >
+                <ExternalLink size={12} />
+                Open original source article
+              </a>
+            ) : (
+              <span style={{ fontSize: 11, color: "rgba(70,70,70,0.9)" }}>
+                No source URL available.
+              </span>
+            )}
+          </section>
         </div>
       </div>
     </div>,

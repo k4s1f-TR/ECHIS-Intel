@@ -22,6 +22,7 @@ export const SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS = [
   "worldnews-geopolitical",
   "freenews-geopolitical",
   "finlight-geopolitical",
+  "gdelt-geopolitical",
   "reliefweb-crises",
   "guardian-world",
   "trt-haber-dunya",
