@@ -3,99 +3,18 @@ import type {
   SourceDefinition,
 } from "@/data/sources/sourceTypes";
 
-const FETCH_TIMEOUT_MS = 12_000;
+const FETCH_TIMEOUT_MS = 20_000;
 const MAX_TITLE_LENGTH = 300;
 
-// ---------------------------------------------------------------------------
-// Category-based query system
-// ---------------------------------------------------------------------------
-
-interface GdeltCategory {
-  id: string;
-  label: string;
-  query: string;
-  maxRecords: number;
-}
-
-const GDELT_CATEGORIES: GdeltCategory[] = [
-  {
-    id: "war_conflict",
-    label: "War & Conflict",
-    maxRecords: 25,
-    query: [
-      "war", "warfare", "armed conflict", "battle", "combat",
-      "airstrike", "air strike", "bombing", "bombardment", "shelling",
-      "artillery", "rocket attack", "missile strike", "drone strike",
-      "casualties", "death toll", "killed in action",
-      "offensive", "counteroffensive", "frontline",
-      "siege", "occupation", "invasion", "incursion",
-      "clashes", "skirmish", "escalation",
-      "ceasefire violation", "truce",
-      "insurgency", "insurgent", "militia", "rebel", "guerrilla",
-      "terrorist attack", "suicide bombing",
-      "hostage", "kidnapping",
-      "genocide", "ethnic cleansing", "war crime", "atrocity", "massacre",
-      "chemical weapon", "nuclear threat",
-    ].map((t) => `"${t}"`).join(" OR "),
-  },
-  {
-    id: "diplomacy",
-    label: "Diplomacy",
-    maxRecords: 20,
-    query: [
-      "diplomacy", "diplomatic", "foreign minister", "foreign affairs",
-      "foreign secretary", "secretary of state",
-      "ambassador", "embassy", "consulate",
-      "summit", "bilateral talks", "multilateral",
-      "peace talks", "peace negotiations", "peace process", "peace agreement",
-      "treaty", "accord", "pact",
-      "diplomatic relations", "diplomatic crisis",
-      "expel diplomat", "recall ambassador",
-      "state visit", "official visit",
-      "UN General Assembly", "UN Security Council",
-      "resolution", "veto",
-      "foreign policy", "international relations",
-      "mediation", "envoy", "special envoy",
-      "normalization", "rapprochement",
-    ].map((t) => `"${t}"`).join(" OR "),
-  },
-  {
-    id: "defense_military",
-    label: "Defense & Military",
-    maxRecords: 15,
-    query: [
-      "defense ministry", "ministry of defense", "armed forces",
-      "military exercise", "joint exercise", "war games", "military drill",
-      "arms deal", "arms sale", "weapons transfer", "military aid",
-      "defense budget", "defense spending",
-      "military base", "aircraft carrier", "fighter jet",
-      "submarine", "warship", "destroyer",
-      "missile defense", "air defense",
-      "NATO exercise", "military alliance",
-      "conscription", "mobilization",
-      "military coup", "martial law",
-      "arms embargo", "military buildup",
-      "defense pact", "troops deployment",
-    ].map((t) => `"${t}"`).join(" OR "),
-  },
-  {
-    id: "intel_security",
-    label: "Intelligence & Security",
-    maxRecords: 15,
-    query: [
-      "intelligence agency", "espionage", "spy",
-      "counterintelligence", "surveillance",
-      "cyber attack", "cyber warfare", "cyberattack", "hacking", "state-sponsored",
-      "ransomware", "classified", "leak", "whistleblower",
-      "covert operation", "clandestine",
-      "reconnaissance", "drone surveillance", "satellite imagery",
-      "sanctions evasion", "terror financing",
-      "nuclear program", "ballistic missile", "enrichment",
-      "WMD", "chemical weapons", "IAEA", "nonproliferation",
-      "Mossad", "CIA", "MI6", "FSB", "ISI",
-    ].map((t) => `"${t}"`).join(" OR "),
-  },
-];
+const GDELT_API_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
+const GDELT_HTTP_FALLBACK_BASE_URL = "http://api.gdeltproject.org/api/v2/doc/doc";
+const GDELT_CATEGORY_LABEL = "Geopolitical Events";
+const GDELT_QUERY =
+  "war OR conflict OR ceasefire OR airstrike OR offensive OR invasion OR " +
+  "diplomacy OR sanctions OR summit OR treaty OR negotiations OR ambassador OR " +
+  "envoy OR military OR troops OR defense OR weapons OR NATO OR mobilization OR " +
+  "coup OR warship OR nuclear OR ballistic OR Ukraine OR Russia OR Iran OR " +
+  "Israel OR Gaza OR Lebanon OR Taiwan OR China";
 
 // ---------------------------------------------------------------------------
 // Country lookup tables
@@ -281,65 +200,121 @@ export function buildGdeltUrl(
   maxRecords = 25,
 ): string {
   const params = new URLSearchParams({
-    query: `(${queryString})`,
+    query: queryString,
     mode: "ArtList",
     format: "json",
     maxrecords: String(Math.min(maxRecords, 250)),
     timespan: timespan,
     sort: "DateDesc",
   });
-  return `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
+  return `${GDELT_API_BASE_URL}?${params.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
-// Main fetch function — parallel category queries
+// Main fetch function
 // ---------------------------------------------------------------------------
+
+function buildGdeltHttpFallbackUrl(
+  queryString: string,
+  timespan = "24h",
+  maxRecords = 25,
+): string {
+  return buildGdeltUrl(queryString, timespan, maxRecords).replace(
+    GDELT_API_BASE_URL,
+    GDELT_HTTP_FALLBACK_BASE_URL,
+  );
+}
+
+function isTlsFetchFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const cause = error.cause as { code?: unknown; message?: unknown } | undefined;
+  const causeCode = typeof cause?.code === "string" ? cause.code : "";
+  const causeMessage = typeof cause?.message === "string" ? cause.message : "";
+  return (
+    causeCode === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+    causeCode === "SELF_SIGNED_CERT_IN_CHAIN" ||
+    causeMessage.includes("certificate")
+  );
+}
+
+function sourceFetchError(error: unknown): Error {
+  if (error instanceof Error) {
+    const cause = error.cause as { code?: unknown } | undefined;
+    const causeCode = typeof cause?.code === "string" ? cause.code : "";
+    if (causeCode === "EACCES") return new Error("network_access_denied");
+    if (causeCode === "ETIMEDOUT") return new Error("timeout");
+    if (causeCode === "ECONNRESET") return new Error("network_connection_reset");
+    if (isTlsFetchFailure(error)) return new Error("tls_certificate_error");
+    if (error.message === "fetch failed") return new Error("network_fetch_failed");
+    return error;
+  }
+  return new Error("network_fetch_failed");
+}
+
+async function fetchGdeltApi(
+  url: string,
+  timeoutMs: number,
+): Promise<GdeltApiResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "TaipanMonitor/1.0",
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      const detail = text.trim().replace(/\s+/g, " ").slice(0, 160);
+      throw new Error(
+        `upstream_${response.status}${detail ? `: ${detail}` : ""}`,
+      );
+    }
+
+    try {
+      return JSON.parse(text) as GdeltApiResponse;
+    } catch {
+      throw new Error("parse_failed");
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function fetchGdeltArticles(
   source: SourceDefinition,
   timespan = "24h",
 ): Promise<NormalizedSourceItem[]> {
-  // Fetch all categories in parallel
-  const categoryResults = await Promise.allSettled(
-    GDELT_CATEGORIES.map(async (cat) => {
-      const url = buildGdeltUrl(cat.query, timespan, cat.maxRecords);
+  const maxRecords = 50;
+  const httpsUrl = buildGdeltUrl(GDELT_QUERY, timespan, maxRecords);
+  let data: GdeltApiResponse;
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    data = await fetchGdeltApi(httpsUrl, FETCH_TIMEOUT_MS);
+  } catch (error) {
+    if (!isTlsFetchFailure(error)) throw sourceFetchError(error);
+    try {
+      data = await fetchGdeltApi(
+        buildGdeltHttpFallbackUrl(GDELT_QUERY, timespan, maxRecords),
+        FETCH_TIMEOUT_MS,
+      );
+    } catch (fallbackError) {
+      throw sourceFetchError(fallbackError);
+    }
+  }
 
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "TaipanMonitor/1.0",
-          },
-          signal: controller.signal,
-          cache: "no-store",
-        });
-        if (!response.ok) return [];
-        const data: GdeltApiResponse = await response.json();
-        return (data.articles ?? []).map((article) => ({
-          ...article,
-          _category: cat.label,
-        }));
-      } finally {
-        clearTimeout(timer);
-      }
-    }),
-  );
-
-  // Flatten and deduplicate by URL
   const seen = new Set<string>();
   const allArticles: (GdeltArticle & { _category: string })[] = [];
-  for (const result of categoryResults) {
-    if (result.status === "fulfilled") {
-      for (const article of result.value) {
-        if (article.url && !seen.has(article.url)) {
-          seen.add(article.url);
-          allArticles.push(article);
-        }
-      }
+  for (const article of data.articles ?? []) {
+    if (article.url && !seen.has(article.url)) {
+      seen.add(article.url);
+      allArticles.push({ ...article, _category: GDELT_CATEGORY_LABEL });
     }
   }
 
@@ -353,8 +328,14 @@ export async function fetchGdeltArticles(
     const publishedAt = parseGdeltDate(article.seendate);
     const fipsCode = (article.sourcecountry || "").toUpperCase();
     const countryName = FIPS_TO_COUNTRY[fipsCode];
-    const relatedCountries = countryName ? [countryName] : [];
     const coords = FIPS_TO_COORDS[fipsCode];
+    // relatedCountries intentionally left empty: GDELT's `sourcecountry` field
+    // reflects the news outlet's country, NOT the article's subject country.
+    // Populating relatedCountries from it would cause the rssMarkerAdapter
+    // fallback to place markers at the wrong location (e.g. US marker for a
+    // Ukraine story covered by a US outlet).  Title-text matching is relied
+    // on exclusively for GDELT item_location markers.
+    const relatedCountries: string[] = [];
 
     items.push({
       id: `${source.id}::${article.url}`,

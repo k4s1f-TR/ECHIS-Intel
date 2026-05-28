@@ -247,6 +247,45 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "tayvan",  // Tayvan → Taiwan
     ],
   },
+  {
+    name: "Japan",
+    lat: 36.2,
+    lng: 138.3,
+    aliases: [
+      // English
+      "japan", "japanese", "tokyo", "osaka", "kishida", "fumio kishida",
+      // Turkish
+      "japonya", "japon",
+    ],
+  },
+  {
+    name: "South Korea",
+    lat: 35.9,
+    lng: 127.8,
+    aliases: [
+      // English
+      "south korea", "south korean", "seoul", "busan", "yoon suk", "yoon",
+      // Turkish
+      "guney kore", "seul",
+    ],
+  },
+  // ── European institutions ────────────────────────────────────────────────
+  // Placed before the Western-powers block so NATO / EU stories resolve to
+  // Brussels rather than to a member-state capital when only the institution
+  // name is mentioned in the title.
+  {
+    name: "Brussels / NATO",
+    lat: 50.85,
+    lng: 4.35,
+    aliases: [
+      // NATO
+      "nato", "stoltenberg", "jens stoltenberg", "mark rutte",
+      // EU institutions
+      "european commission", "european council",
+      "eu summit", "eu sanctions",
+      "brussels",
+    ],
+  },
   // ── Western powers ──────────────────────────────────────────────────────
   {
     name: "United States",
@@ -340,6 +379,18 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "north korea", "north korean", "pyongyang", "kim jong",
       // Turkish
       "kuzey kore",
+    ],
+  },
+  {
+    name: "Myanmar",
+    lat: 21.9,
+    lng: 95.9,
+    aliases: [
+      // English
+      "myanmar", "burma", "burmese", "naypyidaw", "yangon", "tatmadaw",
+      "min aung hlaing",
+      // Turkish
+      "birma",
     ],
   },
   // ── Europe / Caucasus ────────────────────────────────────────────────────
@@ -490,6 +541,15 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "congo", "congolese", "kinshasa", "drc",
     ],
   },
+  // ── Americas ──────────────────────────────────────────────────────────────
+  {
+    name: "Venezuela",
+    lat: 6.4,
+    lng: -66.6,
+    aliases: [
+      "venezuela", "venezuelan", "caracas", "maduro", "nicolas maduro",
+    ],
+  },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -550,7 +610,7 @@ const COUNTRY_FALLBACK_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "United States": ["usa", "us"],
   "United Kingdom": ["uk", "great britain"],
   UAE: ["united arab emirates"],
-  "TÃ¼rkiye": ["turkiye", "turkey"],
+  "Türkiye": ["turkiye", "turkey"],
 };
 
 const LOCATION_BY_COUNTRY_FALLBACK = new Map<string, (typeof NORMALIZED_DICTIONARY)[number]>();

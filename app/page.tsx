@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { RssPreviewProvider } from "@/components/events/RssPreviewStore";
+import { SourceIntelligenceProvider } from "@/components/source-intelligence/SourceIntelligenceProvider";
 
 export default function Home() {
   return (
-    <RssPreviewProvider>
+    <SourceIntelligenceProvider>
       <AppShell />
-    </RssPreviewProvider>
+    </SourceIntelligenceProvider>
   );
 }

@@ -12,9 +12,8 @@ import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard"
 import { MapControls } from "@/components/map/MapControls";
 import { MarkerInfoPopup } from "@/components/map/MarkerInfoPopup";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
-import { RssGlobalFeedPanel } from "@/components/events/RssGlobalFeedPanel";
-import { useRssPreviewItems } from "@/components/events/useRssPreviewItems";
-import { rssItemsToMarkers, type RssMarkerFeature } from "@/data/sources/rssMarkerAdapter";
+import { SourceGlobalFeedPanel } from "@/components/source-intelligence/SourceGlobalFeedPanel";
+import { useSourceIntelligenceItems } from "@/components/source-intelligence/useSourceIntelligenceItems";
 import { EventDetailModal } from "@/components/events/EventDetailModal";
 import { BookmarksView } from "@/components/events/BookmarksView";
 import { useBookmarks } from "@/components/events/useBookmarks";
@@ -52,33 +51,28 @@ export function AppShell() {
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
   const [signalDetailOpen, setSignalDetailOpen] = useState(false);
-  // Single source of truth for the active RSS item across feed, marker popup,
+  // Single source of truth for the active source item across feed, marker popup,
   // and pager.  All three UI surfaces read from / write to this one value so
   // they can never disagree.
-  const [selectedRssItemId, setSelectedRssItemId] = useState<string | null>(null);
+  const [selectedSourceItemId, setSelectedSourceItemId] = useState<string | null>(null);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
 
-  // RSS preview items — same data that drives the right-side feed list.
-  // Used here to produce globe markers without a second network fetch.
-  const { items: rssItems } = useRssPreviewItems();
-  const rssMarkers = useMemo<RssMarkerFeature[]>(
-    () => rssItemsToMarkers(rssItems),
-    [rssItems],
-  );
+  // Same accepted source-intelligence candidates drive the feed and map pins.
+  const { markers: sourceMarkers } = useSourceIntelligenceItems();
 
-  // O(1) lookup: RSS item id → { markerId, itemIndex }.
+  // O(1) lookup: source item id -> { markerId, itemIndex }.
   // Used by the feed-click handler to find the correct marker and item position
-  // without scanning the rssMarkers array on every click.
-  const rssItemKeyToMarker = useMemo(() => {
+  // without scanning the sourceMarkers array on every click.
+  const sourceItemKeyToMarker = useMemo(() => {
     const map = new Map<string, { markerId: string; itemIndex: number }>();
-    for (const m of rssMarkers) {
+    for (const m of sourceMarkers) {
       m.items.forEach((item, idx) => {
         map.set(item.id, { markerId: m.id, itemIndex: idx });
       });
     }
     return map;
-  }, [rssMarkers]);
+  }, [sourceMarkers]);
 
   // Stable refs so the focus effects below only re-run when the selected ID
   // changes, not when the rail mode changes (avoids spurious camera jumps
@@ -157,42 +151,42 @@ export function AppShell() {
     [displayedEvents, markerPopup],
   );
 
-  // RSS marker popup — used when the clicked marker belongs to an RSS item
-  // rather than a mock event (markerPopupEvent will be null in that case).
-  const markerPopupRssMarker = useMemo(
+  // Source marker popup — used when the clicked marker belongs to a source
+  // intelligence item rather than a mock event.
+  const markerPopupSourceMarker = useMemo(
     () =>
       markerPopup?.kind === "global" && markerPopupEvent === null
-        ? (rssMarkers.find((m) => m.id === markerPopup.id) ?? null)
+        ? (sourceMarkers.find((m) => m.id === markerPopup.id) ?? null)
         : null,
-    [markerPopup, markerPopupEvent, rssMarkers],
+    [markerPopup, markerPopupEvent, sourceMarkers],
   );
-  // Derive the pager index from selectedRssItemId so the feed highlight and
+  // Derive the pager index from selectedSourceItemId so the feed highlight and
   // the popup "REPORT XX / NN" label always agree.  Falls back to 0 when the
   // selected item is not part of this marker (e.g. a no-location item was
   // selected after the popup was already open).
-  const markerPopupRssItemIndex = useMemo(() => {
-    if (!markerPopupRssMarker || !selectedRssItemId) return 0;
-    const idx = markerPopupRssMarker.items.findIndex(
-      (it) => it.id === selectedRssItemId,
+  const markerPopupSourceItemIndex = useMemo(() => {
+    if (!markerPopupSourceMarker || !selectedSourceItemId) return 0;
+    const idx = markerPopupSourceMarker.items.findIndex(
+      (it) => it.id === selectedSourceItemId,
     );
     return idx >= 0 ? idx : 0;
-  }, [markerPopupRssMarker, selectedRssItemId]);
+  }, [markerPopupSourceMarker, selectedSourceItemId]);
 
-  const markerPopupRssItem = useMemo(
+  const markerPopupSourceItem = useMemo(
     () =>
-      markerPopupRssMarker
-        ? (markerPopupRssMarker.items[markerPopupRssItemIndex] ?? null)
+      markerPopupSourceMarker
+        ? (markerPopupSourceMarker.items[markerPopupSourceItemIndex] ?? null)
         : null,
-    [markerPopupRssMarker, markerPopupRssItemIndex],
+    [markerPopupSourceMarker, markerPopupSourceItemIndex],
   );
 
-  // Global View markers — RSS-derived only.
+  // Global View markers — source-intelligence candidates only.
   // Mock event markers are not shown in Global View; the globe renders only
-  // items that have a deterministic location match in the RSS preview feed.
+  // items that have a deterministic location match in the source pipeline.
   // SOCMINT markers are untouched (separate signalsMarkers array below).
   const globalMarkers = useMemo<MarkerFeature[]>(
-    () => rssMarkers,
-    [rssMarkers],
+    () => sourceMarkers,
+    [sourceMarkers],
   );
 
   const signalsMarkers = useMemo<MarkerFeature[]>(
@@ -340,17 +334,17 @@ export function AppShell() {
     setSelectedId(id);
     setEventDetailOpen(false);
     setMarkerPopup({ kind: "global", id });
-    // For RSS markers: default to the first item unless the currently selected
+    // For source markers: default to the first item unless the currently selected
     // item already belongs to this marker (e.g. user re-clicks the same pin).
-    const rssMarker = rssMarkers.find((m) => m.id === id);
-    if (rssMarker) {
-      const currentBelongs = rssMarker.items.some(
-        (it) => it.id === selectedRssItemId,
+    const sourceMarker = sourceMarkers.find((m) => m.id === id);
+    if (sourceMarker) {
+      const currentBelongs = sourceMarker.items.some(
+        (it) => it.id === selectedSourceItemId,
       );
       if (!currentBelongs) {
-        setSelectedRssItemId(rssMarker.items[0]?.id ?? null);
+        setSelectedSourceItemId(sourceMarker.items[0]?.id ?? null);
       }
-      globeMapRef.current?.focusMarker(rssMarker.lng, rssMarker.lat);
+      globeMapRef.current?.focusMarker(sourceMarker.lng, sourceMarker.lat);
     }
   }
 
@@ -363,7 +357,7 @@ export function AppShell() {
   function handleMarkerPopupClose() {
     if (markerPopup?.kind === "global") {
       setSelectedId(null);
-      setSelectedRssItemId(null);
+      setSelectedSourceItemId(null);
     }
     if (markerPopup?.kind === "signals") {
       setSelectedSignalId(null);
@@ -392,12 +386,12 @@ export function AppShell() {
         ) ?? null
       );
     }
-    // RSS marker: use adapter-resolved coordinates directly.
-    if (markerPopup?.kind === "global" && markerPopupRssMarker) {
+    // Source marker: use pipeline-resolved coordinates directly.
+    if (markerPopup?.kind === "global" && markerPopupSourceMarker) {
       return (
         globeMapRef.current?.projectMarker(
-          markerPopupRssMarker.lng,
-          markerPopupRssMarker.lat,
+          markerPopupSourceMarker.lng,
+          markerPopupSourceMarker.lat,
         ) ?? null
       );
     }
@@ -410,7 +404,7 @@ export function AppShell() {
       );
     }
     return null;
-  }, [markerPopup, markerPopupEvent, markerPopupRssMarker, markerPopupSignal]);
+  }, [markerPopup, markerPopupEvent, markerPopupSourceMarker, markerPopupSignal]);
 
   return (
     <div
@@ -522,16 +516,16 @@ export function AppShell() {
               }}
             >
               {activeMapRailMode === "global" && (
-                <RssGlobalFeedPanel
-                  selectedMarkerId={selectedRssItemId}
+                <SourceGlobalFeedPanel
+                  selectedItemId={selectedSourceItemId}
                   onItemSelect={(itemId) => {
-                    const entry = rssItemKeyToMarker.get(itemId);
+                    const entry = sourceItemKeyToMarker.get(itemId);
                     if (entry) {
                       // Item has a deterministic location — sync popup + globe.
-                      // Set selectedRssItemId first so the derived index is
+                      // Set selectedSourceItemId first so the derived index is
                       // already correct when the popup re-renders.
-                      setSelectedRssItemId(itemId);
-                      const grouped = rssMarkers.find(
+                      setSelectedSourceItemId(itemId);
+                      const grouped = sourceMarkers.find(
                         (m) => m.id === entry.markerId,
                       );
                       if (grouped) {
@@ -546,7 +540,7 @@ export function AppShell() {
                     } else {
                       // No location match — update feed highlight only;
                       // do not open or change the marker popup.
-                      setSelectedRssItemId(itemId);
+                      setSelectedSourceItemId(itemId);
                     }
                   }}
                 />
@@ -570,27 +564,27 @@ export function AppShell() {
                 onClose={handleMarkerPopupClose}
               />
             )}
-            {activeMapRailMode === "global" && markerPopupRssItem && markerPopupRssMarker && (
+            {activeMapRailMode === "global" && markerPopupSourceItem && markerPopupSourceMarker && (
               <MarkerInfoPopup
-                title={markerPopupRssItem.title}
-                location={markerPopupRssMarker.locationName}
-                summary={markerPopupRssItem.summary}
-                source={markerPopupRssItem.sourceName}
-                time={markerPopupRssItem.publishedAt}
+                title={markerPopupSourceItem.title}
+                location={markerPopupSourceMarker.locationName}
+                summary={markerPopupSourceItem.summary ?? ""}
+                source={markerPopupSourceItem.sourceName}
+                time={markerPopupSourceItem.publishedAt}
                 accent="#60a5fa"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
-                itemIndex={markerPopupRssItemIndex}
-                itemCount={markerPopupRssMarker.items.length}
+                itemIndex={markerPopupSourceItemIndex}
+                itemCount={markerPopupSourceMarker.items.length}
                 onPrev={() => {
                   const prev =
-                    markerPopupRssMarker.items[markerPopupRssItemIndex - 1];
-                  if (prev) setSelectedRssItemId(prev.id);
+                    markerPopupSourceMarker.items[markerPopupSourceItemIndex - 1];
+                  if (prev) setSelectedSourceItemId(prev.id);
                 }}
                 onNext={() => {
                   const next =
-                    markerPopupRssMarker.items[markerPopupRssItemIndex + 1];
-                  if (next) setSelectedRssItemId(next.id);
+                    markerPopupSourceMarker.items[markerPopupSourceItemIndex + 1];
+                  if (next) setSelectedSourceItemId(next.id);
                 }}
               />
             )}

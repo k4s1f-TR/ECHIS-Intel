@@ -1,42 +1,16 @@
 "use client";
 
+import { useMemo } from "react";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+  SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS,
+} from "@/data/source-intelligence/sourceRegistry";
+import type { NormalizedSourceItem as SourceIntelligenceItem } from "@/data/source-intelligence/sourceIntelligenceTypes";
 import type { NormalizedSourceItem } from "@/data/sources/sourceTypes";
-import { shouldExcludeFromSourceFeed } from "@/lib/sources/sourceFeedFilter";
+import { useSourceIntelligenceStore } from "@/components/source-intelligence/SourceIntelligenceProvider";
 
 export const RSS_PREVIEW_DEFAULT_SOURCE_IDS = [
-  "gdelt-geopolitical",
-  "reliefweb-crises",
-  "guardian-world",
-  "trt-haber-dunya",
-  "aljazeera-middle-east",
-  "bbc-turkce",
-  "dw-turkce",
-  "crisis-group-crisiswatch",
+  ...SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS,
 ] as const;
-
-const SOURCE_FEED_CACHE_KEY = "taipanmonitor-source-feed-cache-v1";
-const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-
-interface SourceFeedApiResponse {
-  sourceId: string;
-  items?: NormalizedSourceItem[];
-  collectedAt?: string;
-  error?: string;
-}
-
-interface StoredSourceFeedCache {
-  itemsBySourceId: Record<string, NormalizedSourceItem[]>;
-  collectedAtBySourceId: Record<string, string>;
-}
 
 export interface RssPreviewStore {
   itemsBySourceId: Record<string, NormalizedSourceItem[]>;
@@ -47,174 +21,122 @@ export interface RssPreviewStore {
   previewSource: (sourceId: string) => Promise<void>;
 }
 
-const RssPreviewContext = createContext<RssPreviewStore | null>(null);
-
-function readStoredCache(): StoredSourceFeedCache | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.localStorage.getItem(SOURCE_FEED_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredSourceFeedCache>;
-    return {
-      itemsBySourceId:
-        parsed.itemsBySourceId && typeof parsed.itemsBySourceId === "object"
-          ? parsed.itemsBySourceId
-          : {},
-      collectedAtBySourceId:
-        parsed.collectedAtBySourceId && typeof parsed.collectedAtBySourceId === "object"
-          ? parsed.collectedAtBySourceId
-          : {},
-    };
-  } catch {
-    return null;
+function legacySourceType(item: SourceIntelligenceItem): NormalizedSourceItem["sourceType"] {
+  if (item.collectionMethod === "rss") return "rss";
+  if (
+    item.collectionMethod === "api" ||
+    item.collectionMethod === "aggregator_api" ||
+    item.collectionMethod === "official_page"
+  ) {
+    return "api";
   }
+  if (item.collectionMethod === "script_import") return "manual";
+  return "static";
+}
+
+function legacyVerificationStatus(
+  item: SourceIntelligenceItem,
+): NormalizedSourceItem["verificationStatus"] {
+  if (item.verificationStatus === "official") return "official_statement";
+  if (item.verificationStatus === "cross_source_matched") {
+    return "multi_source_reference";
+  }
+  return "source_reported";
+}
+
+function legacySourceBasis(
+  item: SourceIntelligenceItem,
+): NormalizedSourceItem["sourceBasis"] {
+  if (item.sourceBasis === "official_source") return "official_source";
+  if (item.sourceBasis === "multi_source") return "multiple_public_sources";
+  if (item.sourceBasis === "dataset_record") return "manual_sample";
+  return "single_public_source";
+}
+
+function legacyExtractionMethod(
+  item: SourceIntelligenceItem,
+): NormalizedSourceItem["extractionMethod"] {
+  if (item.extractionMethod === "rss_summary") return "rss_summary";
+  if (item.extractionMethod === "api_payload") return "api_result";
+  if (item.extractionMethod === "dataset_record") return "manual_sample";
+  if (item.extractionMethod === "script_import") return "manual_sample";
+  return "keyword_match";
+}
+
+function toLegacyItem(item: SourceIntelligenceItem): NormalizedSourceItem {
+  return {
+    id: item.id,
+    sourceId: item.sourceId,
+    sourceName: item.sourceName,
+    title: item.title,
+    summary: item.summary ?? "",
+    url: item.url ?? "",
+    publishedAt: item.publishedAt ?? "",
+    collectedAt: item.collectedAt ?? "",
+    sourceType: legacySourceType(item),
+    sourceStatus:
+      item.sourceType === "official_government"
+        ? "official_government"
+        : item.sourceType === "conflict_dataset"
+          ? "reference_dataset"
+          : "public_news_source",
+    verificationStatus: legacyVerificationStatus(item),
+    sourceBasis: legacySourceBasis(item),
+    extractionMethod: legacyExtractionMethod(item),
+    sourceLanguage: item.language as NormalizedSourceItem["sourceLanguage"],
+    relatedCountries: item.mentionedCountries ?? [],
+    relatedRegions: [],
+    category: item.legacyCategory ?? "Source Intelligence",
+    isSample: false,
+    sourceProfile:
+      item.sourceType === "official_government"
+        ? "official_diplomatic"
+        : item.sourceType === "crisis_humanitarian" ||
+            item.sourceType === "conflict_dataset"
+          ? "conflict_crisis"
+          : "general_news",
+    markerLocationStrategy: item.locationHint
+      ? "item_location"
+      : item.sourceType === "official_government"
+        ? "source_location"
+        : "item_location",
+    sourceLocationForMarker: item.locationHint
+      ? {
+          lat: item.locationHint.latitude,
+          lng: item.locationHint.longitude,
+          locationName: item.locationHint.label,
+        }
+      : undefined,
+  };
 }
 
 export function RssPreviewProvider({ children }: { children: React.ReactNode }) {
-  const [itemsBySourceId, setItemsBySourceId] = useState<
-    Record<string, NormalizedSourceItem[]>
-  >({});
-  const [collectedAtBySourceId, setCollectedAtBySourceId] = useState<
-    Record<string, string>
-  >({});
-  const [loadingBySourceId, setLoadingBySourceId] = useState<
-    Record<string, boolean>
-  >({});
-  const [errorBySourceId, setErrorBySourceId] = useState<
-    Record<string, string | null>
-  >({});
-
-  const combinedItems = useMemo(() => {
-    const merged = Object.values(itemsBySourceId).flat();
-    merged.sort((a, b) => {
-      if (!a.publishedAt && !b.publishedAt) return 0;
-      if (!a.publishedAt) return 1;
-      if (!b.publishedAt) return -1;
-      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
-    });
-    return merged;
-  }, [itemsBySourceId]);
-
-  const previewSource = useCallback(async (sourceId: string) => {
-    setLoadingBySourceId((prev) => ({ ...prev, [sourceId]: true }));
-    setErrorBySourceId((prev) => ({ ...prev, [sourceId]: null }));
-
-    try {
-      const endpoint = sourceId.startsWith("gdelt-")
-        ? `/api/sources/gdelt`
-        : sourceId.startsWith("guardian-")
-        ? `/api/sources/guardian`
-        : `/api/sources/rss-preview?sourceId=${encodeURIComponent(sourceId)}`;
-
-      const res = await fetch(endpoint, { cache: "no-store" });
-      let data: SourceFeedApiResponse;
-
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(res.ok ? "parse_failed" : `upstream_${res.status}`);
-      }
-
-      if (data.error) throw new Error(data.error);
-
-      const items = Array.isArray(data.items)
-        ? data.items.filter((item) => !shouldExcludeFromSourceFeed(item))
-        : [];
-      setItemsBySourceId((prev) => ({ ...prev, [sourceId]: items }));
-      setCollectedAtBySourceId((prev) => ({
-        ...prev,
-        [sourceId]: data.collectedAt ?? new Date().toISOString(),
-      }));
-    } catch (err) {
-      setErrorBySourceId((prev) => ({
-        ...prev,
-        [sourceId]: err instanceof Error ? err.message : "fetch_error",
-      }));
-    } finally {
-      setLoadingBySourceId((prev) => ({ ...prev, [sourceId]: false }));
-    }
-  }, []);
-
-  const didHydrateRef = useRef(false);
-  useEffect(() => {
-    if (didHydrateRef.current) return;
-    didHydrateRef.current = true;
-
-    const cached = readStoredCache();
-    if (!cached) return;
-
-    setItemsBySourceId(cached.itemsBySourceId);
-    setCollectedAtBySourceId(cached.collectedAtBySourceId);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const payload: StoredSourceFeedCache = {
-      itemsBySourceId,
-      collectedAtBySourceId,
-    };
-
-    try {
-      window.localStorage.setItem(SOURCE_FEED_CACHE_KEY, JSON.stringify(payload));
-    } catch {
-      // Ignore quota/storage failures; runtime state remains authoritative.
-    }
-  }, [itemsBySourceId, collectedAtBySourceId]);
-
-  const didInitRef = useRef(false);
-  useEffect(() => {
-    if (didInitRef.current) return;
-    didInitRef.current = true;
-
-    for (const sourceId of RSS_PREVIEW_DEFAULT_SOURCE_IDS) {
-      void previewSource(sourceId);
-    }
-  }, [previewSource]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      for (const sourceId of RSS_PREVIEW_DEFAULT_SOURCE_IDS) {
-        void previewSource(sourceId);
-      }
-    }, AUTO_REFRESH_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [previewSource]);
-
-  const value = useMemo<RssPreviewStore>(
-    () => ({
-      itemsBySourceId,
-      collectedAtBySourceId,
-      loadingBySourceId,
-      errorBySourceId,
-      combinedItems,
-      previewSource,
-    }),
-    [
-      itemsBySourceId,
-      collectedAtBySourceId,
-      loadingBySourceId,
-      errorBySourceId,
-      combinedItems,
-      previewSource,
-    ],
-  );
-
-  return (
-    <RssPreviewContext.Provider value={value}>
-      {children}
-    </RssPreviewContext.Provider>
-  );
+  return <>{children}</>;
 }
 
 export function useRssPreviewStore(): RssPreviewStore {
-  const ctx = useContext(RssPreviewContext);
-  if (!ctx) {
-    throw new Error(
-      "useRssPreviewStore must be used within a <RssPreviewProvider>.",
-    );
-  }
-  return ctx;
+  const sourceStore = useSourceIntelligenceStore();
+
+  return useMemo(() => {
+    const itemsBySourceId: Record<string, NormalizedSourceItem[]> = {};
+    for (const [sourceId, items] of Object.entries(sourceStore.itemsBySourceId)) {
+      itemsBySourceId[sourceId] = items.map(toLegacyItem);
+    }
+
+    return {
+      itemsBySourceId,
+      collectedAtBySourceId: sourceStore.collectedAtBySourceId,
+      loadingBySourceId: sourceStore.loadingBySourceId,
+      errorBySourceId: sourceStore.errorBySourceId,
+      combinedItems: sourceStore.combinedItems.map(toLegacyItem),
+      previewSource: sourceStore.previewSource,
+    };
+  }, [
+    sourceStore.collectedAtBySourceId,
+    sourceStore.combinedItems,
+    sourceStore.errorBySourceId,
+    sourceStore.itemsBySourceId,
+    sourceStore.loadingBySourceId,
+    sourceStore.previewSource,
+  ]);
 }

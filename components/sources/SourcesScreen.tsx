@@ -1,147 +1,170 @@
 "use client";
 
-import { Clock3, Database, ExternalLink, FlaskConical, Radio, RefreshCw } from "lucide-react";
-import { type ReactNode } from "react";
-import { useRssPreviewStore } from "@/components/events/RssPreviewStore";
-import { mockEvents } from "@/data/mockEvents";
-import { mockSources } from "@/data/mockSources";
-import { candidateSourceDefinitions } from "@/data/sources/sourceDefinitions";
+import {
+  Activity,
+  AlertTriangle,
+  Database,
+  ExternalLink,
+  MapPin,
+  Radio,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useSourceIntelligenceStore } from "@/components/source-intelligence/SourceIntelligenceProvider";
+import { sourceRegistry } from "@/data/source-intelligence/sourceRegistry";
 import type {
-  ExtractionMethod,
-  SourceAccessType,
-  SourceBasis,
-  SourceCandidateStatus,
+  CollectionMethod,
   SourceDefinition,
-  SourceRegionScope,
-  SourceStatus as CandidateSourceStatus,
-  SourceTargetScreen,
-  VerificationStatus as CandidateVerificationStatus,
-} from "@/data/sources/sourceTypes";
-import type { RegionKey } from "@/types/event";
-import type { OsintSourceType, SourceCategory, SourceStatus } from "@/types/source";
+  SourceStatus,
+  SourceType,
+} from "@/data/source-intelligence/sourceIntelligenceTypes";
 
-const STATUS_STYLES: Record<SourceStatus, { color: string; background: string; border: string }> = {
-  ACTIVE: {
-    color: "rgba(74,222,128,0.95)",
-    background: "rgba(22,101,52,0.16)",
+const METHOD_LABELS: Record<CollectionMethod, string> = {
+  rss: "RSS",
+  api: "API Route",
+  aggregator_api: "Aggregator API",
+  official_page: "Official Page",
+  scraping: "Scraping",
+  script_import: "Script Import",
+  dataset: "Dataset",
+};
+
+const TYPE_LABELS: Record<SourceType, string> = {
+  official_government: "Official Government",
+  intergovernmental_org: "Intergovernmental Org",
+  wire_agency: "Wire Agency",
+  regional_news: "Regional News",
+  global_news: "Global News",
+  crisis_humanitarian: "Crisis / Humanitarian",
+  conflict_dataset: "Conflict Dataset",
+  aggregator: "Aggregator",
+  scraped_official_page: "Scraped Official Page",
+  script_import: "Script Import",
+};
+
+const STATUS_LABELS: Record<SourceStatus, string> = {
+  active: "Active",
+  test: "Test",
+  candidate: "Candidate",
+  disabled: "Disabled",
+};
+
+const STATUS_STYLES: Record<
+  SourceStatus,
+  { color: string; background: string; border: string }
+> = {
+  active: {
+    color: "rgba(74,222,128,0.92)",
+    background: "rgba(22,101,52,0.14)",
     border: "rgba(74,222,128,0.22)",
   },
-  INACTIVE: {
-    color: "rgba(148,163,184,0.86)",
-    background: "rgba(51,65,85,0.2)",
-    border: "rgba(148,163,184,0.16)",
-  },
-  PENDING: {
-    color: "rgba(251,191,36,0.95)",
-    background: "rgba(113,63,18,0.2)",
+  test: {
+    color: "rgba(251,191,36,0.94)",
+    background: "rgba(113,63,18,0.17)",
     border: "rgba(251,191,36,0.22)",
   },
-  FUTURE: {
-    color: "rgba(96,165,250,0.95)",
-    background: "rgba(30,64,175,0.18)",
-    border: "rgba(96,165,250,0.22)",
+  candidate: {
+    color: "rgba(147,197,253,0.88)",
+    background: "rgba(30,64,175,0.12)",
+    border: "rgba(96,165,250,0.18)",
+  },
+  disabled: {
+    color: "rgba(148,163,184,0.72)",
+    background: "rgba(51,65,85,0.14)",
+    border: "rgba(148,163,184,0.14)",
   },
 };
 
-const TYPE_LABELS: Record<OsintSourceType, string> = {
-  OFFICIAL: "Official",
-  MEDIA: "Media",
-  SPECIALIST: "Specialist",
-  NGO: "NGO",
-  UNVERIFIED: "Unverified",
-  MARITIME_SOURCE: "Maritime Source",
-  INTEL_SOURCE: "Intel Source",
-  SIGNAL_SOURCE: "Signal Source",
-  OPEN_DATA: "Open Data",
-};
+function labelFor(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
-const CATEGORY_LABELS: Record<SourceCategory, string> = {
-  PUBLIC_NEWS_WIRE: "Public News / Wire",
-  GOVERNMENT_INSTITUTIONAL: "Government & Institutional",
-  THINK_TANK_POLICY: "Think Tank / Policy",
-  CYBER_SECURITY_FEEDS: "Cyber Security Feeds",
-  DEFENSE_INDUSTRY: "Defense Industry",
-  REGIONAL_MONITORING: "Regional Monitoring",
-  SOCIAL_OPEN_WEB_SIGNALS: "Social / Open Web Signals",
-};
+function formatCollectedAt(iso?: string): string {
+  if (!iso) return "Not loaded";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Not loaded";
+  return `${date.toISOString().replace("T", " ").slice(0, 16)} UTC`;
+}
 
-const REGION_LABELS: Record<RegionKey, string> = {
-  "middle-east": "Middle East",
-  europe: "Europe",
-  "asia-pacific": "Asia-Pacific",
-  americas: "Americas",
-};
+function formatCheckTime(collectedAt?: string, requestedAt?: string): string {
+  return formatCollectedAt(collectedAt ?? requestedAt);
+}
 
-const ACCESS_TYPE_LABELS: Record<SourceAccessType, string> = {
-  rss: "RSS",
-  api: "API",
-  static: "Static",
-  manual: "Manual",
-};
+function formatSourceError(error?: string | null): string | null {
+  if (!error) return null;
+  if (error === "guardian_key_not_configured") return "Guardian API key is not configured.";
+  if (error === "missing_feed_url") return "Feed URL is missing.";
+  if (error === "timeout") return "Request timed out.";
+  if (error === "network_access_denied") return "Network access was denied for this source route.";
+  if (error === "network_connection_reset") return "Source connection was reset.";
+  if (error === "network_fetch_failed") return "Source network request failed.";
+  if (error === "tls_certificate_error") return "TLS certificate verification failed for this source.";
+  if (error === "parse_failed") return "Source response could not be parsed.";
+  if (error.startsWith("upstream_")) {
+    const detail = error.slice("upstream_".length);
+    if (detail.startsWith("429")) {
+      return "Source rate limit reached. Wait a few seconds before refreshing again.";
+    }
+    if (detail.includes("approved appname")) {
+      return "ReliefWeb API requires an approved appname; this source now uses the RSS adapter in the active pipeline.";
+    }
+    return `Upstream HTTP ${detail}.`;
+  }
+  return labelFor(error);
+}
 
-const CANDIDATE_STATUS_LABELS: Record<SourceCandidateStatus, string> = {
-  candidate_test: "Operational",
-  review_more: "Review More",
-  later: "Later",
-  rejected: "Rejected",
-};
+function Pill({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "blue" | "green" | "amber";
+}) {
+  const styles = {
+    neutral: {
+      color: "rgba(170,180,194,0.78)",
+      background: "rgba(255,255,255,0.032)",
+      border: "rgba(255,255,255,0.065)",
+    },
+    blue: {
+      color: "rgba(147,197,253,0.86)",
+      background: "rgba(59,130,246,0.08)",
+      border: "rgba(96,165,250,0.18)",
+    },
+    green: {
+      color: "rgba(74,222,128,0.88)",
+      background: "rgba(22,101,52,0.13)",
+      border: "rgba(74,222,128,0.19)",
+    },
+    amber: {
+      color: "rgba(251,191,36,0.9)",
+      background: "rgba(113,63,18,0.14)",
+      border: "rgba(251,191,36,0.2)",
+    },
+  }[tone];
 
-const CANDIDATE_SOURCE_STATUS_LABELS: Record<CandidateSourceStatus, string> = {
-  public_news_source: "Public News Source",
-  established_media: "Established Media",
-  official_government: "Official Government",
-  official_feed: "Official Feed",
-  community_signal: "Community Signal",
-  reference_dataset: "Reference Dataset",
-};
-
-const CANDIDATE_VERIFICATION_LABELS: Record<CandidateVerificationStatus, string> = {
-  source_reported: "Source Reported",
-  official_entry: "Official Entry",
-  official_statement: "Official Statement",
-  multi_source_reference: "Multi-Source Reference",
-  manual_sample: "Manual Sample",
-};
-
-const SOURCE_BASIS_LABELS: Record<SourceBasis, string> = {
-  single_public_source: "Single Public Source",
-  single_official_source: "Single Official Source",
-  official_source: "Official Source",
-  multiple_public_sources: "Multiple Public Sources",
-  manual_sample: "Manual Sample",
-};
-
-const EXTRACTION_METHOD_LABELS: Record<ExtractionMethod, string> = {
-  rss_summary: "RSS Summary",
-  rss_feed: "RSS Feed",
-  official_json: "Official JSON",
-  manual_sample: "Manual Sample",
-  keyword_match: "Keyword Match",
-  api_result: "API Result",
-};
-
-const TARGET_SCREEN_LABELS: Record<SourceTargetScreen, string> = {
-  monitor: "Monitor",
-  intel_watch: "Intel Watch",
-  cyber_news: "Cyber News",
-  defense_industry: "Defense Industry",
-  policy: "Policy",
-  sources: "Sources",
-};
-
-const REGION_SCOPE_LABELS: Record<SourceRegionScope, string> = {
-  global: "Global",
-  north_america: "North America",
-  middle_east: "Middle East",
-  europe: "Europe",
-  asia_pacific: "Asia-Pacific",
-  americas: "Americas",
-  africa: "Africa",
-};
+  return (
+    <span
+      className="inline-flex min-w-0 items-center rounded px-2 py-1 font-semibold uppercase"
+      style={{
+        color: styles.color,
+        background: styles.background,
+        border: `1px solid ${styles.border}`,
+        fontSize: "9px",
+        letterSpacing: "0.08em",
+        lineHeight: 1,
+      }}
+    >
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
 
 function StatusPill({ status }: { status: SourceStatus }) {
   const style = STATUS_STYLES[status];
-
   return (
     <span
       className="inline-flex items-center rounded px-2 py-1 font-semibold uppercase"
@@ -149,637 +172,566 @@ function StatusPill({ status }: { status: SourceStatus }) {
         color: style.color,
         background: style.background,
         border: `1px solid ${style.border}`,
-        fontSize: "10px",
-        letterSpacing: "0.06em",
+        fontSize: "9px",
+        letterSpacing: "0.08em",
         lineHeight: 1,
       }}
     >
-      {status}
+      {STATUS_LABELS[status]}
     </span>
   );
 }
 
-function TextPill({ children }: { children: ReactNode }) {
+function RuntimeStatePill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "blue" | "green" | "amber" | "red" | "neutral";
+}) {
+  const styles = {
+    blue: {
+      color: "rgba(147,197,253,0.88)",
+      background: "rgba(59,130,246,0.09)",
+      border: "rgba(96,165,250,0.2)",
+    },
+    green: {
+      color: "rgba(74,222,128,0.88)",
+      background: "rgba(22,101,52,0.13)",
+      border: "rgba(74,222,128,0.2)",
+    },
+    amber: {
+      color: "rgba(251,191,36,0.9)",
+      background: "rgba(113,63,18,0.14)",
+      border: "rgba(251,191,36,0.22)",
+    },
+    red: {
+      color: "rgba(252,165,165,0.9)",
+      background: "rgba(127,29,29,0.12)",
+      border: "rgba(248,113,113,0.18)",
+    },
+    neutral: {
+      color: "rgba(148,163,184,0.74)",
+      background: "rgba(255,255,255,0.025)",
+      border: "rgba(255,255,255,0.06)",
+    },
+  }[tone];
+
   return (
     <span
-      className="inline-flex items-center rounded px-2 py-1"
+      className="inline-flex items-center rounded px-2 py-1 font-semibold uppercase"
       style={{
-        color: "rgba(170,170,170,0.88)",
-        background: "rgba(255,255,255,0.035)",
-        border: "1px solid rgba(255,255,255,0.055)",
-        fontSize: "10.5px",
+        color: styles.color,
+        background: styles.background,
+        border: `1px solid ${styles.border}`,
+        fontSize: "9px",
+        letterSpacing: "0.08em",
         lineHeight: 1,
       }}
     >
-      {children}
+      {label}
     </span>
   );
 }
 
-function SummaryCard({
+function MetricTile({
+  icon,
   label,
   value,
   tone,
 }: {
+  icon: ReactNode;
   label: string;
-  value: number;
+  value: number | string;
   tone: string;
 }) {
   return (
     <div
-      className="min-w-0 rounded-md px-2.5 py-2"
+      className="min-w-0 rounded-md px-3 py-2.5"
       style={{
-        background: "rgba(14,14,14,0.78)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(13,13,13,0.86)",
+        border: "1px solid rgba(255,255,255,0.065)",
       }}
     >
-      <div className="mb-1 flex items-center gap-1.5">
+      <div className="mb-2 flex items-center gap-2">
         <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{ background: tone, boxShadow: `0 0 6px ${tone}` }}
-        />
+          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded"
+          style={{
+            color: tone,
+            background: "rgba(255,255,255,0.035)",
+            border: "1px solid rgba(255,255,255,0.055)",
+          }}
+        >
+          {icon}
+        </span>
         <span
           className="truncate font-semibold uppercase"
-          style={{ color: "rgba(105,105,105,0.9)", fontSize: "9px", letterSpacing: "0.08em" }}
+          style={{
+            color: "rgba(120,130,145,0.84)",
+            fontSize: "9px",
+            letterSpacing: "0.08em",
+          }}
         >
           {label}
         </span>
       </div>
-      <span className="font-semibold" style={{ color: "rgba(230,230,230,0.94)", fontSize: "18px" }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function formatPreviewDate(iso: string): string {
-  if (!iso) return "Date unavailable";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Date unavailable";
-  return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
-}
-
-/**
- * Maps a structured reason code (returned by the rss-preview API) to a
- * human-readable diagnostic line shown in the Sources panel error state.
- * Falls back to a generic message for unknown codes so new reasons don't
- * silently break the UI.
- */
-function previewErrorMessage(reason: string | null): string {
-  if (!reason) return "Feed unavailable. The source remains registered.";
-  // HTTP status variants: upstream_404, upstream_403, upstream_500 …
-  if (reason.startsWith("upstream_")) {
-    const code = reason.slice("upstream_".length);
-    if (code === "404")
-      return "Feed URL not found (404). The feed path may have moved or been removed.";
-    if (code === "403")
-      return "Feed access denied (403). The source may require authentication or block automated requests.";
-    if (code === "301" || code === "302")
-      return `Feed URL redirects (${code}). The registered URL may be outdated.`;
-    if (code.startsWith("5"))
-      return `Feed server error (${code}). The source may be temporarily unavailable.`;
-    return `Feed server returned HTTP ${code}. The feed URL may be incorrect.`;
-  }
-  // ReliefWeb / HDX WAF checks
-  if (reason.includes("bot activity") || reason.includes("Blocked due to")) {
-    return "Request blocked by ReliefWeb (HDX) bot-protection. This is a server-side IP or User-Agent filter — retrying usually resolves it. If persistent, contact hdx@un.org to whitelist the deployment.";
-  }
-  if (reason.includes("appname") || reason.includes("approved")) {
-    return "ReliefWeb API requires an approved appname. Register 'taipanmonitor' at apidoc.reliefweb.int/parameters#appname — approval is free and typically instant.";
-  }
-  switch (reason) {
-    case "timeout":
-      return "Feed request timed out. The source server may be slow or unreachable from this deployment.";
-    case "missing_feed_url":
-      return "No feed URL is configured for this source.";
-    case "parse_failed":
-      return "Feed content could not be parsed. The URL may return HTML or a non-RSS/Atom document.";
-    case "empty_response":
-      return "Feed returned no content. The URL may be valid but currently empty.";
-    default:
-      return "Feed unavailable. The source remains registered.";
-  }
-}
-
-/**
- * CandidateRssPreview — Sources panel live feed card.
- *
- * Uses the shared RssPreviewStore so a manual refresh updates both the Sources
- * card and the Global View live feed / marker flow in the same operation.
- */
-function CandidateRssPreview({ source }: { source: SourceDefinition }) {
-  const {
-    previewSource,
-    loadingBySourceId,
-    errorBySourceId,
-    itemsBySourceId,
-    collectedAtBySourceId,
-  } = useRssPreviewStore();
-
-  const isLoading = loadingBySourceId[source.id] ?? false;
-  const hasError =
-    (errorBySourceId[source.id] ?? null) !== null && !isLoading;
-  const items = itemsBySourceId[source.id];
-  const hasItems = items !== undefined && items.length > 0;
-  const collectedAt = collectedAtBySourceId[source.id] ?? "";
-  const feedLabel = source.accessType === "api" ? "API Feed" : "RSS Feed";
-
-  // Derive a display status that mirrors the old local PreviewState shape.
-  type DisplayStatus = "idle" | "loading" | "error" | "ready_empty" | "ready";
-  let displayStatus: DisplayStatus = "idle";
-  if (isLoading) displayStatus = "loading";
-  else if (hasError) displayStatus = "error";
-  else if (items !== undefined && !hasItems) displayStatus = "ready_empty";
-  else if (hasItems) displayStatus = "ready";
-
-  return (
-    <div
-      className="mt-3 rounded-[8px]"
-      style={{
-        background: "rgba(255,255,255,0.018)",
-        border: "1px solid rgba(255,255,255,0.05)",
-      }}
-    >
       <div
-        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+        className="truncate font-semibold"
+        style={{ color: "rgba(235,240,245,0.94)", fontSize: "20px", lineHeight: 1 }}
       >
-        <div className="flex items-center gap-2">
-          <Radio size={12} style={{ color: "rgba(147,197,253,0.78)" }} />
-          <span
-            className="font-semibold uppercase"
-            style={{ color: "rgba(140,140,140,0.85)", fontSize: "10px", letterSpacing: "0.09em" }}
-          >
-            {feedLabel}
-          </span>
-          <span
-            className="rounded px-1.5 py-0.5 font-semibold uppercase"
-            style={{
-              color: "rgba(147,197,253,0.85)",
-              background: "rgba(30,64,175,0.14)",
-              border: "1px solid rgba(96,165,250,0.18)",
-              fontSize: "9px",
-              letterSpacing: "0.08em",
-              lineHeight: 1.4,
-            }}
-          >
-            Live Fetch | Local Cache | Map Synced
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => void previewSource(source.id)}
-          disabled={isLoading}
-          className="inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-semibold uppercase transition-colors"
-          style={{
-            color: isLoading ? "rgba(150,150,150,0.7)" : "rgba(215,215,215,0.92)",
-            background: isLoading
-              ? "rgba(255,255,255,0.02)"
-              : "rgba(255,255,255,0.045)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            fontSize: "10px",
-            letterSpacing: "0.08em",
-            cursor: isLoading ? "wait" : "pointer",
-          }}
-        >
-          <RefreshCw
-            size={11}
-            className={isLoading ? "animate-spin" : undefined}
-            style={{ opacity: isLoading ? 0.7 : 0.85 }}
-          />
-          {displayStatus === "ready" ? "Refresh Feed" : "Load Feed"}
-        </button>
-      </div>
-
-      <div className="px-3 py-2.5">
-        {displayStatus === "idle" && (
-          <p style={{ color: "rgba(125,125,125,0.85)", fontSize: "11px", lineHeight: 1.5 }}>
-            On-demand live fetch. Click{" "}
-            <span style={{ color: "rgba(190,190,190,0.92)" }}>Load Feed</span>{" "}
-            to fetch the latest items from this source and sync them into the live feed and map.
-          </p>
-        )}
-
-        {displayStatus === "loading" && (
-          <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
-            Fetching live feed...
-          </p>
-        )}
-
-        {displayStatus === "error" && (
-          <div
-            className="rounded px-2.5 py-2"
-            style={{
-              color: "rgba(248,180,180,0.92)",
-              background: "rgba(127,29,29,0.12)",
-              border: "1px solid rgba(248,113,113,0.18)",
-              fontSize: "11px",
-              lineHeight: 1.5,
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>Feed unavailable.</span>{" "}
-            {previewErrorMessage(errorBySourceId[source.id] ?? null)}
-          </div>
-        )}
-
-        {displayStatus === "ready_empty" && (
-          <p style={{ color: "rgba(150,150,150,0.85)", fontSize: "11px" }}>
-            No items were returned by this source at fetch time.
-          </p>
-        )}
-
-        {displayStatus === "ready" && items && (
-          <>
-            <div
-              className="mb-2 flex flex-wrap items-center gap-2"
-              style={{ color: "rgba(120,120,120,0.85)", fontSize: "10.5px" }}
-            >
-              <span>Items: {items.length}</span>
-              <span>·</span>
-              <span>Collected: {formatPreviewDate(collectedAt)}</span>
-            </div>
-            <ul
-              className="flex flex-col gap-2"
-              style={{
-                maxHeight: "420px",
-                overflowY: "auto",
-                overflowX: "hidden",
-                paddingRight: "4px",
-                scrollbarWidth: "thin",
-                scrollbarColor: "rgba(255,255,255,0.08) transparent",
-              }}
-            >
-              {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded px-2.5 py-2"
-                  style={{
-                    background: "rgba(255,255,255,0.012)",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1"
-                      style={{
-                        color: "rgba(220,220,220,0.95)",
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      <span>{item.title}</span>
-                      <ExternalLink
-                        size={11}
-                        style={{ color: "rgba(147,197,253,0.7)", flexShrink: 0 }}
-                      />
-                    </a>
-                    <span style={{ color: "rgba(115,115,115,0.85)", fontSize: "10.5px" }}>
-                      {formatPreviewDate(item.publishedAt)}
-                    </span>
-                  </div>
-                  <div
-                    className="mb-1.5 flex flex-wrap items-center gap-2"
-                    style={{ color: "rgba(140,140,140,0.85)", fontSize: "10.5px" }}
-                  >
-                    <span>{item.sourceName}</span>
-                  </div>
-                  {item.summary && (
-                    <p
-                      className="mb-2"
-                      style={{
-                        color: "rgba(180,180,180,0.88)",
-                        fontSize: "11.5px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {item.summary}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-1.5">
-                    <TextPill>
-                      Extraction Method:{" "}
-                      {EXTRACTION_METHOD_LABELS[item.extractionMethod]}
-                    </TextPill>
-                    <TextPill>
-                      Verification Status:{" "}
-                      {CANDIDATE_VERIFICATION_LABELS[item.verificationStatus]}
-                    </TextPill>
-                    <TextPill>
-                      Source Basis: {SOURCE_BASIS_LABELS[item.sourceBasis]}
-                    </TextPill>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+        {value}
       </div>
     </div>
   );
 }
 
-function CandidateField({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="min-w-0">
-      <span
-        className="mb-1 block font-semibold uppercase"
-        style={{ color: "rgba(95,95,95,0.9)", fontSize: "9.5px", letterSpacing: "0.09em" }}
+      <div
+        className="mb-1 truncate font-semibold uppercase"
+        style={{
+          color: "rgba(92,103,118,0.92)",
+          fontSize: "9px",
+          letterSpacing: "0.08em",
+        }}
       >
         {label}
-      </span>
-      <div style={{ color: "rgba(210,210,210,0.92)", fontSize: "11.5px", lineHeight: 1.45 }}>
+      </div>
+      <div
+        className="min-w-0 truncate"
+        style={{
+          color: "rgba(206,215,225,0.88)",
+          fontSize: "12px",
+          lineHeight: 1.35,
+        }}
+      >
         {children}
       </div>
     </div>
   );
 }
 
+function SourceRow({
+  source,
+  itemCount,
+  acceptedCount,
+  markerCount,
+  domainLabels,
+  matchedDomainLabels,
+  collectedAt,
+  requestedAt,
+  error,
+  isLoading,
+  onRefresh,
+}: {
+  source: SourceDefinition;
+  itemCount: number;
+  acceptedCount: number;
+  markerCount: number;
+  domainLabels: string[];
+  matchedDomainLabels: string[];
+  collectedAt?: string;
+  requestedAt?: string;
+  error?: string | null;
+  isLoading: boolean;
+  onRefresh: () => void;
+}) {
+  const status = source.sourceStatus ?? "candidate";
+  const readableError = formatSourceError(error);
+  const sourceHref = source.feedUrl ?? source.endpoint;
+  const canLoad = status !== "disabled" && Boolean(source.endpoint);
+  const buttonLabel = isLoading
+    ? "Loading"
+    : itemCount > 0 || collectedAt || readableError
+      ? "Refresh"
+      : "Load";
+  const hasBeenChecked = Boolean(collectedAt || requestedAt || readableError);
+  const runtimeState = isLoading
+    ? { label: "Loading", tone: "blue" as const }
+    : readableError
+      ? { label: "Error", tone: "red" as const }
+      : acceptedCount > 0
+        ? { label: "Accepted", tone: "green" as const }
+        : itemCount > 0
+          ? { label: "Filtered Out", tone: "amber" as const }
+          : hasBeenChecked
+            ? { label: "No Items", tone: "neutral" as const }
+            : { label: "Not Loaded", tone: "neutral" as const };
+  const locationLabel =
+    source.institutionLocation?.label ??
+    source.institutionLocation?.city ??
+    source.countryCode ??
+    "Location pending";
+
+  return (
+    <article
+      className="px-4 py-3.5 transition-colors duration-150"
+      style={{
+        background: "rgba(255,255,255,0.008)",
+        borderTop: "1px solid rgba(255,255,255,0.045)",
+      }}
+    >
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
+            <h2
+              className="min-w-0 truncate font-semibold"
+              style={{ color: "rgba(235,240,245,0.95)", fontSize: "13.5px" }}
+            >
+              {source.name}
+            </h2>
+            <StatusPill status={status} />
+            <RuntimeStatePill
+              label={runtimeState.label}
+              tone={runtimeState.tone}
+            />
+            <Pill tone="blue">{METHOD_LABELS[source.collectionMethod]}</Pill>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Pill>{TYPE_LABELS[source.sourceType]}</Pill>
+            {source.language && <Pill>{source.language.toUpperCase()}</Pill>}
+            <Pill>{source.markerLocationStrategy ?? "none"}</Pill>
+          </div>
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-2 sm:justify-end">
+          {sourceHref && (
+            <a
+              aria-label={`Open ${source.name}`}
+              className="flex h-8 w-8 items-center justify-center rounded transition-colors"
+              href={sourceHref}
+              target="_blank"
+              rel="noreferrer"
+              title="Open source endpoint"
+              style={{
+                color: "rgba(148,163,184,0.82)",
+                background: "rgba(255,255,255,0.035)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <ExternalLink size={14} />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={!canLoad || isLoading}
+            className="inline-flex h-8 w-[104px] items-center justify-center gap-1.5 rounded font-semibold uppercase transition-colors"
+            title={canLoad ? "Load source feed" : "No runtime route"}
+            style={{
+              color:
+                !canLoad || isLoading
+                  ? "rgba(145,155,170,0.62)"
+                  : "rgba(226,232,240,0.94)",
+              background:
+                !canLoad || isLoading
+                  ? "rgba(255,255,255,0.024)"
+                  : "rgba(59,130,246,0.12)",
+              border:
+                !canLoad || isLoading
+                  ? "1px solid rgba(255,255,255,0.06)"
+                  : "1px solid rgba(96,165,250,0.22)",
+              cursor: !canLoad || isLoading ? "not-allowed" : "pointer",
+              fontSize: "10px",
+              letterSpacing: "0.08em",
+            }}
+          >
+            <RefreshCw
+              size={12}
+              className={isLoading ? "animate-spin" : undefined}
+            />
+            {canLoad ? buttonLabel : "No Route"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2.5 md:grid-cols-4 xl:grid-cols-[1fr_0.9fr_0.85fr_0.85fr_0.9fr_1.2fr]">
+        <Field label="Loaded Items">{itemCount}</Field>
+        <Field label="Accepted Events">{acceptedCount}</Field>
+        <Field label="Markers">{markerCount}</Field>
+        <Field label="Location">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <MapPin size={11} style={{ color: "rgba(96,165,250,0.68)", flexShrink: 0 }} />
+            <span className="truncate">{locationLabel}</span>
+          </span>
+        </Field>
+        <Field label="Last Check">{formatCheckTime(collectedAt, requestedAt)}</Field>
+        <Field label="Domains">
+          {domainLabels.length > 0 ? (
+            <span className="flex min-w-0 flex-wrap gap-1">
+              {domainLabels.slice(0, 3).map((domain) => (
+                <Pill key={domain} tone="green">
+                  {domain}
+                </Pill>
+              ))}
+              {domainLabels.length > 3 && <Pill>+{domainLabels.length - 3}</Pill>}
+            </span>
+          ) : matchedDomainLabels.length > 0 ? (
+            <span className="flex min-w-0 flex-wrap gap-1">
+              {matchedDomainLabels.slice(0, 2).map((domain) => (
+                <Pill key={domain} tone="amber">
+                  {domain}
+                </Pill>
+              ))}
+              <Pill tone="amber">Below Threshold</Pill>
+            </span>
+          ) : isLoading ? (
+            <span style={{ color: "rgba(147,197,253,0.78)" }}>Loading...</span>
+          ) : readableError ? (
+            <span style={{ color: "rgba(252,165,165,0.84)" }}>Source error</span>
+          ) : itemCount > 0 ? (
+            <span style={{ color: "rgba(251,191,36,0.82)" }}>No accepted domains</span>
+          ) : hasBeenChecked ? (
+            <span style={{ color: "rgba(148,163,184,0.68)" }}>No items returned</span>
+          ) : (
+            <span style={{ color: "rgba(120,130,145,0.7)" }}>Not loaded</span>
+          )}
+        </Field>
+      </div>
+
+      {readableError && (
+        <div
+          className="mt-3 flex items-start gap-2 rounded px-2.5 py-2"
+          style={{
+            color: "rgba(252,165,165,0.9)",
+            background: "rgba(127,29,29,0.11)",
+            border: "1px solid rgba(248,113,113,0.16)",
+            fontSize: "11px",
+            lineHeight: 1.45,
+          }}
+        >
+          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{readableError}</span>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export function SourcesScreen() {
-  const totalSources = mockSources.length;
-  const activeSources = mockSources.filter((source) => source.status === "ACTIVE").length;
-  const futureSources = mockSources.filter((source) => source.status === "FUTURE").length;
-  const pendingSources = mockSources.filter((source) => source.status === "PENDING").length;
-  const eventCountsBySourceId = mockEvents.reduce<Record<string, number>>((counts, event) => {
-    counts[event.sourceId] = (counts[event.sourceId] ?? 0) + 1;
+  const {
+    sources,
+    combinedItems,
+    eventCandidates,
+    markerCandidates,
+    itemsBySourceId,
+    collectedAtBySourceId,
+    loadingBySourceId,
+    errorBySourceId,
+    filterResults,
+    loadState,
+    previewSource,
+  } = useSourceIntelligenceStore();
+  const [requestedAtBySourceId, setRequestedAtBySourceId] = useState<
+    Record<string, string>
+  >({});
+
+  const acceptedBySourceId = useMemo(() => {
+    return eventCandidates.reduce<Record<string, number>>((acc, item) => {
+      acc[item.sourceId] = (acc[item.sourceId] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [eventCandidates]);
+
+  const markersBySourceId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const marker of markerCandidates) {
+      const sourceIds = new Set(marker.items.map((item) => item.sourceId));
+      for (const sourceId of sourceIds) {
+        counts[sourceId] = (counts[sourceId] ?? 0) + 1;
+      }
+    }
     return counts;
-  }, {});
+  }, [markerCandidates]);
+
+  const domainsBySourceId = useMemo(() => {
+    const domains: Record<string, Set<string>> = {};
+    for (const item of eventCandidates) {
+      domains[item.sourceId] ??= new Set<string>();
+      domains[item.sourceId].add(labelFor(item.primaryDomain));
+    }
+    return Object.fromEntries(
+      Object.entries(domains).map(([sourceId, values]) => [
+        sourceId,
+        Array.from(values),
+      ]),
+    ) as Record<string, string[]>;
+  }, [eventCandidates]);
+
+  const matchedDomainsBySourceId = useMemo(() => {
+    const domains: Record<string, Set<string>> = {};
+    for (const result of filterResults) {
+      if (result.accepted || result.matches.length === 0) continue;
+      domains[result.item.sourceId] ??= new Set<string>();
+      for (const match of result.matches) {
+        domains[result.item.sourceId].add(labelFor(match.domain));
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(domains).map(([sourceId, values]) => [
+        sourceId,
+        Array.from(values),
+      ]),
+    ) as Record<string, string[]>;
+  }, [filterResults]);
+
+  const handleRefresh = useCallback(
+    (sourceId: string) => {
+      setRequestedAtBySourceId((prev) => ({
+        ...prev,
+        [sourceId]: new Date().toISOString(),
+      }));
+      void previewSource(sourceId);
+    },
+    [previewSource],
+  );
+
+  const markerReadyEvents = eventCandidates.filter(
+    (item) => item.markerEligibility === "eligible",
+  ).length;
+  const needsLocationEvents = eventCandidates.filter(
+    (item) => item.markerEligibility === "needs_location",
+  ).length;
+  const failedSources = sources.filter(
+    (source) => (errorBySourceId[source.id] ?? null) !== null,
+  ).length;
 
   return (
     <main
       className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(circle at 28% 18%, rgba(59,130,246,0.055), rgba(10,10,10,0) 34%), #080808",
-      }}
+      style={{ background: "#080808" }}
     >
-      <div className="sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 pb-2.5 pt-2.5">
-        <section className="flex flex-shrink-0 items-start justify-between gap-3">
-          <div>
-            <div className="mb-1 flex items-center gap-1.5">
-              <Database size={12} style={{ color: "rgba(147,197,253,0.88)" }} />
+      <div className="sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-3 pt-3">
+        <section className="flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center gap-2">
+              <Database size={13} style={{ color: "rgba(147,197,253,0.86)" }} />
               <span
                 className="font-semibold uppercase"
-                style={{ color: "rgba(147,147,147,0.82)", fontSize: "9.5px", letterSpacing: "0.12em" }}
+                style={{
+                  color: "rgba(145,155,170,0.86)",
+                  fontSize: "10px",
+                  letterSpacing: "0.12em",
+                }}
               >
-                Source Registry
+                Source Intelligence Registry
               </span>
             </div>
-            <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "18px" }}>
-              Sources Overview
+            <h1
+              className="truncate font-semibold"
+              style={{ color: "rgba(238,242,247,0.96)", fontSize: "19px" }}
+            >
+              Runtime Sources
             </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill tone={loadState === "loaded" ? "green" : loadState === "partial" ? "amber" : "blue"}>
+              {labelFor(loadState)}
+            </Pill>
+            <Pill>{sourceRegistry.length} registered</Pill>
+            <Pill>{failedSources} source errors</Pill>
           </div>
         </section>
 
-        <section className="grid flex-shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
-          <SummaryCard label="Total Sources" value={totalSources} tone="rgba(147,197,253,0.9)" />
-          <SummaryCard label="Active Sources" value={activeSources} tone="rgba(74,222,128,0.9)" />
-          <SummaryCard label="Future Sources" value={futureSources} tone="rgba(96,165,250,0.9)" />
-          <SummaryCard label="Pending Sources" value={pendingSources} tone="rgba(251,191,36,0.9)" />
+        <section className="grid flex-shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          <MetricTile
+            icon={<Database size={12} />}
+            label="Runtime Sources"
+            value={sources.length}
+            tone="rgba(147,197,253,0.9)"
+          />
+          <MetricTile
+            icon={<Radio size={12} />}
+            label="Loaded Items"
+            value={combinedItems.length}
+            tone="rgba(96,165,250,0.9)"
+          />
+          <MetricTile
+            icon={<Activity size={12} />}
+            label="Accepted Events"
+            value={eventCandidates.length}
+            tone="rgba(74,222,128,0.9)"
+          />
+          <MetricTile
+            icon={<MapPin size={12} />}
+            label="Marker Candidates"
+            value={markerCandidates.length}
+            tone="rgba(251,191,36,0.92)"
+          />
+          <MetricTile
+            icon={<ShieldCheck size={12} />}
+            label="Marker Ready"
+            value={markerReadyEvents}
+            tone="rgba(45,212,191,0.9)"
+          />
+          <MetricTile
+            icon={<AlertTriangle size={12} />}
+            label="Needs Location"
+            value={needsLocationEvents}
+            tone="rgba(248,113,113,0.88)"
+          />
         </section>
 
         <section
-          className="flex flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
+          className="flex min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
           style={{
-            background: "rgba(12,12,12,0.94)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(12,12,12,0.96)",
+            border: "1px solid rgba(255,255,255,0.07)",
           }}
         >
           <div
             className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
           >
-            <div className="flex items-center gap-2">
-              <FlaskConical size={13} style={{ color: "rgba(251,191,36,0.85)" }} />
+            <div className="flex min-w-0 items-center gap-2">
+              <Radio size={12} style={{ color: "rgba(96,165,250,0.72)" }} />
               <span
-                className="font-semibold uppercase"
-                style={{ color: "rgba(147,147,147,0.85)", fontSize: "10.5px", letterSpacing: "0.1em" }}
+                className="truncate font-semibold uppercase"
+                style={{
+                  color: "rgba(158,168,184,0.86)",
+                  fontSize: "10px",
+                  letterSpacing: "0.1em",
+                }}
               >
-                Live Source Integrations
+                Active Source Adapters
               </span>
             </div>
             <span
-              className="rounded px-2 py-0.5 font-semibold uppercase"
+              className="hidden font-semibold uppercase sm:inline"
               style={{
-                color: "rgba(251,191,36,0.92)",
-                background: "rgba(113,63,18,0.18)",
-                border: "1px solid rgba(251,191,36,0.2)",
-                fontSize: "9.5px",
-                letterSpacing: "0.08em",
-                lineHeight: 1.4,
+                color: "rgba(88,98,112,0.9)",
+                fontSize: "9px",
+                letterSpacing: "0.1em",
               }}
             >
-              Live Fetch | Local Cache | Map Synced
+              Feed + Map Pipeline
             </span>
           </div>
-          <div
-            className="px-4 py-2.5"
-            style={{
-              color: "rgba(135,135,135,0.85)",
-              fontSize: "11px",
-              lineHeight: 1.5,
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-            }}
-          >
-            These records are active external source integrations used by the
-            live source feed. Manual refresh updates the Sources screen, the
-            Global View feed, and the map marker flow together.
-          </div>
-          <div className="flex flex-col">
-            {candidateSourceDefinitions.map((source, index) => (
-              <article
-                key={source.id}
-                className="px-4 py-3"
-                style={{
-                  borderTop: index === 0 ? "0" : "1px solid rgba(255,255,255,0.04)",
-                }}
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <h3
-                    className="font-semibold"
-                    style={{ color: "rgba(225,225,225,0.95)", fontSize: "13px" }}
-                  >
-                    {source.name}
-                  </h3>
-                  <TextPill>{source.category}</TextPill>
-                  <TextPill>{ACCESS_TYPE_LABELS[source.accessType]}</TextPill>
-                  <span
-                    className="inline-flex items-center rounded px-2 py-0.5 font-semibold uppercase"
-                    style={{
-                      color: "rgba(251,191,36,0.92)",
-                      background: "rgba(113,63,18,0.18)",
-                      border: "1px solid rgba(251,191,36,0.2)",
-                      fontSize: "9.5px",
-                      letterSpacing: "0.08em",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {CANDIDATE_STATUS_LABELS[source.candidateStatus]}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 lg:grid-cols-4">
-                  <CandidateField label="Source Status">
-                    {CANDIDATE_SOURCE_STATUS_LABELS[source.sourceStatus]}
-                  </CandidateField>
-                  <CandidateField label="Verification Status">
-                    {CANDIDATE_VERIFICATION_LABELS[source.verificationStatus]}
-                  </CandidateField>
-                  <CandidateField label="Source Basis">
-                    {SOURCE_BASIS_LABELS[source.sourceBasis]}
-                  </CandidateField>
-                  <CandidateField label="Extraction Method">
-                    {EXTRACTION_METHOD_LABELS[source.extractionMethod]}
-                  </CandidateField>
-                  <CandidateField label="Language">
-                    {source.language.toUpperCase()}
-                  </CandidateField>
-                  <CandidateField label="Region Scope">
-                    {REGION_SCOPE_LABELS[source.regionScope]}
-                  </CandidateField>
-                  <CandidateField label="Target Screens">
-                    <div className="flex flex-wrap gap-1.5">
-                      {source.targetScreens.map((screen) => (
-                        <TextPill key={screen}>{TARGET_SCREEN_LABELS[screen]}</TextPill>
-                      ))}
-                    </div>
-                  </CandidateField>
-                  <CandidateField label="Base URL">
-                    <a
-                      href={source.baseUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 break-all"
-                      style={{ color: "rgba(147,197,253,0.88)" }}
-                    >
-                      <span className="truncate">{source.baseUrl}</span>
-                      <ExternalLink size={11} style={{ flexShrink: 0 }} />
-                    </a>
-                  </CandidateField>
-                  {source.candidateFeedUrl && (
-                    <CandidateField label="Candidate Feed URL">
-                      <a
-                        href={source.candidateFeedUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 break-all"
-                        style={{ color: "rgba(147,197,253,0.88)" }}
-                      >
-                        <span className="truncate">{source.candidateFeedUrl}</span>
-                        <ExternalLink size={11} style={{ flexShrink: 0 }} />
-                      </a>
-                    </CandidateField>
-                  )}
-                </div>
-                {source.notes && (
-                  <p
-                    className="mt-2.5"
-                    style={{ color: "rgba(125,125,125,0.88)", fontSize: "11px", lineHeight: 1.5 }}
-                  >
-                    {source.notes}
-                  </p>
-                )}
-                {(source.accessType === "api" || source.candidateFeedUrl) && (
-                  <CandidateRssPreview source={source} />
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section
-          className="flex flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
-          style={{
-            background: "rgba(12,12,12,0.96)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.035)",
-          }}
-        >
-          <div
-            className="hidden flex-shrink-0 grid-cols-[1.35fr_0.7fr_0.55fr_0.85fr_0.9fr_0.65fr] gap-3 px-4 py-2.5 lg:grid"
-            style={{
-              borderBottom: "1px solid rgba(255,255,255,0.055)",
-              color: "rgba(92,92,92,0.95)",
-              fontSize: "10px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            <span>Source</span>
-            <span>Type</span>
-            <span>Status</span>
-            <span>Category</span>
-            <span>Last Reviewed</span>
-            <span className="text-right">Events</span>
-          </div>
 
           <div className="flex flex-col">
-            {mockSources.map((source, index) => (
-              <article
+            {sources.map((source) => (
+              <SourceRow
                 key={source.id}
-                className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors duration-150 lg:grid-cols-[1.35fr_0.7fr_0.55fr_0.85fr_0.9fr_0.65fr]"
-                style={{
-                  background: "rgba(255,255,255,0.008)",
-                  borderTop: index === 0 ? "0" : "1px solid rgba(255,255,255,0.045)",
-                }}
-              >
-                <div className="min-w-0">
-                  <div className="mb-1.5 flex min-w-0 items-center gap-2">
-                    <h2
-                      className="truncate font-semibold"
-                      style={{ color: "rgba(218,218,218,0.94)", fontSize: "13px" }}
-                    >
-                      {source.name}
-                    </h2>
-                    {source.url && (
-                      <ExternalLink size={12} style={{ color: "rgba(96,165,250,0.62)", flexShrink: 0 }} />
-                    )}
-                  </div>
-                  <p className="max-w-[520px]" style={{ color: "rgba(118,118,118,0.92)", fontSize: "11.5px", lineHeight: 1.45 }}>
-                    {source.description}
-                  </p>
-                </div>
-
-                <div className="flex items-start">
-                  <TextPill>{TYPE_LABELS[source.type]}</TextPill>
-                </div>
-
-                <div className="flex items-start">
-                  <StatusPill status={source.status} />
-                </div>
-
-                <div className="flex flex-wrap content-start gap-1.5">
-                  {source.categories.slice(0, 3).map((category) => (
-                    <TextPill key={category}>{CATEGORY_LABELS[category]}</TextPill>
-                  ))}
-                  {source.categories.length > 3 && <TextPill>+{source.categories.length - 3}</TextPill>}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <span
-                    className="flex items-center gap-1.5"
-                    style={{ color: "rgba(145,145,145,0.88)", fontSize: "11px" }}
-                  >
-                    <Clock3 size={12} style={{ color: "rgba(95,95,95,0.9)" }} />
-                    {source.lastReviewed}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {source.regions.slice(0, 2).map((region) => (
-                      <TextPill key={region}>{REGION_LABELS[region]}</TextPill>
-                    ))}
-                    {source.regions.length > 2 && <TextPill>+{source.regions.length - 2}</TextPill>}
-                  </div>
-                </div>
-
-                <div className="flex items-start justify-start lg:justify-end">
-                  <span className="font-semibold" style={{ color: "rgba(225,225,225,0.9)", fontSize: "16px" }}>
-                    {eventCountsBySourceId[source.id] ?? 0}
-                  </span>
-                </div>
-              </article>
+                source={source}
+                itemCount={itemsBySourceId[source.id]?.length ?? 0}
+                acceptedCount={acceptedBySourceId[source.id] ?? 0}
+                markerCount={markersBySourceId[source.id] ?? 0}
+                domainLabels={domainsBySourceId[source.id] ?? []}
+                matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
+                collectedAt={collectedAtBySourceId[source.id]}
+                requestedAt={requestedAtBySourceId[source.id]}
+                error={errorBySourceId[source.id]}
+                isLoading={loadingBySourceId[source.id] ?? false}
+                onRefresh={() => handleRefresh(source.id)}
+              />
             ))}
           </div>
         </section>
