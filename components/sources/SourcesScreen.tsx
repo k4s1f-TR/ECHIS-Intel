@@ -96,7 +96,16 @@ function formatCheckTime(collectedAt?: string, requestedAt?: string): string {
 
 function formatSourceError(error?: string | null): string | null {
   if (!error) return null;
+  if (error === "source_route_not_found") {
+    return "Source route was not found. The source may be stale, removed, or still open from an older browser session.";
+  }
   if (error === "guardian_key_not_configured") return "Guardian API key is not configured.";
+  if (error.endsWith("_key_not_configured")) {
+    return `${labelFor(error.replace("_key_not_configured", ""))} API key is not configured.`;
+  }
+  if (error.endsWith("_source_not_configured")) {
+    return `${labelFor(error.replace("_source_not_configured", ""))} source is not configured in the runtime registry.`;
+  }
   if (error === "missing_feed_url") return "Feed URL is missing.";
   if (error === "timeout") return "Request timed out.";
   if (error === "network_access_denied") return "Network access was denied for this source route.";
@@ -104,10 +113,26 @@ function formatSourceError(error?: string | null): string | null {
   if (error === "network_fetch_failed") return "Source network request failed.";
   if (error === "tls_certificate_error") return "TLS certificate verification failed for this source.";
   if (error === "parse_failed") return "Source response could not be parsed.";
+  if (error.startsWith("source_route_")) {
+    const detail = error.slice("source_route_".length);
+    if (detail === "404") {
+      return "Source route was not found. The local runtime endpoint or stale source id should be checked.";
+    }
+    return `Source runtime route returned HTTP ${detail}.`;
+  }
   if (error.startsWith("upstream_")) {
     const detail = error.slice("upstream_".length);
     if (detail.startsWith("429")) {
       return "Source rate limit reached. Wait a few seconds before refreshing again.";
+    }
+    if (detail.startsWith("400")) {
+      return "Source request was rejected by the upstream API. Check the request parameters for this adapter.";
+    }
+    if (detail.startsWith("401") || detail.startsWith("403")) {
+      return "Source authentication or access was rejected by the upstream service.";
+    }
+    if (detail.startsWith("404")) {
+      return "Upstream source endpoint was not found. The external API path or feed URL may have changed.";
     }
     if (detail.includes("approved appname")) {
       return "ReliefWeb API requires an approved appname; this source now uses the RSS adapter in the active pipeline.";

@@ -117,7 +117,7 @@ export async function fetchFinlightArticles(
     const textCountries = extractCountriesFromText(scanText);
     const relatedCountries = [
       ...new Set([...apiCountries, ...textCountries]),
-    ].slice(0, 3);
+    ];
 
     const firstCountry = relatedCountries[0];
     const coords = firstCountry ? COUNTRY_COORDS[firstCountry] : undefined;

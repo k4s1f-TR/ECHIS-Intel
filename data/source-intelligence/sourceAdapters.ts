@@ -19,9 +19,12 @@ async function fetchRouteItems(source: SourceDefinition): Promise<RawSourceItem[
   try {
     payload = await response.json();
   } catch {
-    throw new Error(response.ok ? "parse_failed" : `upstream_${response.status}`);
+    throw new Error(response.ok ? "parse_failed" : `source_route_${response.status}`);
   }
   if (!response.ok || payload.error) {
+    if (response.status === 404) {
+      throw new Error("source_route_not_found");
+    }
     throw new Error(payload.error ?? `upstream_${response.status}`);
   }
   return Array.isArray(payload.items) ? payload.items : [];

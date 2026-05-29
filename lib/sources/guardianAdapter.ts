@@ -2,6 +2,7 @@ import type {
   NormalizedSourceItem,
   SourceDefinition,
 } from "@/data/sources/sourceTypes";
+import { worldCapitals } from "@/data/worldCapitals";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_SUMMARY_LENGTH = 300;
@@ -90,8 +91,21 @@ const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   Zimbabwe: { lat: -19.02, lng: 29.15 },
 };
 
+const WORLD_CAPITAL_COUNTRY_COORDS: Record<string, { lat: number; lng: number }> =
+  Object.fromEntries(
+    worldCapitals.map((entry) => [
+      entry.country,
+      { lat: entry.coordinates[1], lng: entry.coordinates[0] },
+    ]),
+  );
+
+const ALL_COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
+  ...WORLD_CAPITAL_COUNTRY_COORDS,
+  ...COUNTRY_COORDS,
+};
+
 // Sorted long-to-short so multi-word names match before their fragments.
-const COUNTRY_NAMES_SORTED = Object.keys(COUNTRY_COORDS).sort(
+const COUNTRY_NAMES_SORTED = Object.keys(ALL_COUNTRY_COORDS).sort(
   (a, b) => b.length - a.length,
 );
 
@@ -133,7 +147,6 @@ function extractCountriesFromText(text: string): string[] {
       new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)
     ) {
       found.push(name);
-      if (found.length >= 3) break;
     }
   }
   return found;
@@ -197,7 +210,7 @@ export async function fetchGuardianArticles(
     const scanText = result.webTitle + " " + summary;
     const relatedCountries = extractCountriesFromText(scanText);
     const firstCountry = relatedCountries[0];
-    const coords = firstCountry ? COUNTRY_COORDS[firstCountry] : undefined;
+    const coords = firstCountry ? ALL_COUNTRY_COORDS[firstCountry] : undefined;
 
     items.push({
       id: `${source.id}::${result.id}`,

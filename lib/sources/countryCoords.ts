@@ -1,7 +1,9 @@
 // Shared country name → approximate centre coordinates.
 // Used by all news API adapters for item_location marker placement.
 
-export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
+import { worldCapitals } from "@/data/worldCapitals";
+
+const MANUAL_COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   Afghanistan: { lat: 33.93, lng: 67.71 },
   Albania: { lat: 41.15, lng: 20.17 },
   Algeria: { lat: 28.03, lng: 1.66 },
@@ -104,6 +106,19 @@ export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   Zimbabwe: { lat: -19.02, lng: 29.15 },
 };
 
+const WORLD_CAPITAL_COUNTRY_COORDS: Record<string, { lat: number; lng: number }> =
+  Object.fromEntries(
+    worldCapitals.map((entry) => [
+      entry.country,
+      { lat: entry.coordinates[1], lng: entry.coordinates[0] },
+    ]),
+  );
+
+export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
+  ...WORLD_CAPITAL_COUNTRY_COORDS,
+  ...MANUAL_COUNTRY_COORDS,
+};
+
 // Sorted long-to-short so multi-word names match before their fragments.
 export const COUNTRY_NAMES_SORTED = Object.keys(COUNTRY_COORDS).sort(
   (a, b) => b.length - a.length,
@@ -116,7 +131,6 @@ export function extractCountriesFromText(text: string): string[] {
       new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)
     ) {
       found.push(name);
-      if (found.length >= 3) break;
     }
   }
   return found;
