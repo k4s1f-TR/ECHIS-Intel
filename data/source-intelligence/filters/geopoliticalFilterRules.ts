@@ -1,6 +1,6 @@
 import type { SourceFilterDomain } from "../sourceIntelligenceTypes";
 
-export const FILTER_ACCEPTANCE_THRESHOLD = 45;
+export const FILTER_ACCEPTANCE_THRESHOLD = 25;
 export const STRONG_MARKER_THRESHOLD = 70;
 
 export const domainTags: Record<SourceFilterDomain, string> = {

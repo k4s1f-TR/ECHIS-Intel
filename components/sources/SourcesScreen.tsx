@@ -746,6 +746,113 @@ export function SourcesScreen() {
     [previewSource],
   );
 
+  const FRANCE24_SOURCE_IDS = useMemo(
+    () =>
+      new Set([
+        "france24-europe",
+        "france24-africa",
+        "france24-middle-east",
+        "france24-americas",
+        "france24-asia-pacific",
+      ]),
+    [],
+  );
+
+  const SKYNEWS_SOURCE_IDS = useMemo(
+    () =>
+      new Set([
+        "skynews-world",
+        "skynews-uk",
+        "skynews-us",
+        "skynews-politics",
+        "skynews-home",
+      ]),
+    [],
+  );
+
+  const ARABNEWS_SOURCE_IDS = useMemo(
+    () => new Set(["arabnews-cat1", "arabnews-cat2"]),
+    [],
+  );
+
+  const france24Sources = useMemo(
+    () => sources.filter((s) => FRANCE24_SOURCE_IDS.has(s.id)),
+    [sources, FRANCE24_SOURCE_IDS],
+  );
+  const skynewsSources = useMemo(
+    () => sources.filter((s) => SKYNEWS_SOURCE_IDS.has(s.id)),
+    [sources, SKYNEWS_SOURCE_IDS],
+  );
+  const arabnewsSources = useMemo(
+    () => sources.filter((s) => ARABNEWS_SOURCE_IDS.has(s.id)),
+    [sources, ARABNEWS_SOURCE_IDS],
+  );
+  const otherSources = useMemo(
+    () =>
+      sources.filter(
+        (s) =>
+          !FRANCE24_SOURCE_IDS.has(s.id) &&
+          !SKYNEWS_SOURCE_IDS.has(s.id) &&
+          !ARABNEWS_SOURCE_IDS.has(s.id),
+      ),
+    [sources, FRANCE24_SOURCE_IDS, SKYNEWS_SOURCE_IDS, ARABNEWS_SOURCE_IDS],
+  );
+
+  const isFrance24Loading = france24Sources.some(
+    (s) => loadingBySourceId[s.id] ?? false,
+  );
+  const isSkynewsLoading = skynewsSources.some(
+    (s) => loadingBySourceId[s.id] ?? false,
+  );
+  const isArabnewsLoading = arabnewsSources.some(
+    (s) => loadingBySourceId[s.id] ?? false,
+  );
+
+  const handleRefreshFrance24 = useCallback(() => {
+    const now = new Date().toISOString();
+    const ids = [
+      "france24-europe",
+      "france24-africa",
+      "france24-middle-east",
+      "france24-americas",
+      "france24-asia-pacific",
+    ];
+    setRequestedAtBySourceId((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = now;
+      return next;
+    });
+    for (const id of ids) void previewSource(id);
+  }, [previewSource]);
+
+  const handleRefreshSkynews = useCallback(() => {
+    const now = new Date().toISOString();
+    const ids = [
+      "skynews-world",
+      "skynews-uk",
+      "skynews-us",
+      "skynews-politics",
+      "skynews-home",
+    ];
+    setRequestedAtBySourceId((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = now;
+      return next;
+    });
+    for (const id of ids) void previewSource(id);
+  }, [previewSource]);
+
+  const handleRefreshArabnews = useCallback(() => {
+    const now = new Date().toISOString();
+    const ids = ["arabnews-cat1", "arabnews-cat2"];
+    setRequestedAtBySourceId((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = now;
+      return next;
+    });
+    for (const id of ids) void previewSource(id);
+  }, [previewSource]);
+
   const markerReadyEvents = eventCandidates.filter(
     (item) => item.markerEligibility === "eligible",
   ).length;
@@ -877,7 +984,7 @@ export function SourcesScreen() {
           </div>
 
           <div className="flex flex-col">
-            {sources.map((source) => (
+            {otherSources.map((source) => (
               <SourceRow
                 key={source.id}
                 source={source}
@@ -893,6 +1000,250 @@ export function SourcesScreen() {
                 onRefresh={() => handleRefresh(source.id)}
               />
             ))}
+
+            {/* ── France 24 group ─────────────────────────────────────────── */}
+            {france24Sources.length > 0 && (
+              <>
+                {/* Group header with collective refresh button */}
+                <div
+                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
+                  style={{
+                    borderTop: "1px solid rgba(255,255,255,0.055)",
+                    background: "rgba(255,255,255,0.013)",
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Radio size={12} style={{ color: "rgba(251,191,36,0.72)", flexShrink: 0 }} />
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(200,210,224,0.86)",
+                        fontSize: "10px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      France 24
+                    </span>
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(88,98,112,0.9)",
+                        fontSize: "9px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {france24Sources.length} regional feeds
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshFrance24}
+                    disabled={isFrance24Loading}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
+                    title="Refresh all France 24 feeds"
+                    style={{
+                      color: isFrance24Loading
+                        ? "rgba(145,155,170,0.62)"
+                        : "rgba(226,232,240,0.94)",
+                      background: isFrance24Loading
+                        ? "rgba(255,255,255,0.024)"
+                        : "rgba(251,191,36,0.09)",
+                      border: isFrance24Loading
+                        ? "1px solid rgba(255,255,255,0.06)"
+                        : "1px solid rgba(251,191,36,0.22)",
+                      cursor: isFrance24Loading ? "not-allowed" : "pointer",
+                      fontSize: "10px",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    <RefreshCw
+                      size={12}
+                      className={isFrance24Loading ? "animate-spin" : undefined}
+                    />
+                    {isFrance24Loading ? "Loading…" : "Refresh France 24"}
+                  </button>
+                </div>
+
+                {france24Sources.map((source) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
+                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
+                    markerCount={markersBySourceId[source.id] ?? 0}
+                    domainLabels={domainsBySourceId[source.id] ?? []}
+                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
+                    collectedAt={collectedAtBySourceId[source.id]}
+                    requestedAt={requestedAtBySourceId[source.id]}
+                    error={errorBySourceId[source.id]}
+                    isLoading={loadingBySourceId[source.id] ?? false}
+                    onRefresh={() => handleRefresh(source.id)}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* ── Arab News group ──────────────────────────────────────────── */}
+            {arabnewsSources.length > 0 && (
+              <>
+                <div
+                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
+                  style={{
+                    borderTop: "1px solid rgba(255,255,255,0.055)",
+                    background: "rgba(255,255,255,0.013)",
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Radio size={12} style={{ color: "rgba(251,146,60,0.72)", flexShrink: 0 }} />
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(200,210,224,0.86)",
+                        fontSize: "10px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      Arab News
+                    </span>
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(88,98,112,0.9)",
+                        fontSize: "9px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {arabnewsSources.length} feeds
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshArabnews}
+                    disabled={isArabnewsLoading}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
+                    title="Refresh all Arab News feeds"
+                    style={{
+                      color: isArabnewsLoading
+                        ? "rgba(145,155,170,0.62)"
+                        : "rgba(226,232,240,0.94)",
+                      background: isArabnewsLoading
+                        ? "rgba(255,255,255,0.024)"
+                        : "rgba(251,146,60,0.09)",
+                      border: isArabnewsLoading
+                        ? "1px solid rgba(255,255,255,0.06)"
+                        : "1px solid rgba(251,146,60,0.22)",
+                      cursor: isArabnewsLoading ? "not-allowed" : "pointer",
+                      fontSize: "10px",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    <RefreshCw
+                      size={12}
+                      className={isArabnewsLoading ? "animate-spin" : undefined}
+                    />
+                    {isArabnewsLoading ? "Loading…" : "Refresh Arab News"}
+                  </button>
+                </div>
+
+                {arabnewsSources.map((source) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
+                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
+                    markerCount={markersBySourceId[source.id] ?? 0}
+                    domainLabels={domainsBySourceId[source.id] ?? []}
+                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
+                    collectedAt={collectedAtBySourceId[source.id]}
+                    requestedAt={requestedAtBySourceId[source.id]}
+                    error={errorBySourceId[source.id]}
+                    isLoading={loadingBySourceId[source.id] ?? false}
+                    onRefresh={() => handleRefresh(source.id)}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* ── Sky News group ───────────────────────────────────────────── */}
+            {skynewsSources.length > 0 && (
+              <>
+                <div
+                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
+                  style={{
+                    borderTop: "1px solid rgba(255,255,255,0.055)",
+                    background: "rgba(255,255,255,0.013)",
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Radio size={12} style={{ color: "rgba(147,197,253,0.72)", flexShrink: 0 }} />
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(200,210,224,0.86)",
+                        fontSize: "10px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      Sky News
+                    </span>
+                    <span
+                      className="font-semibold uppercase"
+                      style={{
+                        color: "rgba(88,98,112,0.9)",
+                        fontSize: "9px",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {skynewsSources.length} feeds
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshSkynews}
+                    disabled={isSkynewsLoading}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
+                    title="Refresh all Sky News feeds"
+                    style={{
+                      color: isSkynewsLoading
+                        ? "rgba(145,155,170,0.62)"
+                        : "rgba(226,232,240,0.94)",
+                      background: isSkynewsLoading
+                        ? "rgba(255,255,255,0.024)"
+                        : "rgba(147,197,253,0.09)",
+                      border: isSkynewsLoading
+                        ? "1px solid rgba(255,255,255,0.06)"
+                        : "1px solid rgba(147,197,253,0.22)",
+                      cursor: isSkynewsLoading ? "not-allowed" : "pointer",
+                      fontSize: "10px",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    <RefreshCw
+                      size={12}
+                      className={isSkynewsLoading ? "animate-spin" : undefined}
+                    />
+                    {isSkynewsLoading ? "Loading…" : "Refresh Sky News"}
+                  </button>
+                </div>
+
+                {skynewsSources.map((source) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
+                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
+                    markerCount={markersBySourceId[source.id] ?? 0}
+                    domainLabels={domainsBySourceId[source.id] ?? []}
+                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
+                    collectedAt={collectedAtBySourceId[source.id]}
+                    requestedAt={requestedAtBySourceId[source.id]}
+                    error={errorBySourceId[source.id]}
+                    isLoading={loadingBySourceId[source.id] ?? false}
+                    onRefresh={() => handleRefresh(source.id)}
+                  />
+                ))}
+              </>
+            )}
           </div>
         </section>
       </div>

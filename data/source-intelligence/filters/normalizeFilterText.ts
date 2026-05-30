@@ -15,12 +15,33 @@ export function normalizeFilterText(value: string): string {
     .trim();
 }
 
+// ---------------------------------------------------------------------------
+// Phrase regex cache: compiled once per unique phrase, reused on every call.
+//
+// Keywords are static string literals that never change at runtime. Without
+// this cache, containsNormalizedPhrase creates a new RegExp object for every
+// (item x keyword) pair. The cache reduces that to one compilation per unique
+// keyword phrase, regardless of how many items or pipeline runs occur.
+//
+// Map value `false` = the phrase normalised to empty string, always false.
+// ---------------------------------------------------------------------------
+const _phraseRegexCache = new Map<string, RegExp | false>();
+
 export function containsNormalizedPhrase(
   normalizedText: string,
   phrase: string,
 ): boolean {
-  const normalizedPhrase = normalizeFilterText(phrase);
-  if (!normalizedPhrase) return false;
-  const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|\\s)${escaped}(?=\\s|$)`).test(normalizedText);
+  let entry = _phraseRegexCache.get(phrase);
+  if (entry === undefined) {
+    const normalizedPhrase = normalizeFilterText(phrase);
+    if (!normalizedPhrase) {
+      _phraseRegexCache.set(phrase, false);
+      return false;
+    }
+    const escaped = normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    entry = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`);
+    _phraseRegexCache.set(phrase, entry);
+  }
+  if (entry === false) return false;
+  return entry.test(normalizedText);
 }

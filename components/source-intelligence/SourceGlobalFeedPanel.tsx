@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, FileText, Radio, X } from "lucide-react";
 import type { IntelligenceEventCandidate } from "@/data/source-intelligence/sourceIntelligenceTypes";
@@ -9,6 +9,7 @@ import { useSourceIntelligenceItems } from "./useSourceIntelligenceItems";
 const LEFT_RAIL_W = 68;
 const HEADER_H = 52;
 const MODAL_ANIMATION_MS = 260;
+const ALL_SOURCES_FILTER = "__all_sources__";
 
 function formatAge(iso?: string): string {
   if (!iso) return "";
@@ -540,23 +541,218 @@ function SourceFeedCard({
   );
 }
 
+type SourceFilterOption = {
+  id: string;
+  name: string;
+  count: number;
+};
+
+function SourceFilterList({
+  options,
+  totalCount,
+  selectedSourceId,
+  onSelectSource,
+}: {
+  options: SourceFilterOption[];
+  totalCount: number;
+  selectedSourceId: string;
+  onSelectSource: (sourceId: string) => void;
+}) {
+  const allSelected = selectedSourceId === ALL_SOURCES_FILTER;
+
+  return (
+    <div
+      className="flex flex-shrink-0 flex-col"
+      style={{
+        borderBottom: "1px solid rgba(255,255,255,0.045)",
+        background: "rgba(255,255,255,0.012)",
+        padding: "7px 10px 8px",
+      }}
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span
+          className="uppercase"
+          style={{
+            color: "rgba(125,140,160,0.78)",
+            fontSize: 8.5,
+            fontWeight: 800,
+            letterSpacing: "0.11em",
+          }}
+        >
+          Sources
+        </span>
+        <span
+          style={{
+            color: "rgba(80,95,115,0.8)",
+            fontSize: 9,
+            fontWeight: 650,
+          }}
+        >
+          {options.length} sources
+        </span>
+      </div>
+
+      <div
+        className="source-filter-scrollbar"
+        style={{
+          maxHeight: 104,
+          overflowY: "auto",
+          paddingRight: 2,
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(59,130,246,0.16) transparent",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onSelectSource(ALL_SOURCES_FILTER)}
+          className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left transition-colors duration-150"
+          style={{
+            background: allSelected ? "rgba(59,130,246,0.13)" : "rgba(255,255,255,0.026)",
+            border: `1px solid ${allSelected ? "rgba(96,165,250,0.24)" : "rgba(255,255,255,0.055)"}`,
+            color: allSelected ? "rgba(205,225,255,0.94)" : "rgba(150,164,182,0.86)",
+          }}
+        >
+          <span
+            className="truncate"
+            style={{ fontSize: 10.5, fontWeight: allSelected ? 750 : 650 }}
+          >
+            All Sources
+          </span>
+          <span
+            style={{
+              flexShrink: 0,
+              borderRadius: 4,
+              padding: "2px 5px",
+              background: "rgba(255,255,255,0.045)",
+              color: "rgba(160,175,195,0.82)",
+              fontSize: 9,
+              fontWeight: 750,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {totalCount}
+          </span>
+        </button>
+
+        {options.map((source) => {
+          const selected = source.id === selectedSourceId;
+          return (
+            <button
+              key={source.id}
+              type="button"
+              onClick={() => onSelectSource(source.id)}
+              className="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150"
+              style={{
+                background: selected ? "rgba(59,130,246,0.11)" : "transparent",
+                border: `1px solid ${selected ? "rgba(96,165,250,0.22)" : "rgba(255,255,255,0.035)"}`,
+                color: selected ? "rgba(205,225,255,0.93)" : "rgba(132,146,166,0.82)",
+              }}
+            >
+              <span
+                className="truncate"
+                title={source.name}
+                style={{ fontSize: 10.5, fontWeight: selected ? 720 : 590 }}
+              >
+                {source.name}
+              </span>
+              <span
+                style={{
+                  flexShrink: 0,
+                  minWidth: 24,
+                  borderRadius: 4,
+                  padding: "2px 5px",
+                  textAlign: "center",
+                  background: selected ? "rgba(96,165,250,0.13)" : "rgba(255,255,255,0.035)",
+                  color: selected ? "rgba(190,215,245,0.9)" : "rgba(112,128,150,0.82)",
+                  fontSize: 9,
+                  fontWeight: 760,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {source.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
+  const shimmer =
+    "linear-gradient(90deg, transparent, rgba(148,163,184,0.11), transparent)";
+
+  const shimmerSpan = (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        transform: "translateX(-100%)",
+        background: shimmer,
+        animation: "source-panel-shimmer 1.6s infinite",
+      }}
+    />
+  );
+
   return (
     <div
       className="min-h-0 flex-1 overflow-hidden"
-      style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: "6px" }}
+      style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: "8px" }}
     >
-      {[0, 1, 2].map((i) => (
+      <style>{`
+        @keyframes source-panel-shimmer {
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+      {[0, 1, 2, 3, 4].map((i) => (
         <div
           key={i}
           className="rounded-lg"
           style={{
-            height: "80px",
-            border: "1px solid rgba(255,255,255,0.04)",
-            background: "rgba(255,255,255,0.012)",
-            opacity: 1 - i * 0.25,
+            minHeight: 96,
+            border: "1px solid rgba(255,255,255,0.055)",
+            background: "rgba(255,255,255,0.018)",
+            padding: "11px 12px",
+            opacity: 1 - i * 0.08,
           }}
-        />
+        >
+          {[0, 1, 2].map((line) => (
+            <div
+              key={line}
+              style={{
+                position: "relative",
+                overflow: "hidden",
+                height: line === 0 ? 10 : 8,
+                width: line === 0 ? "68%" : line === 1 ? "92%" : "76%",
+                marginBottom: line === 2 ? 0 : 8,
+                borderRadius: 999,
+                background: "rgba(148,163,184,0.095)",
+              }}
+            >
+              {shimmerSpan}
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            {[0, 1, 2].map((chip) => (
+              <div
+                key={chip}
+                style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  height: 18,
+                  width: chip === 0 ? 54 : chip === 1 ? 70 : 46,
+                  borderRadius: 4,
+                  background: "rgba(59,130,246,0.055)",
+                  border: "1px solid rgba(59,130,246,0.08)",
+                }}
+              >
+                {shimmerSpan}
+              </div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -572,7 +768,41 @@ export function SourceGlobalFeedPanel({
   const { items, loadState } = useSourceIntelligenceItems();
   const [selectedItem, setSelectedItem] =
     useState<IntelligenceEventCandidate | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState(ALL_SOURCES_FILTER);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sourceOptions = useMemo<SourceFilterOption[]>(() => {
+    const bySource = new Map<string, SourceFilterOption>();
+    for (const item of items) {
+      const existing = bySource.get(item.sourceId);
+      if (existing) {
+        existing.count += 1;
+        continue;
+      }
+      bySource.set(item.sourceId, {
+        id: item.sourceId,
+        name: item.sourceName,
+        count: 1,
+      });
+    }
+    return [...bySource.values()].sort((a, b) => {
+      const countDelta = b.count - a.count;
+      if (countDelta !== 0) return countDelta;
+      return a.name.localeCompare(b.name);
+    });
+  }, [items]);
+  const effectiveSelectedSourceId = useMemo(() => {
+    if (selectedSourceId === ALL_SOURCES_FILTER) return ALL_SOURCES_FILTER;
+    return sourceOptions.some((source) => source.id === selectedSourceId)
+      ? selectedSourceId
+      : ALL_SOURCES_FILTER;
+  }, [selectedSourceId, sourceOptions]);
+  const visibleItems = useMemo(
+    () =>
+      effectiveSelectedSourceId === ALL_SOURCES_FILTER
+        ? items
+        : items.filter((item) => item.sourceId === effectiveSelectedSourceId),
+    [items, effectiveSelectedSourceId],
+  );
 
   useEffect(() => {
     if (!selectedItemId || !scrollRef.current) return;
@@ -648,6 +878,18 @@ export function SourceGlobalFeedPanel({
         )}
 
         {(loadState === "loaded" || loadState === "partial") && (
+          <SourceFilterList
+            options={sourceOptions}
+            totalCount={items.length}
+            selectedSourceId={effectiveSelectedSourceId}
+            onSelectSource={(sourceId) => {
+              setSelectedSourceId(sourceId);
+              scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        )}
+
+        {(loadState === "loaded" || loadState === "partial") && (
           <div
             ref={scrollRef}
             className="min-h-0 flex-1 overflow-y-auto"
@@ -660,14 +902,14 @@ export function SourceGlobalFeedPanel({
               scrollbarColor: "rgba(59,130,246,0.18) transparent",
             }}
           >
-            {items.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <div className="flex flex-1 items-center justify-center">
                 <span style={{ fontSize: "11px", color: "rgba(70,70,70,0.9)" }}>
-                  No source intelligence items available.
+                  No source intelligence items for this source.
                 </span>
               </div>
             ) : (
-              items.map((item, i) => (
+              visibleItems.map((item, i) => (
                 <SourceFeedCard
                   key={item.id}
                   item={item}
@@ -690,7 +932,7 @@ export function SourceGlobalFeedPanel({
             style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
           >
             <span style={{ fontSize: "9.5px", color: "rgba(60,60,60,0.85)" }}>
-              {items.length} items
+              {visibleItems.length} / {items.length} items
             </span>
             <span
               style={{

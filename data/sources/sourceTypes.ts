@@ -57,7 +57,19 @@ export type SourceTargetScreen =
   | "policy"
   | "sources";
 
-export type SourceLanguage = "tr" | "en" | "ar" | "fr" | "es" | "ru" | "de";
+export type SourceLanguage =
+  | "tr"
+  | "en"
+  | "ar"
+  | "fr"
+  | "es"
+  | "ru"
+  | "de"
+  | "sr"  // Serbian (Tanjug)
+  | "el"  // Greek (ERT News)
+  | "az"  // Azerbaijani
+  | "zh"  // Chinese
+  | "vi"; // Vietnamese
 
 /**
  * Thematic profile of a source.

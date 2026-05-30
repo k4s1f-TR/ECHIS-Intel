@@ -11,17 +11,105 @@ import { fetchRssPreview } from "@/lib/sources/rssPreviewAdapter";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// This set is the single authoritative allowlist for on-demand RSS fetching.
+// Only IDs that also appear in candidateSourceDefinitions (via sourceDefinitions.ts)
+// with accessType "rss" should be listed here.  Do not accept arbitrary URLs.
 const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
+  // ── Humanitarian / defense ──────────────────────────────────────────────
   "reliefweb-crises",
   "defense-news-global",
   "dod-news",
+  // ── Turkish sources ─────────────────────────────────────────────────────
   "aa-en-live",
   "trt-haber-turkiye",
   "trt-haber-dunya-feed",
   "trt-haber-dunya",
-  "aljazeera-middle-east",
   "bbc-turkce",
   "dw-turkce",
+  // ── Middle East ─────────────────────────────────────────────────────────
+  "aljazeera-middle-east",
+  "arabnews-cat1",
+  "arabnews-cat2",
+  "times-of-israel",
+  // ── UAE (WAM) ───────────────────────────────────────────────────────────
+  "wam-uae-news",
+  "wam-world",
+  // ── Qatar (QNA) ─────────────────────────────────────────────────────────
+  "qna-en",
+  // ── Iran ────────────────────────────────────────────────────────────────
+  "irna-en",
+  "mehr-politics",
+  "mehr-world",
+  "mehr-iran",
+  "mehr-economy",
+  "mehr-society",
+  "mehr-culture",
+  "mehr-science",
+  "mehr-special",
+  "presstv-headlines",
+  "presstv-iran",
+  "presstv-middle-east",
+  "presstv-world",
+  "presstv-politics",
+  "presstv-us-europe",
+  // ── Levant / conflict ───────────────────────────────────────────────────
+  "sana-en",
+  "sana-tr",
+  "saba-politics",
+  "saba-local",
+  "saba-arab",
+  "saba-international",
+  "saba-economy",
+  "saba-military",
+  "jpost-headlines",
+  "jpost-israel",
+  "jpost-gaza",
+  "jpost-iran",
+  // ── Asia-Pacific ────────────────────────────────────────────────────────
+  "vna-politics",
+  "vna-security",
+  "xinhua-china",
+  "xinhua-world",
+  "abc-australia",
+  // ── Russia / Eurasia ────────────────────────────────────────────────────
+  "tass-world",
+  "azertag-politics",
+  "azertag-official",
+  // ── Europe ──────────────────────────────────────────────────────────────
+  "euronews-world",
+  "skynews-world",
+  "skynews-uk",
+  "skynews-us",
+  "skynews-politics",
+  "skynews-home",
+  "france24-europe",
+  "france24-africa",
+  "france24-middle-east",
+  "france24-americas",
+  "france24-asia-pacific",
+  "ansa-en",
+  "tanjug-politika",
+  "ertnews-gr",
+  "cyprus-mail",
+  // ── Balkans ─────────────────────────────────────────────────────────────
+  "balkan-albania",
+  "balkan-bosnia",
+  "balkan-croatia",
+  "balkan-bulgaria",
+  "balkan-greece",
+  "balkan-kosovo",
+  "balkan-macedonia",
+  "balkan-moldova",
+  "balkan-montenegro",
+  "balkan-serbia",
+  // ── Africa / North Africa ───────────────────────────────────────────────
+  "lana-en",
+  // ── Central Asia ────────────────────────────────────────────────────────
+  "gazetauz-politics",
+  "gazetauz-society",
+  // ── Citizen media / global ──────────────────────────────────────────────
+  "globalvoices-main",
+  "globalvoices-filtered",
 ]);
 
 export async function GET(request: Request) {

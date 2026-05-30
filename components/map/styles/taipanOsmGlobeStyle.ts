@@ -126,23 +126,6 @@ export function createTaipanOsmGlobeStyle({
         },
       },
       {
-        id: "water_boundary_mask",
-        type: "fill",
-        ...sourceLayer("water"),
-        paint: { "fill-color": waterFill, "fill-opacity": 1 },
-      },
-      {
-        id: "waterway_boundary_mask",
-        type: "line",
-        ...sourceLayer("waterway"),
-        minzoom: 4,
-        paint: {
-          "line-color": waterwayFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.45, 9, 1.2],
-          "line-opacity": 0.75,
-        },
-      },
-      {
         id: "boundary_country",
         type: "line",
         ...sourceLayer("boundary"),

@@ -247,6 +247,10 @@ export type IntelligenceEventCandidate = {
   matches: SourceFilterMatch[];
   markerEligibility: MarkerEligibility;
   geoBasis?: GeoBasis;
+  /** Resolved map coordinates cached from the first geo-resolution pass so
+   *  sourceItemsToMarkers can place the pin without running resolveGeoBasis
+   *  a second time on the same item. */
+  resolvedLocation?: import("./geo/locationResolver").ResolvedLocation;
 };
 
 export type SourceAdapter = {

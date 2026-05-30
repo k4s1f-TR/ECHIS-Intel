@@ -27,6 +27,30 @@ export function normalizeRawSourceItems(
   return rawItems.map((raw) => adapter.normalizeItem(raw, source));
 }
 
+// ---------------------------------------------------------------------------
+// Geo-resolution cache — persists across useMemo re-runs so items resolved
+// in a previous pipeline pass are not re-resolved when new sources arrive.
+//
+// Key  : NormalizedSourceItem.id — stable for the lifetime of an RSS article.
+// Value: the three fields written back onto IntelligenceEventCandidate after
+//        resolveGeoBasis().
+//
+// Safety:
+//   • Item IDs are derived from content URLs and do not change between fetches.
+//   • Source definitions are static module-level constants; the resolution
+//     logic for a given sourceId never changes at runtime.
+//   • resolveGeoBasis is a pure function of (candidate, source).
+//
+// A hard cap prevents unbounded growth during long browser sessions.
+// ---------------------------------------------------------------------------
+type _GeoCacheEntry = {
+  markerEligibility: IntelligenceEventCandidate["markerEligibility"];
+  geoBasis:          IntelligenceEventCandidate["geoBasis"];
+  resolvedLocation:  IntelligenceEventCandidate["resolvedLocation"];
+};
+const _geoCache    = new Map<string, _GeoCacheEntry>();
+const _GEO_CAP     = 4000;
+
 export function buildIntelligenceEventCandidates(
   filterResults: SourceFilterResult<NormalizedSourceItem>[],
   sourceLookup: (sourceId: string) => SourceDefinition | undefined,
@@ -61,11 +85,35 @@ export function buildIntelligenceEventCandidates(
       };
 
       if (!source) return initial;
+
+      // Return cached geo-resolution when available — avoids re-running the
+      // expensive findLocationResolutionCandidates() regex scan for items that
+      // were already resolved in a prior pipeline pass.
+      const cached = _geoCache.get(result.item.id);
+      if (cached) {
+        return {
+          ...initial,
+          markerEligibility: cached.markerEligibility,
+          geoBasis:          cached.geoBasis,
+          resolvedLocation:  cached.resolvedLocation,
+        };
+      }
+
       const resolved = resolveGeoBasis(initial, source);
+      const entry: _GeoCacheEntry = {
+        markerEligibility: resolved.markerEligibility,
+        geoBasis:          resolved.geoBasis,
+        resolvedLocation:  resolved.location,
+      };
+      if (_geoCache.size < _GEO_CAP) _geoCache.set(result.item.id, entry);
+
+      // Cache the resolved coordinates on the candidate so sourceItemsToMarkers
+      // can place the globe pin without running resolveGeoBasis a second time.
       return {
         ...initial,
-        markerEligibility: resolved.markerEligibility,
-        geoBasis: resolved.geoBasis,
+        markerEligibility: entry.markerEligibility,
+        geoBasis:          entry.geoBasis,
+        resolvedLocation:  entry.resolvedLocation,
       };
     })
     .sort((a, b) => {

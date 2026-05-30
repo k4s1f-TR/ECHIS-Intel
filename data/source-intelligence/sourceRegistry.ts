@@ -14,26 +14,130 @@ const COUNTRY_CODE_BY_NAME: Record<string, string> = {
   France: "FR",
   Germany: "DE",
   "United Kingdom": "GB",
+  Russia: "RU",
+  Australia: "AU",
+  Israel: "IL",
+  "Saudi Arabia": "SA",
+  // ── New country codes added for expanded RSS source coverage ──
+  "United Arab Emirates": "AE",
+  Iran: "IR",
+  Syria: "SY",
+  Yemen: "YE",
+  Qatar: "QA",
+  Vietnam: "VN",
+  China: "CN",
+  Azerbaijan: "AZ",
+  Italy: "IT",
+  Serbia: "RS",
+  Greece: "GR",
+  Cyprus: "CY",
+  Libya: "LY",
+  Uzbekistan: "UZ",
 };
 
 export const SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS = [
+  // ── API sources ──────────────────────────────────────────────────────────
   "currents-geopolitical",
   "newsdata-geopolitical",
   "worldnews-geopolitical",
   "freenews-geopolitical",
   "finlight-geopolitical",
   "gdelt-geopolitical",
-  "reliefweb-crises",
   "guardian-world",
+  // ── Crisis / humanitarian ────────────────────────────────────────────────
+  "reliefweb-crises",
+  // ── Turkish sources ──────────────────────────────────────────────────────
   "aa-en-live",
   "trt-haber-turkiye",
   "trt-haber-dunya-feed",
   "trt-haber-dunya",
-  "aljazeera-middle-east",
   "bbc-turkce",
   "dw-turkce",
+  // ── Middle East / Gulf ───────────────────────────────────────────────────
+  "aljazeera-middle-east",
+  "wam-uae-news",
+  "wam-world",
+  "qna-en",
+  "arabnews-cat1",
+  "arabnews-cat2",
+  // ── Iran ─────────────────────────────────────────────────────────────────
+  "irna-en",
+  "mehr-politics",
+  "mehr-world",
+  "mehr-iran",
+  "mehr-economy",
+  "mehr-society",
+  "mehr-culture",
+  "mehr-science",
+  "mehr-special",
+  "presstv-headlines",
+  "presstv-iran",
+  "presstv-middle-east",
+  "presstv-world",
+  "presstv-politics",
+  "presstv-us-europe",
+  // ── Levant / conflict zone ───────────────────────────────────────────────
+  "sana-en",
+  "sana-tr",
+  "saba-politics",
+  "saba-local",
+  "saba-arab",
+  "saba-international",
+  "saba-economy",
+  "saba-military",
+  "times-of-israel",
+  "jpost-headlines",
+  "jpost-israel",
+  "jpost-gaza",
+  "jpost-iran",
+  // ── Asia-Pacific ─────────────────────────────────────────────────────────
+  "vna-politics",
+  "vna-security",
+  "xinhua-china",
+  "xinhua-world",
+  "abc-australia",
+  // ── Russia / Eurasia ─────────────────────────────────────────────────────
+  "tass-world",
+  "azertag-politics",
+  "azertag-official",
+  // ── Europe ───────────────────────────────────────────────────────────────
+  "euronews-world",
+  "skynews-world",
+  "skynews-uk",
+  "skynews-us",
+  "skynews-politics",
+  "skynews-home",
+  "france24-europe",
+  "france24-africa",
+  "france24-middle-east",
+  "france24-americas",
+  "france24-asia-pacific",
+  "ansa-en",
+  "tanjug-politika",
+  "ertnews-gr",
+  "cyprus-mail",
+  // ── Balkans ───────────────────────────────────────────────────────────────
+  "balkan-albania",
+  "balkan-bosnia",
+  "balkan-croatia",
+  "balkan-bulgaria",
+  "balkan-greece",
+  "balkan-kosovo",
+  "balkan-macedonia",
+  "balkan-moldova",
+  "balkan-montenegro",
+  "balkan-serbia",
+  // ── Africa / North Africa ─────────────────────────────────────────────────
+  "lana-en",
+  // ── Central Asia ──────────────────────────────────────────────────────────
+  "gazetauz-politics",
+  "gazetauz-society",
+  // ── Defense ───────────────────────────────────────────────────────────────
   "defense-news-global",
   "dod-news",
+  // ── Citizen media / global ────────────────────────────────────────────────
+  "globalvoices-main",
+  "globalvoices-filtered",
 ] as const;
 
 function sourceStatus(status: string): SourceStatus {
@@ -48,6 +152,7 @@ function sourceStatus(status: string): SourceStatus {
 }
 
 function sourceType(source: (typeof candidateSourceDefinitions)[number]): SourceType {
+  // ── API aggregators ──────────────────────────────────────────────────────
   if (source.id.startsWith("currents-")) return "global_news";
   if (source.id.startsWith("newsdata-")) return "global_news";
   if (source.id.startsWith("worldnews-")) return "global_news";
@@ -56,9 +161,32 @@ function sourceType(source: (typeof candidateSourceDefinitions)[number]): Source
   if (source.id.startsWith("gdelt-")) return "aggregator";
   if (source.id.startsWith("guardian-")) return "global_news";
   if (source.id.startsWith("reliefweb-")) return "crisis_humanitarian";
+  // ── State wire agencies ──────────────────────────────────────────────────
+  if (source.id.startsWith("irna-")) return "wire_agency";
+  if (source.id.startsWith("mehr-")) return "wire_agency";
+  if (source.id.startsWith("presstv-")) return "wire_agency";
+  if (source.id.startsWith("tass-")) return "wire_agency";
+  if (source.id.startsWith("xinhua-")) return "wire_agency";
+  if (source.id.startsWith("ansa-")) return "wire_agency";
+  if (source.id.startsWith("tanjug-")) return "wire_agency";
+  // ── Official government agencies ─────────────────────────────────────────
+  if (source.id.startsWith("wam-")) return "official_government";
+  if (source.id.startsWith("sana-")) return "official_government";
+  if (source.id.startsWith("saba-")) return "official_government";
+  if (source.id.startsWith("qna-")) return "official_government";
+  if (source.id.startsWith("vna-")) return "official_government";
+  if (source.id.startsWith("azertag-")) return "official_government";
+  if (source.id.startsWith("lana-")) return "official_government";
   if (source.sourceStatus === "official_government" || source.sourceStatus === "official_feed") {
     return "official_government";
   }
+  // ── Regional / investigative ─────────────────────────────────────────────
+  if (source.id.startsWith("balkan-")) return "regional_news";
+  if (source.id.startsWith("ertnews-")) return "regional_news";
+  if (source.id.startsWith("cyprus-")) return "regional_news";
+  if (source.id.startsWith("gazetauz-")) return "regional_news";
+  if (source.id.startsWith("globalvoices-")) return "global_news";
+  if (source.id.startsWith("jpost-")) return "global_news";
   if (source.sourceProfile === "conflict_crisis") return "regional_news";
   return source.language === "tr" ? "regional_news" : "global_news";
 }
@@ -140,8 +268,15 @@ export const activeSourceRegistry = sourceRegistry.filter((source) =>
   ),
 );
 
+// O(1) lookup map — built once at module load so repeated calls from
+// buildIntelligenceEventCandidates and sourceItemsToMarkers don't scan
+// the full registry array on every item.
+const _sourceRegistryMap = new Map<string, SourceDefinition>(
+  sourceRegistry.map((s) => [s.id, s]),
+);
+
 export function getSourceDefinition(
   sourceId: string,
 ): SourceDefinition | undefined {
-  return sourceRegistry.find((source) => source.id === sourceId);
+  return _sourceRegistryMap.get(sourceId);
 }

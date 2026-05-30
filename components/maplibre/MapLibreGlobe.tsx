@@ -24,6 +24,7 @@ export interface MapLibreGlobeHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   projectMarker: (lng: number, lat: number) => { x: number; y: number } | null;
+  setAutoRotatePaused: (paused: boolean) => void;
   /** Smoothly pan the globe to the given coordinate so the selected marker
    *  becomes visible.  Keeps the current zoom and framing padding so the
    *  marker appears in the open viewport area between panels.  Also pauses
@@ -69,6 +70,8 @@ interface MapLibreGlobeProps {
     kind: MarkerKind,
     point?: { x: number; y: number },
   ) => void;
+  autoRotatePaused?: boolean;
+  onGlobalMarkerRevealStart?: () => void;
   /** ID of the currently selected Global View event — drives the selected
    *  marker highlight (larger pin + neon red glow). */
   selectedGlobalId?: string | null;
@@ -428,6 +431,10 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },
+        paint: {
+          "icon-opacity": 1,
+          "icon-opacity-transition": { duration: 220, delay: 0 },
+        },
       });
     }
     // Selected pin — only the selected feature, drawn larger on top
@@ -444,6 +451,10 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "icon-size": 1.45,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": 1,
+          "icon-opacity-transition": { duration: 220, delay: 0 },
         },
       });
     }
@@ -483,6 +494,7 @@ function applyMarkerSelection(
   map: maplibregl.Map,
   kind: MarkerKind,
   selectedId: string | null | undefined,
+  revealCount?: number,
 ): void {
   const bloomId  = kind === "global" ? MARKER_BLOOM_GLOBAL  : MARKER_BLOOM_SIGNALS;
   const glowId   = kind === "global" ? MARKER_GLOW_GLOBAL   : MARKER_GLOW_SIGNALS;
@@ -522,6 +534,57 @@ function applyMarkerSelection(
   } catch {
     /* layers may not exist yet — initial load race, safe to ignore */
   }
+
+  if (kind === "global" && revealCount !== undefined) {
+    applyGlobalMarkerReveal(map, revealCount);
+  }
+}
+
+function markerRevealExpression(
+  visibleCount: number,
+  visibleValue: number,
+  hiddenValue: number,
+): maplibregl.ExpressionSpecification {
+  return [
+    "case",
+    ["<", ["to-number", ["get", MARKER_REVEAL_INDEX_PROP], -1], visibleCount],
+    visibleValue,
+    hiddenValue,
+  ] as maplibregl.ExpressionSpecification;
+}
+
+function applyGlobalMarkerReveal(
+  map: maplibregl.Map,
+  visibleCount: number,
+): void {
+  try {
+    if (map.getLayer(MARKER_LAYER_GLOBAL)) {
+      map.setPaintProperty(
+        MARKER_LAYER_GLOBAL,
+        "icon-opacity",
+        markerRevealExpression(visibleCount, 1, 0),
+      );
+      map.setLayoutProperty(
+        MARKER_LAYER_GLOBAL,
+        "icon-size",
+        markerRevealExpression(visibleCount, 1, 0.35),
+      );
+    }
+    if (map.getLayer(MARKER_SEL_GLOBAL)) {
+      map.setPaintProperty(
+        MARKER_SEL_GLOBAL,
+        "icon-opacity",
+        markerRevealExpression(visibleCount, 1, 0),
+      );
+      map.setLayoutProperty(
+        MARKER_SEL_GLOBAL,
+        "icon-size",
+        markerRevealExpression(visibleCount, 1.45, 0.45),
+      );
+    }
+  } catch {
+    /* layers may not exist yet — initial load race, safe to ignore */
+  }
 }
 
 // Push a fresh feature set into a marker source.  Safe to call before
@@ -537,7 +600,7 @@ function applyMarkerData(
   if (!source || source.type !== "geojson") return;
   const fc: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
-    features: features.map((f) => ({
+    features: features.map((f, index) => ({
       type: "Feature",
       id: f.id,
       geometry: { type: "Point", coordinates: [f.lng, f.lat] },
@@ -545,6 +608,7 @@ function applyMarkerData(
         id: f.id,
         severity: f.severity ?? null,
         confidence: f.confidence ?? null,
+        [MARKER_REVEAL_INDEX_PROP]: index,
       },
     })),
   };
@@ -558,6 +622,10 @@ function applyMarkerData(
 // Time after which a still-loading map is treated as failed.  Prevents the
 // loading placeholder from sitting forever if the style/tiles never arrive.
 const LOAD_TIMEOUT_MS = 9000;
+const MARKER_DATA_DEBOUNCE_MS = 400;
+const MARKER_REVEAL_BATCH_SIZE = 10;
+const MARKER_REVEAL_BATCH_DELAY_MS = 130;
+const MARKER_REVEAL_INDEX_PROP = "revealIndex";
 
 // ---------------------------------------------------------------------------
 // Auto-rotate — calm, ambient globe motion when the operator is idle.
@@ -970,6 +1038,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       globalMarkers,
       signalsMarkers,
       onMarkerClick,
+      autoRotatePaused = false,
+      onGlobalMarkerRevealStart,
       selectedGlobalId,
       selectedSignalsId,
     },
@@ -977,6 +1047,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
   ) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
+    const pendingGlobalMarkersRef = useRef<MarkerFeature[]>([]);
+    const globalMarkerDebounceTimerRef = useRef<number | null>(null);
+    const globalMarkerRevealTimerRef = useRef<number | null>(null);
+    const globalMarkerRevealCountRef = useRef(0);
+    const selectedGlobalIdRef = useRef<string | null | undefined>(selectedGlobalId);
+    const autoRotatePausedPropRef = useRef(autoRotatePaused);
+    const setAutoRotatePausedRef = useRef<(paused: boolean) => void>(() => {});
 
     // Imperative pause-rotate hook — wired by the useEffect below and called
     // from the imperative handle (button-driven zoom/center) and from real
@@ -991,6 +1068,20 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       onMarkerClickRef.current = onMarkerClick;
     }, [onMarkerClick]);
 
+    const onGlobalMarkerRevealStartRef = useRef(onGlobalMarkerRevealStart);
+    useEffect(() => {
+      onGlobalMarkerRevealStartRef.current = onGlobalMarkerRevealStart;
+    }, [onGlobalMarkerRevealStart]);
+
+    useEffect(() => {
+      selectedGlobalIdRef.current = selectedGlobalId;
+    }, [selectedGlobalId]);
+
+    useEffect(() => {
+      autoRotatePausedPropRef.current = autoRotatePaused;
+      setAutoRotatePausedRef.current(autoRotatePaused);
+    }, [autoRotatePaused]);
+
     const [loadState, setLoadState] = useState<LoadState>("loading");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -998,6 +1089,14 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     // first-application (jumpTo, no auto-rotate pause) from a real user
     // navigation between views (easeTo + pause).
     const lastAppliedViewRef = useRef<GlobeViewMode | null>(null);
+
+    // Guards auto-rotate from starting before the view-mode effect has
+    // committed the initial camera position.  Without this, the RAF loop
+    // begins rotating immediately when mapLoaded flips, which is 1-3 frames
+    // before the React view-mode effect fires its first jumpTo — causing a
+    // visible positional conflict and startup stutter.  Set to true once the
+    // first applyViewMode call is complete; reset on map teardown.
+    const viewReadyRef = useRef(false);
 
     useImperativeHandle(
       ref,
@@ -1023,6 +1122,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           } catch {
             return null;
           }
+        },
+        setAutoRotatePaused: (paused: boolean) => {
+          autoRotatePausedPropRef.current = paused;
+          setAutoRotatePausedRef.current(paused);
         },
         centerView: () => {
           const m = mapRef.current;
@@ -1073,9 +1176,20 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       // ── WebGL probe ──────────────────────────────────────────────────────
       // MapLibre v5 removed the static .supported() helper, so check directly.
       // WebGL2 is required for globe projection; WebGL1 is enough for mercator.
+      // The probe canvas is explicitly destroyed after the check so the
+      // abandoned context does not sit in the GC queue during initial tile load.
       const probe = document.createElement("canvas");
-      const hasWebGL2 = !!probe.getContext("webgl2");
-      const hasWebGL1 = !!probe.getContext("webgl");
+      const gl2 = probe.getContext("webgl2");
+      const hasWebGL2 = !!gl2;
+      let hasWebGL1 = false;
+      if (!hasWebGL2) {
+        const gl1 = probe.getContext("webgl");
+        hasWebGL1 = !!gl1;
+        gl1?.getExtension("WEBGL_lose_context")?.loseContext();
+      } else {
+        gl2.getExtension("WEBGL_lose_context")?.loseContext();
+      }
+      probe.remove();
       if (!hasWebGL2 && !hasWebGL1) {
         setErrorMsg("WebGL is not available in this browser.");
         setLoadState("error");
@@ -1104,6 +1218,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           attributionControl: false,
           renderWorldCopies: false,
           fadeDuration: 200,
+          // antialias defaults to false in MapLibre v5 (canvasContextAttributes),
+          // so no explicit override is needed — MSAA is already off.
         });
       } catch (err) {
         const msg =
@@ -1158,10 +1274,12 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           );
         }
 
-        // Dark refinement pass — walk every layer in the loaded style and
-        // route it through the tuning categoriser.  Robust across style
-        // versions: missing/renamed layers are silently skipped.
-        applyDarkTone(map);
+        // Dark refinement pass — only needed for the CARTO basemap.  When the
+        // OSM basemap is active the style is pre-built with the correct palette
+        // by createTaipanOsmGlobeStyle, so running the pass would redundantly
+        // call setPaintProperty on every layer (triggering shader revalidation)
+        // at exactly the moment the browser is compiling tile shaders.
+        if (!USE_TAIPAN_OSM_BASEMAP) applyDarkTone(map);
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
@@ -1273,11 +1391,14 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       let userInteracting = false;
       let disposed = false;
       let defaultViewApplied = false;
+      let overlayPaused = autoRotatePausedPropRef.current;
 
       const canRotate = () =>
         mapLoaded &&
         defaultViewApplied &&
+        viewReadyRef.current &&
         !mapErrored &&
+        !overlayPaused &&
         !userInteracting &&
         !disposed;
 
@@ -1305,13 +1426,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           const nextLng = wrapLng(
             center.lng + AUTO_ROTATE_DEG_PER_SEC * dtSeconds,
           );
+          // Only mutate center — bearing/pitch/zoom are unchanged during
+          // auto-rotate and passing them forces MapLibre to validate and
+          // process all four props on every frame.
           map.jumpTo(
-            {
-              center: [nextLng, center.lat],
-              bearing: 0,
-              pitch: map.getPitch(),
-              zoom: map.getZoom(),
-            },
+            { center: [nextLng, center.lat] },
             { [AUTO_ROTATE_EVENT_TAG]: true },
           );
         } catch {
@@ -1345,6 +1464,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
 
       // Expose pause to the imperative handle (button-driven actions).
       pauseAutoRotateRef.current = pauseAutoRotate;
+      setAutoRotatePausedRef.current = (paused: boolean) => {
+        overlayPaused = paused;
+        lastFrameTime = null;
+      };
+      setAutoRotatePausedRef.current(autoRotatePausedPropRef.current);
 
       // ── MapLibre interaction events ─────────────────────────────────────
       // dragstart / zoomstart / rotatestart / pitchstart carry originalEvent
@@ -1383,31 +1507,42 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       canvas.addEventListener("touchstart", onDomUserInput, { passive: true });
       canvas.addEventListener("wheel", onDomUserInput, { passive: true });
 
-      // Promote mapLoaded once load resolves, apply the canonical default
-      // framing with jumpTo (so refresh view == reset view), then unlock
-      // auto-rotate via defaultViewApplied.  Order matters: auto-rotate
-      // must not run before applyDefaultGlobeView, otherwise it could
-      // drift the longitude before the canonical frame is in place.
+      // Promote mapLoaded once load resolves and unlock auto-rotate gating.
+      //
+      // applyDefaultGlobeView is intentionally NOT called here.  The map is
+      // already at DEFAULT_GLOBE_VIEW from the constructor options, and the
+      // view-mode useEffect (which fires after loadState → "ready") calls
+      // applyViewMode with the correct framing padding on its first run.
+      // Calling jumpTo here as well would produce a duplicate positional write
+      // 1-3 frames before the React effect runs, which is the root cause of
+      // the visible startup stutter / camera conflict.
+      //
+      // canRotate() also gates on viewReadyRef.current, which is only set
+      // after the view-mode effect commits the first applyViewMode call —
+      // so even though the RAF loop starts here, it does not rotate until
+      // the initial camera position is fully settled.
+      //
+      // The RAF loop is started here (after load) rather than at mount to
+      // avoid wasting 60 frames/s during the tile-load window where the
+      // loop would spin doing nothing.
       const onLoadInternal = () => {
         mapLoaded = true;
-        try {
-          applyDefaultGlobeView(map, false);
-        } catch {
-          /* map may be mid-teardown — ignore */
-        }
         defaultViewApplied = true;
         lastFrameTime = null;
+        // Kick off the auto-rotate loop.  Actual rotation is gated on
+        // viewReadyRef.current (set by the view-mode effect) so no frame
+        // mutates the camera before the initial jumpTo is settled.
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(animate);
       };
       map.on("load", onLoadInternal);
-
-      // Cancel any stray prior frame before kicking off (defensive — no
-      // prior loop exists in this scope, but keeps the invariant explicit).
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(animate);
 
       // ── Cleanup ──────────────────────────────────────────────────────────
       return () => {
         disposed = true;
+        // Reset viewReadyRef so a future remount starts with the correct
+        // initial state and the RAF gate doesn't open prematurely.
+        viewReadyRef.current = false;
         window.clearTimeout(timeoutId);
         clearResumeTimer();
         cancelAnimationFrame(rafId);
@@ -1421,6 +1556,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           /* canvas may already be detached */
         }
         pauseAutoRotateRef.current = () => {};
+        setAutoRotatePausedRef.current = () => {};
         ro.disconnect();
         mapRef.current = null;
         try {
@@ -1447,10 +1583,14 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     }, []);
 
     // ── View mode sync ──────────────────────────────────────────────────────
-    // First application after load: silent (jumpTo), no auto-rotate pause —
-    // the load handler already placed the globe at DEFAULT_GLOBE_VIEW.
+    // First application after load: silent (jumpTo), no auto-rotate pause.
     // Subsequent changes: smooth easeTo with auto-rotate paused for the
     // duration of the animation + the standard Central View idle delay.
+    //
+    // On first apply, viewReadyRef is set to true AFTER the jumpTo so the RAF
+    // loop starts rotating only once the initial camera position is committed.
+    // This prevents the startup stutter where auto-rotate would begin between
+    // the map's load event and the first React effect cycle.
     useEffect(() => {
       const map = mapRef.current;
       if (!map || loadState !== "ready") return;
@@ -1459,16 +1599,28 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Still keep marker visibility in sync in case it desynced
         setMarkerVisibility(map, "global", activeView === "global");
         setMarkerVisibility(map, "signals", activeView === "signals");
+        if (activeView === "global" && globalMarkerRevealCountRef.current > 0) {
+          window.requestAnimationFrame(() => {
+            onGlobalMarkerRevealStartRef.current?.();
+          });
+        }
         return;
       }
       const isFirstApply = previous === null;
       lastAppliedViewRef.current = activeView;
       if (isFirstApply) {
         applyViewMode(map, activeView, false);
+        // Camera is now at its correct initial position — open the RAF gate.
+        viewReadyRef.current = true;
         return;
       }
       pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
       applyViewMode(map, activeView, true);
+      if (activeView === "global" && globalMarkerRevealCountRef.current > 0) {
+        window.requestAnimationFrame(() => {
+          onGlobalMarkerRevealStartRef.current?.();
+        });
+      }
     }, [activeView, loadState]);
 
     useEffect(() => {
@@ -1494,14 +1646,87 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     }, [activeSignalsRegion, activeView, loadState]);
 
     // ── Marker data sync ────────────────────────────────────────────────────
-    // Push fresh feature sets into the GeoJSON sources whenever the parent
-    // hands us new arrays.  applyMarkerData is a no-op if the source isn't
+    // Push fresh feature sets into the GeoJSON sources.  Global View marker
+    // writes are coalesced on a short timer so bursty RSS/API source batches
+    // produce at most one setData call per window, always using the latest
+    // complete marker array.  applyMarkerData is a no-op if the source isn't
     // ready yet, so race conditions during initial load are harmless.
     useEffect(() => {
       const map = mapRef.current;
       if (!map || loadState !== "ready") return;
-      applyMarkerData(map, "global", globalMarkers ?? []);
+      pendingGlobalMarkersRef.current = globalMarkers ?? [];
+      if (globalMarkerDebounceTimerRef.current !== null) return;
+      globalMarkerDebounceTimerRef.current = window.setTimeout(() => {
+        globalMarkerDebounceTimerRef.current = null;
+        const latestMap = mapRef.current;
+        if (!latestMap) return;
+        const latestMarkers = pendingGlobalMarkersRef.current;
+        applyMarkerData(latestMap, "global", latestMarkers);
+        globalMarkerRevealCountRef.current = 0;
+        applyGlobalMarkerReveal(latestMap, 0);
+
+        if (globalMarkerRevealTimerRef.current !== null) {
+          window.clearTimeout(globalMarkerRevealTimerRef.current);
+          globalMarkerRevealTimerRef.current = null;
+        }
+
+        const revealTotal = latestMarkers.length;
+        if (revealTotal === 0) return;
+
+        const revealNextBatch = () => {
+          const revealMap = mapRef.current;
+          if (!revealMap) return;
+          const wasHidden = globalMarkerRevealCountRef.current === 0;
+          const nextCount = Math.min(
+            globalMarkerRevealCountRef.current + MARKER_REVEAL_BATCH_SIZE,
+            revealTotal,
+          );
+
+          globalMarkerRevealCountRef.current = nextCount;
+          applyGlobalMarkerReveal(revealMap, nextCount);
+          applyMarkerSelection(
+            revealMap,
+            "global",
+            selectedGlobalIdRef.current,
+            nextCount,
+          );
+
+          if (wasHidden && nextCount > 0) {
+            window.requestAnimationFrame(() => {
+              onGlobalMarkerRevealStartRef.current?.();
+            });
+          }
+
+          if (nextCount < revealTotal) {
+            globalMarkerRevealTimerRef.current = window.setTimeout(
+              revealNextBatch,
+              MARKER_REVEAL_BATCH_DELAY_MS,
+            );
+          } else {
+            globalMarkerRevealTimerRef.current = null;
+          }
+        };
+
+        globalMarkerRevealTimerRef.current = window.setTimeout(
+          revealNextBatch,
+          MARKER_REVEAL_BATCH_DELAY_MS,
+        );
+      }, MARKER_DATA_DEBOUNCE_MS);
     }, [globalMarkers, loadState]);
+
+    useEffect(() => {
+      return () => {
+        if (globalMarkerDebounceTimerRef.current !== null) {
+          window.clearTimeout(globalMarkerDebounceTimerRef.current);
+          globalMarkerDebounceTimerRef.current = null;
+        }
+        if (globalMarkerRevealTimerRef.current !== null) {
+          window.clearTimeout(globalMarkerRevealTimerRef.current);
+          globalMarkerRevealTimerRef.current = null;
+        }
+        pendingGlobalMarkersRef.current = [];
+      };
+    }, []);
 
     useEffect(() => {
       const map = mapRef.current;
@@ -1516,7 +1741,12 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     useEffect(() => {
       const map = mapRef.current;
       if (!map || loadState !== "ready") return;
-      applyMarkerSelection(map, "global", selectedGlobalId);
+      applyMarkerSelection(
+        map,
+        "global",
+        selectedGlobalId,
+        globalMarkerRevealCountRef.current,
+      );
     }, [selectedGlobalId, loadState]);
 
     useEffect(() => {

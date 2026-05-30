@@ -11,9 +11,9 @@ import type {
 // and returns NormalizedSourceItem objects for the shared live source pipeline.
 
 /** Maximum items returned per RSS source in a single fetch. */
-export const RSS_PREVIEW_ITEMS_PER_SOURCE = 75;
+export const RSS_PREVIEW_ITEMS_PER_SOURCE = 150;
 const MAX_PREVIEW_ITEMS = RSS_PREVIEW_ITEMS_PER_SOURCE;
-const MAX_BLOCK_SCAN = 100;
+const MAX_BLOCK_SCAN = 200;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_TITLE_LENGTH = 240;
 const MAX_SUMMARY_LENGTH = 320;

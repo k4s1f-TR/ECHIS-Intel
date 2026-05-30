@@ -1,9 +1,7 @@
-import { getSourceDefinition } from "../sourceRegistry";
 import type {
   IntelligenceEventCandidate,
   SourceFilterDomain,
 } from "../sourceIntelligenceTypes";
-import { resolveGeoBasis } from "../geo/resolveGeoBasis";
 import type {
   SourceMarkerCandidate,
   SourceMarkerFeature,
@@ -55,15 +53,17 @@ export function sourceItemsToMarkers(
     }
     if (item.markerEligibility === "rejected") continue;
 
-    const source = getSourceDefinition(item.sourceId);
-    if (!source) continue;
-    const resolved = resolveGeoBasis(item, source);
-    if (!resolved.location || !resolved.geoBasis) continue;
+    // Use the location resolved during the pipeline's first geo-resolution pass
+    // (stored on the candidate by buildIntelligenceEventCandidates) instead of
+    // calling resolveGeoBasis a second time for the same item.
+    const location = item.resolvedLocation;
+    const geoBasis = item.geoBasis;
+    if (!location || !geoBasis) continue;
 
     const markerKey = [
-      resolved.location.label,
-      resolved.location.latitude.toFixed(2),
-      resolved.location.longitude.toFixed(2),
+      location.label,
+      location.latitude.toFixed(2),
+      location.longitude.toFixed(2),
     ].join("::");
     const markerId = `source::${markerKey}`;
     const existing = grouped.get(markerId);
@@ -96,23 +96,23 @@ export function sourceItemsToMarkers(
       itemIds: [item.id],
       title: item.title,
       summary: item.summary,
-      latitude: resolved.location.latitude,
-      longitude: resolved.location.longitude,
-      locationLabel: resolved.location.label,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      locationLabel: location.label,
       markerType: markerTypeFor(item.primaryDomain),
       severity: severityFor(item.priorityScore),
       sourceBasis: item.sourceBasis,
       tags: item.tags,
       publishedAt: item.publishedAt,
       lastUpdatedAt: item.publishedAt ?? item.collectedAt,
-      geoBasis: resolved.geoBasis,
+      geoBasis,
     };
 
     grouped.set(markerId, {
       id: markerId,
-      lng: resolved.location.longitude,
-      lat: resolved.location.latitude,
-      locationName: resolved.location.label,
+      lng: location.longitude,
+      lat: location.latitude,
+      locationName: location.label,
       candidate,
       items: [item],
     });

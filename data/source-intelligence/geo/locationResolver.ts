@@ -381,47 +381,144 @@ function containsAnyPhrase(normalizedText: string, phrases: readonly string[]): 
   return phrases.some((phrase) => containsNormalizedPhrase(normalizedText, phrase));
 }
 
-function optionalDirectionalModifier(): string {
-  const modifiers = phraseAlternation(DIRECTIONAL_LOCATION_MODIFIERS);
-  return `(?:the\\s+)?(?:(?:${modifiers})\\s+)?`;
+// ── Module-level precomputed alternation strings ──────────────────────────────
+// phraseAlternation() was previously called inside every has*() invocation,
+// rebuilding the same large alternation string — and constructing a new RegExp
+// from it — for every alias × item pair in the pipeline.  Precomputing them
+// once at module load eliminates ~2 M regex compilations per pipeline run.
+// All results are identical to what the old code produced; only timing changes.
+const _BEFORE_ALT          = phraseAlternation(EVENT_LOCATION_BEFORE);
+const _AFTER_ALT           = phraseAlternation(EVENT_LOCATION_AFTER);
+const _ACTIONS_ALT         = phraseAlternation(COUNTRY_ACTOR_ACTIONS);
+const _TARGET_BEFORE_ALT   = phraseAlternation(TARGET_ACTION_BEFORE);
+const _TARGET_AFTER_ALT    = phraseAlternation(TARGET_ACTION_AFTER);
+const _DIRECTIONAL_MOD_ALT = phraseAlternation(DIRECTIONAL_LOCATION_MODIFIERS);
+// Replaces optionalDirectionalModifier() — same string, computed once.
+const _DIRECTIONAL_OPT     = `(?:the\\s+)?(?:(?:${_DIRECTIONAL_MOD_ALT})\\s+)?`;
+const _CASE_LINKER_ALT     = TURKISH_CASE_LINKERS.join("|");
+const _POSS_LINKER_ALT     = TURKISH_POSSESSIVE_LINKERS.join("|");
+
+// Precomputed normalized + escaped official-actor phrase fragments.
+// hasOfficialActorPhraseAfter() iterates over 30+ phrases and previously
+// called normalizeFilterText() + new RegExp() for each.  Now it only calls
+// RegExp.prototype.test() on the precompiled objects.
+const _OFFICIAL_ACTOR_FRAGS: readonly string[] = OFFICIAL_ACTOR_PHRASES
+  .map((p) => escapeRegExp(normalizeFilterText(p)))
+  .filter(Boolean);
+
+// ── Per-alias RegExp cache ────────────────────────────────────────────────────
+// AliasRegexSet holds all precompiled RegExp objects for one normalized alias
+// string.  Built lazily on first encounter, reused across every pipeline run.
+// Eagerly warmed for all LOCATION_DICTIONARY + worldCapitals entries below.
+type AliasRegexSet = {
+  /** Shared "before alias" pattern used by contextual + event location checks. */
+  beforeRe:        RegExp;
+  /** Contextual (no Turkish case linker): alias SPACE after-word */
+  ctxAfterRe:      RegExp;
+  /** "people of the alias" — event location variant */
+  evtPeopleRe:     RegExp;
+  /** Event location: alias (case-linker)? SPACE after-word */
+  evtAfterRe:      RegExp;
+  /** Headline starts with alias */
+  hlStartRe:       RegExp;
+  /** Headline with world / global / update prefix before alias */
+  hlGlobalRe:      RegExp;
+  /** Country actor action: (directional)? alias SPACE action-verb */
+  actorActionRe:   RegExp;
+  /** target-action-before SPACE (case-linker)? (directional)? alias */
+  tgtBeforeRe:     RegExp;
+  /** alias (case-linker)? SPACE target-action-after */
+  tgtAfterRe:      RegExp;
+  /** One RegExp per official actor phrase (e.g. "foreign ministry") */
+  officialActorRes: readonly RegExp[];
+};
+
+const _aliasRegexCache = new Map<string, AliasRegexSet>();
+
+function _buildAliasRegexes(normalizedAlias: string): AliasRegexSet {
+  const ea = escapeRegExp(normalizedAlias);
+  return {
+    beforeRe: new RegExp(
+      `(^|\\s)(${_BEFORE_ALT})\\s+${_DIRECTIONAL_OPT}${ea}(?=\\s|$)`,
+    ),
+    ctxAfterRe: new RegExp(
+      `(^|\\s)${ea}\\s+(${_AFTER_ALT})(?=\\s|$)`,
+    ),
+    evtPeopleRe: new RegExp(
+      `(^|\\s)people\\s+of\\s+the\\s+${ea}(?=\\s|$)`,
+    ),
+    evtAfterRe: new RegExp(
+      `(^|\\s)${ea}(?:\\s+(?:${_CASE_LINKER_ALT}))?\\s+(${_AFTER_ALT})(?=\\s|$)`,
+    ),
+    hlStartRe: new RegExp(
+      `^${ea}(?=\\s|$)`,
+    ),
+    hlGlobalRe: new RegExp(
+      `^(world|global|update|flash update)\\s+${ea}(?=\\s|$)`,
+    ),
+    actorActionRe: new RegExp(
+      `(^|\\s)${_DIRECTIONAL_OPT}${ea}\\s+(${_ACTIONS_ALT})(?=\\s|$)`,
+    ),
+    tgtBeforeRe: new RegExp(
+      `(^|\\s)(${_TARGET_BEFORE_ALT})(?:\\s+(?:${_CASE_LINKER_ALT}))?\\s+${_DIRECTIONAL_OPT}${ea}(?=\\s|$)`,
+    ),
+    tgtAfterRe: new RegExp(
+      `(^|\\s)${ea}(?:\\s+(?:${_CASE_LINKER_ALT}))?\\s+(${_TARGET_AFTER_ALT})(?=\\s|$)`,
+    ),
+    officialActorRes: _OFFICIAL_ACTOR_FRAGS.map(
+      (frag) =>
+        new RegExp(
+          `(^|\\s)${ea}(?:\\s+(?:${_POSS_LINKER_ALT}))?\\s+${frag}(?=\\s|$)`,
+        ),
+    ),
+  };
 }
 
-function hasContextualSingleAlias(normalizedText: string, normalizedAlias: string): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  const before = phraseAlternation(EVENT_LOCATION_BEFORE);
-  const after = phraseAlternation(EVENT_LOCATION_AFTER);
-  const directional = optionalDirectionalModifier();
+function _getAliasRegexes(normalizedAlias: string): AliasRegexSet {
+  let set = _aliasRegexCache.get(normalizedAlias);
+  if (!set) {
+    set = _buildAliasRegexes(normalizedAlias);
+    _aliasRegexCache.set(normalizedAlias, set);
+  }
+  return set;
+}
 
-  return (
-    new RegExp(`(^|\\s)(${before})\\s+${directional}${escapedAlias}(?=\\s|$)`).test(
-      normalizedText,
-    ) ||
-    new RegExp(`(^|\\s)${escapedAlias}\\s+(${after})(?=\\s|$)`).test(
-      normalizedText,
-    )
-  );
+// ── Per-alias property cache ──────────────────────────────────────────────────
+// normalizeFilterText() and tokenCount() were called on the same static alias
+// strings on every findLocationResolutionCandidates() invocation.  Memoising
+// the results eliminates repeated normalization across pipeline runs.
+type AliasProps = { normalized: string; tokens: number };
+const _aliasPropCache = new Map<string, AliasProps>();
+
+function _getAliasProps(rawAlias: string): AliasProps {
+  let props = _aliasPropCache.get(rawAlias);
+  if (!props) {
+    props = { normalized: normalizeFilterText(rawAlias), tokens: tokenCount(rawAlias) };
+    _aliasPropCache.set(rawAlias, props);
+  }
+  return props;
+}
+
+// ── has*() functions — now delegate to precompiled RegExp sets ────────────────
+// Behaviour is identical to before; only allocation and compilation are removed.
+
+function hasContextualSingleAlias(
+  normalizedText: string,
+  normalizedAlias: string,
+): boolean {
+  const r = _getAliasRegexes(normalizedAlias);
+  return r.beforeRe.test(normalizedText) || r.ctxAfterRe.test(normalizedText);
 }
 
 function hasEventLocationPhrase(
   normalizedText: string,
   normalizedAlias: string,
 ): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  const before = phraseAlternation(EVENT_LOCATION_BEFORE);
-  const after = phraseAlternation(EVENT_LOCATION_AFTER);
-  const caseLinker = TURKISH_CASE_LINKERS.join("|");
-  const directional = optionalDirectionalModifier();
-
+  const r = _getAliasRegexes(normalizedAlias);
   return (
-    new RegExp(`(^|\\s)(${before})\\s+${directional}${escapedAlias}(?=\\s|$)`).test(
-      normalizedText,
-    ) ||
-    new RegExp(`(^|\\s)people\\s+of\\s+the\\s+${escapedAlias}(?=\\s|$)`).test(
-      normalizedText,
-    ) ||
-    new RegExp(
-      `(^|\\s)${escapedAlias}(?:\\s+(?:${caseLinker}))?\\s+(${after})(?=\\s|$)`,
-    ).test(normalizedText)
+    r.beforeRe.test(normalizedText) ||
+    r.evtPeopleRe.test(normalizedText) ||
+    r.evtAfterRe.test(normalizedText)
   );
 }
 
@@ -429,42 +526,23 @@ function hasOfficialActorPhraseAfter(
   normalizedText: string,
   normalizedAlias: string,
 ): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  const linker = TURKISH_POSSESSIVE_LINKERS.join("|");
-
-  return OFFICIAL_ACTOR_PHRASES.some((phrase) => {
-    const normalizedPhrase = normalizeFilterText(phrase);
-    if (!normalizedPhrase) return false;
-    const escapedPhrase = escapeRegExp(normalizedPhrase);
-    return new RegExp(
-      `(^|\\s)${escapedAlias}(?:\\s+(?:${linker}))?\\s+${escapedPhrase}(?=\\s|$)`,
-    ).test(normalizedText);
-  });
+  const { officialActorRes } = _getAliasRegexes(normalizedAlias);
+  return officialActorRes.some((re) => re.test(normalizedText));
 }
 
 function hasHeadlineLocationPrefix(
   normalizedText: string,
   normalizedAlias: string,
 ): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  return (
-    new RegExp(`^${escapedAlias}(?=\\s|$)`).test(normalizedText) ||
-    new RegExp(`^(world|global|update|flash update)\\s+${escapedAlias}(?=\\s|$)`).test(
-      normalizedText,
-    )
-  );
+  const r = _getAliasRegexes(normalizedAlias);
+  return r.hlStartRe.test(normalizedText) || r.hlGlobalRe.test(normalizedText);
 }
 
 function hasCountryActorAction(
   normalizedText: string,
   normalizedAlias: string,
 ): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  const actions = phraseAlternation(COUNTRY_ACTOR_ACTIONS);
-  const modifier = optionalDirectionalModifier();
-  return new RegExp(
-    `(^|\\s)${modifier}${escapedAlias}\\s+(${actions})(?=\\s|$)`,
-  ).test(normalizedText);
+  return _getAliasRegexes(normalizedAlias).actorActionRe.test(normalizedText);
 }
 
 function hasNegotiationLocationPhrase(
@@ -479,29 +557,16 @@ function hasTargetCountryPhrase(
   normalizedText: string,
   normalizedAlias: string,
 ): boolean {
-  const escapedAlias = escapeRegExp(normalizedAlias);
-  const before = phraseAlternation(TARGET_ACTION_BEFORE);
-  const after = phraseAlternation(TARGET_ACTION_AFTER);
-  const caseLinker = TURKISH_CASE_LINKERS.join("|");
-  const directional = optionalDirectionalModifier();
-
-  return (
-    new RegExp(
-      `(^|\\s)(${before})(?:\\s+(?:${caseLinker}))?\\s+${directional}${escapedAlias}(?=\\s|$)`,
-    ).test(normalizedText) ||
-    new RegExp(
-      `(^|\\s)${escapedAlias}(?:\\s+(?:${caseLinker}))?\\s+(${after})(?=\\s|$)`,
-    ).test(normalizedText)
-  );
+  const r = _getAliasRegexes(normalizedAlias);
+  return r.tgtBeforeRe.test(normalizedText) || r.tgtAfterRe.test(normalizedText);
 }
 
 function aliasMatches(normalizedText: string, entry: LocationEntry) {
   return entry.aliases
-    .map((alias) => ({
-      raw: alias,
-      normalized: normalizeFilterText(alias),
-      tokens: tokenCount(alias),
-    }))
+    .map((rawAlias) => {
+      const { normalized, tokens } = _getAliasProps(rawAlias);
+      return { raw: rawAlias, normalized, tokens };
+    })
     .filter(
       (alias) =>
         alias.normalized &&
@@ -1069,6 +1134,16 @@ const ALL_LOCATION_ENTRIES: readonly LocationEntry[] = [
   ...LOCATION_DICTIONARY,
   ...GLOBAL_CAPITAL_LOCATION_ENTRIES,
 ];
+
+// Eagerly warm alias property and regex caches for every known entry.
+// Pays the one-time compilation cost at module load rather than spreading it
+// across the first pipeline run on the main thread.
+for (const _warmEntry of ALL_LOCATION_ENTRIES) {
+  for (const _warmAlias of _warmEntry.aliases) {
+    const _warmNorm = _getAliasProps(_warmAlias).normalized;
+    if (_warmNorm) _getAliasRegexes(_warmNorm);
+  }
+}
 
 const entriesByCountryCode = new Map(
   ALL_LOCATION_ENTRIES.flatMap((entry) =>
