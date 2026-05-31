@@ -2,18 +2,25 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronRight, Globe2 } from "lucide-react";
 import type { ViewMode } from "@/components/layout/AppShell";
-import type { RegionKey, EventCategory } from "@/types/event";
+import type { RegionKey } from "@/types/event";
 import { REGION_OPTIONS, CATEGORY_OPTIONS } from "@/types/event";
+
+export type MonitorCategoryOption = {
+  key: string;
+  label: string;
+};
 
 interface Props {
   view: ViewMode;
   activeRegion: RegionKey;
-  activeCategory: EventCategory | "all";
+  activeCategory: string;
+  categoryOptions?: MonitorCategoryOption[];
   isPoliticsWatch?: boolean;
   eventCount: number;
   onViewChange: (view: ViewMode) => void;
   onRegionChange: (region: RegionKey) => void;
-  onCategoryChange: (category: EventCategory | "all") => void;
+  onCategoryChange: (category: string) => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const LABEL_STYLE = {
@@ -46,11 +53,13 @@ export function FloatingMonitoringCard({
   view,
   activeRegion,
   activeCategory,
+  categoryOptions = CATEGORY_OPTIONS,
   isPoliticsWatch = false,
   eventCount,
   onViewChange,
   onRegionChange,
   onCategoryChange,
+  onCollapsedChange,
 }: Props) {
   const [regionOpen, setRegionOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -59,7 +68,7 @@ export function FloatingMonitoringCard({
 
   const isGlobal = view === "global";
   const regionLabel = REGION_OPTIONS.find((r) => r.key === activeRegion)?.label ?? "Middle East";
-  const categoryLabel = CATEGORY_OPTIONS.find((c) => c.key === activeCategory)?.label ?? "All Categories";
+  const categoryLabel = categoryOptions.find((c) => c.key === activeCategory)?.label ?? "All Categories";
   const monitoringTitle = isPoliticsWatch ? "Policy Watch" : isGlobal ? "Global View" : regionLabel;
   const monitoringSubtitle = isPoliticsWatch
     ? "Regional Political Monitoring"
@@ -84,7 +93,10 @@ export function FloatingMonitoringCard({
     return (
       <button
         className="absolute top-4 left-4 rounded-xl z-10 flex items-center gap-2"
-        onClick={() => setCollapsed(false)}
+        onClick={() => {
+          setCollapsed(false);
+          onCollapsedChange?.(false);
+        }}
         style={{
           padding: "10px 12px",
           background: "rgba(12,12,12,0.9)",
@@ -132,6 +144,7 @@ export function FloatingMonitoringCard({
             setRegionOpen(false);
             setCategoryOpen(false);
             setCollapsed(true);
+            onCollapsedChange?.(true);
           }}
           aria-label="Collapse monitoring card"
           style={{ color: "rgba(100,100,100,0.8)" }}
@@ -269,7 +282,7 @@ export function FloatingMonitoringCard({
             className="absolute left-0 right-0 mt-1 rounded-lg overflow-hidden"
             style={{ top: "100%", zIndex: 200, ...DROPDOWN_STYLE }}
           >
-            {CATEGORY_OPTIONS.map((opt) => {
+            {categoryOptions.map((opt) => {
               const active = opt.key === activeCategory;
               return (
                 <button

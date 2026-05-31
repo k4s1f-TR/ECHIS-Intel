@@ -4,12 +4,15 @@ import type {
   GeoEvidenceRole,
   GeoEvidenceStrength,
   IntelligenceEventCandidate,
+  MarkerReason,
   MarkerEligibility,
+  NoMarkerReason,
   SourceDefinition,
   SourceFilterDomain,
 } from "../sourceIntelligenceTypes";
 import {
   findLocationResolutionCandidates,
+  resolveLocationByAnchor,
   resolveLocationByCountryCode,
   type LocationResolutionCandidate,
   type ResolvedLocation,
@@ -20,6 +23,9 @@ export type GeoDecision = {
   location?: ResolvedLocation;
   geoBasis?: GeoBasis;
   evidence: GeoEvidence[];
+  markerAnchor?: string;
+  markerReason?: MarkerReason;
+  noMarkerReason?: NoMarkerReason;
 };
 
 type WeightedEvidence = GeoEvidence & {
@@ -53,7 +59,7 @@ function textForGeoResolution(candidate: IntelligenceEventCandidate): string {
   return [
     item.title,
     item.summary,
-    item.bodyText,
+    item.bodyText?.slice(0, 1_500),
     item.eventCountry,
     item.actorCountries?.join(" "),
     item.mentionedCountries?.join(" "),
@@ -392,6 +398,226 @@ function toPublicEvidence(item: WeightedEvidence): GeoEvidence {
   };
 }
 
+type ContextAnchorDecision = {
+  anchor?: string;
+  markerReason?: MarkerReason;
+  noMarkerReason?: NoMarkerReason;
+  markerEligibility?: MarkerEligibility;
+};
+
+function contextualAnchorDecision(
+  candidate: IntelligenceEventCandidate,
+  source: SourceDefinition,
+): ContextAnchorDecision | null {
+  const roles = candidate.entityRoles;
+  if (!candidate.eventType || !roles) return null;
+
+  if (source.markerLocationStrategy === "none") {
+    return { markerEligibility: "feed_only", noMarkerReason: "source_entity_not_location" };
+  }
+  if (candidate.eventType === "analysis_or_opinion") {
+    return { markerEligibility: "feed_only", noMarkerReason: "analysis_or_opinion_item" };
+  }
+  if (candidate.eventType === "local_crime" || candidate.eventType === "ordinary_rescue") {
+    return { markerEligibility: "rejected", noMarkerReason: "local_crime_not_geopolitical" };
+  }
+  if (candidate.eventType === "sports") {
+    return { markerEligibility: "rejected", noMarkerReason: "sports_or_non_relevant_domain" };
+  }
+  if (candidate.eventType === "lifestyle") {
+    return { markerEligibility: "rejected", noMarkerReason: "non_relevant_lifestyle_item" };
+  }
+
+  if (
+    candidate.eventType === "strategic_waterway" ||
+    candidate.eventType === "maritime_security"
+  ) {
+    return roles.strategicLocation
+      ? { anchor: roles.strategicLocation, markerReason: "strategic_topic_location" }
+      : { markerEligibility: "needs_location", noMarkerReason: "no_explicit_location" };
+  }
+
+  if (candidate.eventType === "sanctions_impact") {
+    return roles.impactLocation
+      ? { anchor: roles.impactLocation, markerReason: "impact_location" }
+      : { markerEligibility: "needs_location", noMarkerReason: "no_explicit_location" };
+  }
+
+  if (candidate.eventType === "health_outbreak" || candidate.eventType === "humanitarian_crisis") {
+    if (roles.affectedLocation) {
+      return { anchor: roles.affectedLocation, markerReason: "affected_location" };
+    }
+    if (roles.affectedCountry) {
+      return {
+        anchor: roles.affectedCountry,
+        markerReason: candidate.contextReasons?.some((reason) => reason.includes("summary"))
+          ? "summary_first_sentence_location"
+          : "affected_country",
+      };
+    }
+    return { markerEligibility: "needs_location", noMarkerReason: "no_explicit_location" };
+  }
+
+  if (candidate.eventType === "diplomatic_visit") {
+    const destination = roles.destinationLocations?.[0];
+    return destination
+      ? { anchor: destination, markerReason: "destination_location" }
+      : { markerEligibility: "needs_location", noMarkerReason: "no_explicit_location" };
+  }
+
+  if (
+    candidate.eventType === "official_appointment" ||
+    candidate.eventType === "government_appointment" ||
+    candidate.eventType === "national_security_appointment" ||
+    candidate.eventType === "defense_appointment" ||
+    candidate.eventType === "diplomatic_appointment" ||
+    candidate.eventType === "internal_government_decision"
+  ) {
+    if (roles.issuingCountry) {
+      return {
+        anchor: roles.issuingCountry,
+        markerReason: "appointment_issuing_country",
+      };
+    }
+    if (roles.issuingInstitution) {
+      return {
+        anchor: roles.issuingInstitution,
+        markerReason: "issuing_institution_country",
+      };
+    }
+    return {
+      markerEligibility: "needs_location",
+      noMarkerReason: roles.institution
+        ? "institution_without_country_context"
+        : "unresolved_issuing_country",
+    };
+  }
+
+  if (candidate.eventType === "meeting" || candidate.eventType === "summit") {
+    if (roles.meetingVenue) return { anchor: roles.meetingVenue, markerReason: "meeting_venue" };
+    if (roles.officialCounterpartyCountry) {
+      return {
+        anchor: roles.officialCounterpartyCountry,
+        markerReason: "official_counterparty_country",
+      };
+    }
+    return {
+      markerEligibility: candidate.eventType === "summit" ? "feed_only" : "needs_location",
+      noMarkerReason: "unresolved_event_venue",
+    };
+  }
+
+  if (
+    candidate.eventType === "attack" ||
+    candidate.eventType === "strike" ||
+    candidate.eventType === "drone_strike" ||
+    candidate.eventType === "missile_strike" ||
+    candidate.eventType === "military_incident" ||
+    candidate.eventType === "military_operation" ||
+    candidate.eventType === "clash"
+  ) {
+    if (roles.affectedLocation) return { anchor: roles.affectedLocation, markerReason: "affected_location" };
+    if (roles.eventLocation) return { anchor: roles.eventLocation, markerReason: "event_location" };
+    if (roles.affectedCountry) return { anchor: roles.affectedCountry, markerReason: "affected_country" };
+    if (roles.referencedEventLocation) return { anchor: roles.referencedEventLocation, markerReason: "event_location" };
+    return { markerEligibility: "needs_location", noMarkerReason: "no_explicit_location" };
+  }
+
+  if (
+    candidate.eventType === "condemnation" ||
+    candidate.eventType === "warning" ||
+    candidate.eventType === "official_statement" ||
+    candidate.eventType === "diplomatic_message" ||
+    candidate.eventType === "defense_policy" ||
+    candidate.eventType === "sanctions_announcement" ||
+    candidate.eventType === "legal_decision"
+  ) {
+    if (roles.affectedLocation) return { anchor: roles.affectedLocation, markerReason: "affected_location" };
+    if (roles.affectedCountry) return { anchor: roles.affectedCountry, markerReason: "affected_country" };
+    if (roles.issuingCountry) return { anchor: roles.issuingCountry, markerReason: "issuing_actor_country" };
+    if (roles.issuingInstitution) {
+      return { anchor: roles.issuingInstitution, markerReason: "issuing_institution_country" };
+    }
+    return { markerEligibility: "needs_location", noMarkerReason: "unresolved_official_actor" };
+  }
+
+  return null;
+}
+
+function methodForMarkerReason(reason: MarkerReason): GeoBasis["resolutionMethod"] {
+  switch (reason) {
+    case "issuing_actor_country":
+    case "issuing_institution_country":
+    case "official_actor_alias":
+    case "country_demonym_role":
+    case "institution_inherited_country":
+    case "appointment_issuing_country":
+      return "official_actor_phrase";
+    case "destination_location":
+    case "meeting_venue":
+    case "official_counterparty_country":
+      return "negotiation_location_phrase";
+    case "title_location":
+      return "headline_location_prefix";
+    default:
+      return "event_location_phrase";
+  }
+}
+
+function roleForMarkerReason(reason: MarkerReason): GeoEvidenceRole {
+  switch (reason) {
+    case "issuing_actor_country":
+    case "issuing_institution_country":
+    case "official_actor_alias":
+    case "country_demonym_role":
+    case "institution_inherited_country":
+    case "appointment_issuing_country":
+      return "official_actor";
+    case "destination_location":
+    case "meeting_venue":
+    case "official_counterparty_country":
+      return "venue";
+    default:
+      return "event_location";
+  }
+}
+
+function contextualGeoBasis(
+  candidate: IntelligenceEventCandidate,
+  location: ResolvedLocation,
+  markerReason: MarkerReason,
+  evidence: GeoEvidence[],
+): GeoBasis {
+  const method = methodForMarkerReason(markerReason) ?? "event_location_phrase";
+  const contextEvidence = [
+    `context marker: ${markerReason}`,
+    ...(candidate.contextReasons ?? []).slice(0, 1),
+  ];
+  const compactEvidence = evidence.slice(0, 3);
+  return {
+    type: basisTypeForRole(roleForMarkerReason(markerReason)),
+    reason: reasonForDomain(candidate.primaryDomain),
+    countryCode: location.countryCode,
+    region: location.region,
+    label: location.label,
+    resolutionMethod: method,
+    evidence: [...contextEvidence, ...compactEvidence.map((item) => item.evidenceText)],
+    evidenceDetails: [
+      {
+        role: roleForMarkerReason(markerReason),
+        method,
+        locationLabel: location.label,
+        countryCode: location.countryCode,
+        region: location.region,
+        evidenceText: contextEvidence.join("; "),
+        strength: "strong",
+        acceptedForMarker: true,
+      },
+      ...compactEvidence,
+    ],
+  };
+}
+
 export function resolveGeoDecision(
   candidate: IntelligenceEventCandidate,
   source: SourceDefinition,
@@ -407,17 +633,77 @@ export function resolveGeoDecision(
   const payload = payloadEvidence(candidate, source);
   if (payload) evidence.push(payload);
 
-  for (const locationCandidate of findLocationResolutionCandidates(scanText)) {
-    evidence.push(locationCandidateEvidence(candidate, locationCandidate));
-  }
-
   const fallback = sourceCountryFallbackEvidence(candidate);
   if (fallback && source.markerLocationStrategy !== "none") evidence.push(fallback);
+
+  let publicEvidence: GeoEvidence[] = evidence.map(toPublicEvidence);
+
+  const contextDecision = contextualAnchorDecision(candidate, source);
+  if (contextDecision) {
+    if (contextDecision.anchor && contextDecision.markerReason) {
+      const location = resolveLocationByAnchor(contextDecision.anchor);
+      if (location) {
+        return {
+          markerEligibility: "eligible",
+          location,
+          geoBasis: contextualGeoBasis(
+            candidate,
+            location,
+            contextDecision.markerReason,
+            publicEvidence,
+          ),
+          evidence: publicEvidence,
+          markerAnchor: contextDecision.anchor,
+          markerReason: contextDecision.markerReason,
+        };
+      }
+      return {
+        markerEligibility: "needs_location",
+        geoBasis:
+          publicEvidence.length > 0
+            ? {
+                type: "mentioned_country",
+                reason: "fallback",
+                evidence: publicEvidence.map((item) => item.evidenceText),
+                evidenceDetails: publicEvidence,
+              }
+            : undefined,
+        evidence: publicEvidence,
+        markerAnchor: contextDecision.anchor,
+        noMarkerReason: "no_explicit_location",
+      };
+    }
+
+    if (contextDecision.markerEligibility) {
+      return {
+        markerEligibility: contextDecision.markerEligibility,
+        geoBasis:
+          publicEvidence.length > 0
+            ? {
+                type: "mentioned_country",
+                reason: "fallback",
+                evidence: publicEvidence.map((item) => item.evidenceText),
+                evidenceDetails: publicEvidence,
+              }
+            : undefined,
+        evidence: publicEvidence,
+        noMarkerReason: contextDecision.noMarkerReason,
+      };
+    }
+  }
+
+  if (candidate.item.locationResolutionCandidates === undefined) {
+    candidate.item.locationResolutionCandidates =
+      findLocationResolutionCandidates(scanText);
+  }
+  for (const locationCandidate of candidate.item.locationResolutionCandidates) {
+    evidence.push(locationCandidateEvidence(candidate, locationCandidate));
+  }
+  publicEvidence = evidence.map(toPublicEvidence);
 
   const accepted = evidence
     .filter((item) => item.acceptedForMarker && item.location)
     .sort((a, b) => b.priority - a.priority);
-  const publicEvidence: GeoEvidence[] = evidence.map(toPublicEvidence);
 
   const selected = accepted[0];
   if (!selected) {
@@ -435,6 +721,10 @@ export function resolveGeoDecision(
             }
           : undefined,
       evidence: publicEvidence,
+      noMarkerReason:
+        source.markerLocationStrategy === "none"
+          ? "source_entity_not_location"
+          : "no_explicit_location",
     };
   }
 
@@ -457,6 +747,7 @@ export function resolveGeoDecision(
         evidenceDetails: ambiguousEvidence,
       },
       evidence: ambiguousEvidence,
+      noMarkerReason: "ambiguous_competing_locations",
     };
   }
 
@@ -469,5 +760,6 @@ export function resolveGeoDecision(
       candidate.primaryDomain,
     ),
     evidence: publicEvidence,
+    markerAnchor: selected.location?.label,
   };
 }

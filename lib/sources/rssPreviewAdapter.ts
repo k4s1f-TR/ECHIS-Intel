@@ -17,6 +17,47 @@ const MAX_BLOCK_SCAN = 200;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_TITLE_LENGTH = 240;
 const MAX_SUMMARY_LENGTH = 320;
+const RSS_DIAGNOSTIC_BODY_CHARS = 500;
+
+export type RssPreviewDiagnosticCategory =
+  | "fetch_failed"
+  | "non_xml_response"
+  | "xml_parse_failed"
+  | "rss_no_items_found"
+  | "item_normalization_failed";
+
+type FeedResponse = {
+  body: string;
+  status: number;
+  finalUrl: string;
+  contentType: string;
+};
+
+export class RssPreviewDiagnosticError extends Error {
+  readonly diagnosticCategory: RssPreviewDiagnosticCategory;
+  readonly status?: number;
+  readonly finalUrl?: string;
+  readonly contentType?: string;
+  readonly bodyStart?: string;
+  readonly bodyKind?: BodyKind;
+
+  constructor(
+    diagnosticCategory: RssPreviewDiagnosticCategory,
+    message: string,
+    meta: Partial<FeedResponse> & { bodyKind?: BodyKind } = {},
+  ) {
+    super(message);
+    this.name = "RssPreviewDiagnosticError";
+    this.diagnosticCategory = diagnosticCategory;
+    this.status = meta.status;
+    this.finalUrl = meta.finalUrl;
+    this.contentType = meta.contentType;
+    this.bodyStart = meta.body?.slice(0, RSS_DIAGNOSTIC_BODY_CHARS);
+    this.bodyKind = meta.bodyKind;
+  }
+}
+
+type BodyKind = "rss" | "atom" | "xml" | "html" | "empty" | "other";
 
 const NON_NEWS_PATTERNS: readonly RegExp[] = [
   /abone\s*ol/,
@@ -62,6 +103,10 @@ function decodeHtmlEntities(input: string): string {
       const n = Number(code);
       return Number.isFinite(n) ? String.fromCharCode(n) : "";
     })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+      const n = Number.parseInt(code, 16);
+      return Number.isFinite(n) ? String.fromCharCode(n) : "";
+    })
     .replace(/&amp;/g, "&");
 }
 
@@ -69,22 +114,45 @@ function stripHtml(input: string): string {
   return input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function takeTag(block: string, tag: string): string {
+function tagPattern(tag: string): string {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`<${escaped}\\b[^>]*>([\\s\\S]*?)<\\/${escaped}>`, "i");
+  if (tag.includes(":")) return escaped;
+  return `(?:[\\w.-]+:)?${escaped}`;
+}
+
+function takeTag(block: string, tag: string): string {
+  const re = new RegExp(
+    `<${tagPattern(tag)}\\b[^>]*>([\\s\\S]*?)<\\/${tagPattern(tag)}>`,
+    "i",
+  );
   const match = block.match(re);
   if (!match) return "";
   return decodeHtmlEntities(stripCdata(match[1])).trim();
 }
 
+function takeFirstTag(block: string, tags: readonly string[]): string {
+  for (const tag of tags) {
+    const value = takeTag(block, tag);
+    if (value) return value;
+  }
+  return "";
+}
+
 function takeAtomLink(block: string): string {
-  const hrefMatch = block.match(/<link\b[^>]*\bhref\s*=\s*"([^"]+)"/i);
+  const alternateLink = block.match(
+    /<link\b(?=[^>]*\brel\s*=\s*["']alternate["'])[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\/?>/i,
+  );
+  if (alternateLink) return decodeHtmlEntities(alternateLink[1]).trim();
+  const hrefMatch = block.match(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\/?>/i);
   if (hrefMatch) return hrefMatch[1];
   return takeTag(block, "link");
 }
 
 function extractBlocks(xml: string, tag: string): string[] {
-  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  const re = new RegExp(
+    `<${tagPattern(tag)}\\b[^>]*>([\\s\\S]*?)<\\/${tagPattern(tag)}>`,
+    "gi",
+  );
   const blocks: string[] = [];
   let match: RegExpExecArray | null;
 
@@ -115,7 +183,7 @@ function safeIsoDate(value: string): string {
  * use a different fingerprint and pass through without issues.
  * Follows up to 5 redirects automatically.
  */
-function fetchFeed(feedUrl: string): Promise<string> {
+function fetchFeed(feedUrl: string): Promise<FeedResponse> {
   return new Promise((resolve, reject) => {
     const makeRequest = (url: string, hops = 0): void => {
       if (hops > 5) {
@@ -166,15 +234,16 @@ function fetchFeed(feedUrl: string): Promise<string> {
             return;
           }
 
-          if (!statusCode || statusCode < 200 || statusCode >= 300) {
-            res.destroy();
-            reject(new Error(`upstream_${statusCode ?? 0}`));
-            return;
-          }
-
           const chunks: Buffer[] = [];
           res.on("data", (chunk: Buffer) => chunks.push(chunk));
-          res.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+          res.on("end", () => {
+            resolve({
+              body: Buffer.concat(chunks).toString("utf8"),
+              status: statusCode ?? 0,
+              finalUrl: url,
+              contentType: String(resHeaders["content-type"] ?? ""),
+            });
+          });
           res.on("error", reject);
         },
       );
@@ -204,50 +273,146 @@ function detectAtom(xml: string): boolean {
   if (/<feed\b[^>]*xmlns\s*=\s*"http:\/\/www\.w3\.org\/2005\/Atom"/i.test(xml)) {
     return true;
   }
-  return /<entry\b/i.test(xml) && !/<item\b/i.test(xml);
+  return /<(?:[\w.-]+:)?entry\b/i.test(xml) && !/<(?:[\w.-]+:)?item\b/i.test(xml);
 }
 
-export async function fetchRssPreview(
+function detectBodyKind(body: string): BodyKind {
+  const text = body.replace(/^\uFEFF/, "").trimStart();
+  if (!text) return "empty";
+  if (/^(?:<!doctype\s+html\b|<html\b)/i.test(text)) return "html";
+  if (/<(?:[\w.-]+:)?rss\b/i.test(text) || /<(?:[\w.-]+:)?rdf\b/i.test(text)) {
+    return "rss";
+  }
+  if (/<(?:[\w.-]+:)?feed\b/i.test(text)) return "atom";
+  if (/^<\?xml\b/i.test(text) || /^</.test(text)) return "xml";
+  return "other";
+}
+
+function isLikelyXmlContentType(contentType: string): boolean {
+  return /\b(?:xml|rss|atom)\b/i.test(contentType);
+}
+
+function isDevelopment(): boolean {
+  return process.env.NODE_ENV === "development";
+}
+
+function logRssDiagnostic(
   source: SourceDefinition,
-): Promise<NormalizedSourceItem[]> {
-  if (!source.candidateFeedUrl) {
-    throw new Error("missing_feed_url");
+  response: Partial<FeedResponse>,
+  diagnosticCategory: RssPreviewDiagnosticCategory,
+  bodyKind: BodyKind,
+  extra?: Record<string, unknown>,
+): void {
+  if (!isDevelopment()) return;
+  const body = response.body ?? "";
+  console.warn("[rss-preview]", {
+    sourceId: source.id,
+    sourceName: source.name,
+    feedUrl: source.candidateFeedUrl,
+    status: response.status ?? null,
+    finalUrl: response.finalUrl ?? null,
+    contentType: response.contentType ?? null,
+    bodyStart: body.slice(0, RSS_DIAGNOSTIC_BODY_CHARS),
+    bodyKind,
+    startsWithXmlRssAtom: bodyKind === "xml" || bodyKind === "rss" || bodyKind === "atom",
+    startsWithHtml: bodyKind === "html",
+    diagnosticCategory,
+    ...extra,
+  });
+}
+
+function makeRssError(
+  source: SourceDefinition,
+  response: Partial<FeedResponse>,
+  diagnosticCategory: RssPreviewDiagnosticCategory,
+  bodyKind: BodyKind,
+  message: string = diagnosticCategory,
+  extra?: Record<string, unknown>,
+): RssPreviewDiagnosticError {
+  logRssDiagnostic(source, response, diagnosticCategory, bodyKind, extra);
+  return new RssPreviewDiagnosticError(diagnosticCategory, message, {
+    ...response,
+    bodyKind,
+  });
+}
+
+export function parseRssPreviewItemsFromXml(
+  source: SourceDefinition,
+  xml: string,
+  collectedAt = new Date().toISOString(),
+): NormalizedSourceItem[] {
+  const bodyKind = detectBodyKind(xml);
+  const isAtom = bodyKind === "atom" || detectAtom(xml);
+  const hasFeedRoot =
+    isAtom ||
+    /<(?:[\w.-]+:)?rss\b/i.test(xml) ||
+    /<(?:[\w.-]+:)?rdf\b/i.test(xml);
+  if (!hasFeedRoot) {
+    throw makeRssError(
+      source,
+      { body: xml },
+      "xml_parse_failed",
+      bodyKind,
+      "rss_root_not_found",
+    );
   }
 
-  const xml = await fetchFeed(source.candidateFeedUrl);
-  const isAtom = detectAtom(xml);
   const blocks = isAtom
     ? extractBlocks(xml, "entry")
     : extractBlocks(xml, "item");
 
-  const collectedAt = new Date().toISOString();
+  if (blocks.length === 0) {
+    throw makeRssError(
+      source,
+      { body: xml },
+      "rss_no_items_found",
+      bodyKind,
+      "rss_no_items_found",
+    );
+  }
+
   const items: NormalizedSourceItem[] = [];
+  let malformedCount = 0;
 
   for (let index = 0; index < blocks.length && items.length < MAX_PREVIEW_ITEMS; index++) {
     const block = blocks[index];
 
     try {
-      const titleRaw = takeTag(block, "title");
-      const title = clamp(stripHtml(titleRaw) || "Untitled item", MAX_TITLE_LENGTH);
+      const titleRaw = takeFirstTag(block, ["title"]);
+      const titleText = stripHtml(titleRaw);
+      if (!titleText) {
+        malformedCount += 1;
+        continue;
+      }
+      const title = clamp(titleText, MAX_TITLE_LENGTH);
 
-      const linkRaw = isAtom ? takeAtomLink(block) : takeTag(block, "link");
+      const linkRaw = isAtom
+        ? takeAtomLink(block)
+        : takeFirstTag(block, ["link"]);
       const url = (linkRaw || "").trim() || source.baseUrl;
 
-      let summaryRaw = takeTag(block, "description");
-      if (!summaryRaw) summaryRaw = takeTag(block, "summary");
-      if (!summaryRaw) summaryRaw = takeTag(block, "content");
+      const summaryRaw = takeFirstTag(block, [
+        "description",
+        "summary",
+        "content:encoded",
+        "encoded",
+        "content",
+      ]);
       const summary = clamp(stripHtml(summaryRaw), MAX_SUMMARY_LENGTH);
 
       if (!isEditorialRssItem(title, summary)) continue;
 
-      let dateRaw = takeTag(block, "pubDate");
-      if (!dateRaw) dateRaw = takeTag(block, "published");
-      if (!dateRaw) dateRaw = takeTag(block, "updated");
-      if (!dateRaw) dateRaw = takeTag(block, "dc:date");
+      const dateRaw = takeFirstTag(block, [
+        "pubDate",
+        "published",
+        "updated",
+        "dc:date",
+        "date",
+      ]);
       const publishedAt = safeIsoDate(dateRaw);
 
-      let identifier = takeTag(block, "guid");
-      if (!identifier) identifier = takeTag(block, "id");
+      let identifier = takeFirstTag(block, ["guid", "id"]);
+      if (!identifier) identifier = url && url !== source.baseUrl ? url : "";
       const id =
         identifier && identifier.length > 0
           ? `${source.id}::${identifier}`
@@ -287,9 +452,96 @@ export async function fetchRssPreview(
           : undefined,
       });
     } catch {
-      continue;
+      malformedCount += 1;
     }
   }
 
+  if (items.length === 0) {
+    throw makeRssError(
+      source,
+      { body: xml },
+      malformedCount > 0 ? "item_normalization_failed" : "rss_no_items_found",
+      bodyKind,
+      malformedCount > 0 ? "item_normalization_failed" : "rss_no_items_found",
+      { blockCount: blocks.length, malformedCount },
+    );
+  }
+
+  if (malformedCount > 0 && isDevelopment()) {
+    console.warn("[rss-preview] skipped malformed RSS items", {
+      sourceId: source.id,
+      sourceName: source.name,
+      feedUrl: source.candidateFeedUrl,
+      malformedCount,
+      parsedCount: items.length,
+    });
+  }
+
   return items;
+}
+
+export async function fetchRssPreview(
+  source: SourceDefinition,
+): Promise<NormalizedSourceItem[]> {
+  if (!source.candidateFeedUrl) {
+    throw new Error("missing_feed_url");
+  }
+
+  let response: FeedResponse;
+  try {
+    response = await fetchFeed(source.candidateFeedUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "fetch_failed";
+    throw makeRssError(
+      source,
+      { finalUrl: source.candidateFeedUrl },
+      "fetch_failed",
+      "other",
+      message,
+    );
+  }
+
+  const bodyKind = detectBodyKind(response.body);
+  if (response.status < 200 || response.status >= 300) {
+    throw makeRssError(
+      source,
+      response,
+      "fetch_failed",
+      bodyKind,
+      `upstream_${response.status}`,
+    );
+  }
+
+  if (
+    bodyKind === "html" ||
+    bodyKind === "empty" ||
+    bodyKind === "other" ||
+    (bodyKind === "xml" && !isLikelyXmlContentType(response.contentType))
+  ) {
+    throw makeRssError(
+      source,
+      response,
+      "non_xml_response",
+      bodyKind,
+      "non_xml_response",
+    );
+  }
+
+  try {
+    return parseRssPreviewItemsFromXml(
+      source,
+      response.body,
+      new Date().toISOString(),
+    );
+  } catch (error) {
+    if (error instanceof RssPreviewDiagnosticError) {
+      logRssDiagnostic(
+        source,
+        response,
+        error.diagnosticCategory,
+        error.bodyKind ?? bodyKind,
+      );
+    }
+    throw error;
+  }
 }

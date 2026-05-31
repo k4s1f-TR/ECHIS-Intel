@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, FileText, Radio, X } from "lucide-react";
+import { ChevronRight, ExternalLink, FileText, Radio, X } from "lucide-react";
 import type { IntelligenceEventCandidate } from "@/data/source-intelligence/sourceIntelligenceTypes";
 import { useSourceIntelligenceItems } from "./useSourceIntelligenceItems";
 
 const LEFT_RAIL_W = 68;
 const HEADER_H = 52;
 const MODAL_ANIMATION_MS = 260;
-const ALL_SOURCES_FILTER = "__all_sources__";
+export const ALL_SOURCES_FILTER = "__all_sources__";
 
 function formatAge(iso?: string): string {
   if (!iso) return "";
@@ -541,31 +541,102 @@ function SourceFeedCard({
   );
 }
 
-type SourceFilterOption = {
+export type SourceFilterOption = {
   id: string;
   name: string;
   count: number;
 };
 
-function SourceFilterList({
+export function buildSourceFilterOptions(
+  items: IntelligenceEventCandidate[],
+): SourceFilterOption[] {
+  const bySource = new Map<string, SourceFilterOption>();
+  for (const item of items) {
+    const existing = bySource.get(item.sourceId);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    bySource.set(item.sourceId, {
+      id: item.sourceId,
+      name: item.sourceName,
+      count: 1,
+    });
+  }
+  return [...bySource.values()].sort((a, b) => {
+    const countDelta = b.count - a.count;
+    if (countDelta !== 0) return countDelta;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function SourceFilterList({
   options,
   totalCount,
   selectedSourceId,
   onSelectSource,
+  standalone = false,
+  collapsed = false,
+  onCollapsedChange,
 }: {
   options: SourceFilterOption[];
   totalCount: number;
   selectedSourceId: string;
   onSelectSource: (sourceId: string) => void;
+  standalone?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const allSelected = selectedSourceId === ALL_SOURCES_FILTER;
+
+  if (standalone && collapsed) {
+    return (
+      <button
+        type="button"
+        className="flex items-center gap-2 rounded-xl"
+        onClick={() => onCollapsedChange?.(false)}
+        style={{
+          padding: "10px 12px",
+          background: "rgba(12,12,12,0.9)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          backdropFilter: "blur(14px)",
+          boxShadow:
+            "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
+        }}
+      >
+        <Radio size={10} style={{ color: "rgba(100,100,100,0.74)" }} />
+        <span
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "rgba(185,195,210,0.9)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Sources
+        </span>
+        <ChevronRight size={12} style={{ color: "rgba(100,100,100,0.78)" }} />
+      </button>
+    );
+  }
 
   return (
     <div
       className="flex flex-shrink-0 flex-col"
       style={{
-        borderBottom: "1px solid rgba(255,255,255,0.045)",
-        background: "rgba(255,255,255,0.012)",
+        border: standalone
+          ? "1px solid rgba(255,255,255,0.07)"
+          : undefined,
+        borderBottom: standalone
+          ? undefined
+          : "1px solid rgba(255,255,255,0.045)",
+        borderRadius: standalone ? 10 : undefined,
+        background: standalone ? "rgba(12,12,12,0.88)" : "rgba(255,255,255,0.012)",
+        backdropFilter: standalone ? "blur(14px)" : undefined,
+        boxShadow: standalone
+          ? "0 8px 32px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.035) inset"
+          : undefined,
         padding: "7px 10px 8px",
       }}
     >
@@ -581,15 +652,27 @@ function SourceFilterList({
         >
           Sources
         </span>
-        <span
-          style={{
-            color: "rgba(80,95,115,0.8)",
-            fontSize: 9,
-            fontWeight: 650,
-          }}
-        >
-          {options.length} sources
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            style={{
+              color: "rgba(80,95,115,0.8)",
+              fontSize: 9,
+              fontWeight: 650,
+            }}
+          >
+            {options.length} sources
+          </span>
+          {standalone && (
+            <button
+              type="button"
+              aria-label="Collapse sources filter"
+              onClick={() => onCollapsedChange?.(true)}
+              style={{ color: "rgba(100,100,100,0.8)" }}
+            >
+              <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div
@@ -761,35 +844,24 @@ function LoadingSkeleton() {
 export function SourceGlobalFeedPanel({
   selectedItemId,
   onItemSelect,
+  items: filteredItems,
+  selectedSourceId: controlledSelectedSourceId,
 }: {
   selectedItemId?: string | null;
   onItemSelect?: (id: string) => void;
+  items?: IntelligenceEventCandidate[];
+  selectedSourceId?: string;
 }) {
-  const { items, loadState } = useSourceIntelligenceItems();
+  const { items: allItems, loadState } = useSourceIntelligenceItems();
+  const items = filteredItems ?? allItems;
   const [selectedItem, setSelectedItem] =
     useState<IntelligenceEventCandidate | null>(null);
-  const [selectedSourceId, setSelectedSourceId] = useState(ALL_SOURCES_FILTER);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const sourceOptions = useMemo<SourceFilterOption[]>(() => {
-    const bySource = new Map<string, SourceFilterOption>();
-    for (const item of items) {
-      const existing = bySource.get(item.sourceId);
-      if (existing) {
-        existing.count += 1;
-        continue;
-      }
-      bySource.set(item.sourceId, {
-        id: item.sourceId,
-        name: item.sourceName,
-        count: 1,
-      });
-    }
-    return [...bySource.values()].sort((a, b) => {
-      const countDelta = b.count - a.count;
-      if (countDelta !== 0) return countDelta;
-      return a.name.localeCompare(b.name);
-    });
-  }, [items]);
+  const selectedSourceId = controlledSelectedSourceId ?? ALL_SOURCES_FILTER;
+  const sourceOptions = useMemo<SourceFilterOption[]>(
+    () => buildSourceFilterOptions(items),
+    [items],
+  );
   const effectiveSelectedSourceId = useMemo(() => {
     if (selectedSourceId === ALL_SOURCES_FILTER) return ALL_SOURCES_FILTER;
     return sourceOptions.some((source) => source.id === selectedSourceId)
@@ -811,6 +883,10 @@ export function SourceGlobalFeedPanel({
     );
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [selectedItemId]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [effectiveSelectedSourceId]);
 
   return (
     <>
@@ -875,18 +951,6 @@ export function SourceGlobalFeedPanel({
               No source intelligence items available.
             </span>
           </div>
-        )}
-
-        {(loadState === "loaded" || loadState === "partial") && (
-          <SourceFilterList
-            options={sourceOptions}
-            totalCount={items.length}
-            selectedSourceId={effectiveSelectedSourceId}
-            onSelectSource={(sourceId) => {
-              setSelectedSourceId(sourceId);
-              scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
         )}
 
         {(loadState === "loaded" || loadState === "partial") && (

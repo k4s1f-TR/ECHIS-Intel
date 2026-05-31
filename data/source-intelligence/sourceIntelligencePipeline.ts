@@ -1,15 +1,22 @@
 import { applySourceFilters } from "./filters/applySourceFilters";
 import { resolveGeoBasis } from "./geo/resolveGeoBasis";
+import {
+  addGeoDecisionEngineMs,
+  incrementGeoProcessedCount,
+  readPipelineStageProfile,
+  resetPipelineStageProfile,
+} from "./pipelineProfiling";
 import { getSourceAdapter } from "./sourceAdapters";
 import type {
   IntelligenceEventCandidate,
   NormalizedSourceItem,
   RawSourceItem,
+  SourcePipelineProfile,
   SourceDefinition,
   SourceFilterResult,
 } from "./sourceIntelligenceTypes";
 
-const GLOBAL_VIEW_MAX_ITEM_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const GLOBAL_VIEW_MAX_ITEM_AGE_MS = 48 * 60 * 60 * 1000;
 
 function isFreshEnough(item: NormalizedSourceItem): boolean {
   if (!item.publishedAt || !item.collectedAt) return true;
@@ -47,6 +54,9 @@ type _GeoCacheEntry = {
   markerEligibility: IntelligenceEventCandidate["markerEligibility"];
   geoBasis:          IntelligenceEventCandidate["geoBasis"];
   resolvedLocation:  IntelligenceEventCandidate["resolvedLocation"];
+  markerAnchor:      IntelligenceEventCandidate["markerAnchor"];
+  markerReason:      IntelligenceEventCandidate["markerReason"];
+  noMarkerReason:    IntelligenceEventCandidate["noMarkerReason"];
 };
 const _geoCache    = new Map<string, _GeoCacheEntry>();
 const _GEO_CAP     = 4000;
@@ -82,9 +92,23 @@ export function buildIntelligenceEventCandidates(
         matches: result.matches,
         markerEligibility: result.markerEligibility,
         geoBasis: result.geoBasis,
+        eventType: result.eventType,
+        eventSubType: result.eventSubType,
+        entityRoles: result.entityRoles,
+        markerAnchor: result.markerAnchor,
+        markerReason: result.markerReason,
+        noMarkerReason: result.noMarkerReason,
+        contextReasons: result.contextReasons,
+        filterGuardReason: result.filterGuardReason,
       };
 
       if (!source) return initial;
+      if (
+        initial.markerEligibility === "feed_only" ||
+        initial.markerEligibility === "rejected"
+      ) {
+        return initial;
+      }
 
       // Return cached geo-resolution when available — avoids re-running the
       // expensive findLocationResolutionCandidates() regex scan for items that
@@ -96,14 +120,23 @@ export function buildIntelligenceEventCandidates(
           markerEligibility: cached.markerEligibility,
           geoBasis:          cached.geoBasis,
           resolvedLocation:  cached.resolvedLocation,
+          markerAnchor:      cached.markerAnchor,
+          markerReason:      cached.markerReason,
+          noMarkerReason:    cached.noMarkerReason,
         };
       }
 
+      const geoStart = performance.now();
       const resolved = resolveGeoBasis(initial, source);
+      addGeoDecisionEngineMs(performance.now() - geoStart);
+      incrementGeoProcessedCount();
       const entry: _GeoCacheEntry = {
         markerEligibility: resolved.markerEligibility,
         geoBasis:          resolved.geoBasis,
         resolvedLocation:  resolved.location,
+        markerAnchor:      resolved.markerAnchor,
+        markerReason:      resolved.markerReason,
+        noMarkerReason:    resolved.noMarkerReason,
       };
       if (_geoCache.size < _GEO_CAP) _geoCache.set(result.item.id, entry);
 
@@ -114,6 +147,9 @@ export function buildIntelligenceEventCandidates(
         markerEligibility: entry.markerEligibility,
         geoBasis:          entry.geoBasis,
         resolvedLocation:  entry.resolvedLocation,
+        markerAnchor:      entry.markerAnchor,
+        markerReason:      entry.markerReason,
+        noMarkerReason:    entry.noMarkerReason,
       };
     })
     .sort((a, b) => {
@@ -133,17 +169,45 @@ export function runSourceIntelligencePipeline(
   normalizedItems: NormalizedSourceItem[];
   filterResults: SourceFilterResult<NormalizedSourceItem>[];
   eventCandidates: IntelligenceEventCandidate[];
+  profile: SourcePipelineProfile;
 } {
+  const totalStart = performance.now();
+  resetPipelineStageProfile();
   const freshItems = normalizedItems.filter(isFreshEnough);
+  const filterStart = performance.now();
   const filterResults = applySourceFilters(freshItems);
+  const applySourceFiltersMs = performance.now() - filterStart;
   const eventCandidates = buildIntelligenceEventCandidates(
     filterResults,
     sourceLookup,
   );
+  const stageProfile = readPipelineStageProfile();
+  const totalMs = performance.now() - totalStart;
+  const feedOnlyCount = eventCandidates.filter(
+    (item) => item.markerEligibility === "feed_only",
+  ).length;
+  const markerEligibleCount = eventCandidates.filter(
+    (item) => item.markerEligibility === "eligible",
+  ).length;
+  const rejectedCount = filterResults.filter((item) => !item.accepted).length;
 
   return {
     normalizedItems: freshItems,
     filterResults,
     eventCandidates,
+    profile: {
+      itemCount: normalizedItems.length,
+      freshItemCount: freshItems.length,
+      cheapPrefilterRejectedCount: stageProfile.cheapPrefilterRejectedCount,
+      fullContextProcessedCount: stageProfile.fullContextProcessedCount,
+      geoProcessedCount: stageProfile.geoProcessedCount,
+      feedOnlyCount,
+      rejectedCount,
+      markerEligibleCount,
+      applySourceFiltersMs,
+      eventEntityDetectionMs: stageProfile.eventEntityDetectionMs,
+      geoDecisionEngineMs: stageProfile.geoDecisionEngineMs,
+      totalMs,
+    },
   };
 }

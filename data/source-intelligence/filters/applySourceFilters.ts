@@ -8,8 +8,14 @@ import type {
   SourceFilterResult,
   VerificationStatus,
 } from "../sourceIntelligenceTypes";
+import {
+  addEventEntityDetectionMs,
+  incrementCheapPrefilterRejectedCount,
+  incrementFullContextProcessedCount,
+} from "../pipelineProfiling";
 import { keywordDictionaries } from "./keywordDictionaries";
 import { containsNormalizedPhrase, normalizeFilterText } from "./normalizeFilterText";
+import { classifySourceContext } from "./contextClassifier";
 import {
   domainTags,
   FILTER_ACCEPTANCE_THRESHOLD,
@@ -46,12 +52,15 @@ const groupedKeywordSpecs: GroupSpec[] = [
   { domain: "diplomacy", groupName: "geopoliticalRegions", keywords: keywordDictionaries.geopoliticalRegions },
 ];
 
+const MAX_FILTER_BODY_CHARS = 1_500;
+
 function textForItem(item: NormalizedSourceItem): string {
-  return normalizeFilterText(
+  if (item.normalizedFilterText !== undefined) return item.normalizedFilterText;
+  const text = normalizeFilterText(
     [
       item.title,
       item.summary,
-      item.bodyText,
+      item.bodyText?.slice(0, MAX_FILTER_BODY_CHARS),
       item.sourceName,
       item.legacyCategory,
       item.mentionedCountries?.join(" "),
@@ -62,6 +71,8 @@ function textForItem(item: NormalizedSourceItem): string {
       .filter(Boolean)
       .join(" "),
   );
+  item.normalizedFilterText = text;
+  return text;
 }
 
 function defaults(item: NormalizedSourceItem): {
@@ -107,6 +118,48 @@ function emptyReject(
     markerEligibility: "rejected",
     rejectedBy,
   };
+}
+
+function domainForEventType(
+  eventType: ReturnType<typeof classifySourceContext>["eventType"],
+): SourceFilterDomain | undefined {
+  switch (eventType) {
+    case "condemnation":
+    case "warning":
+    case "official_statement":
+    case "diplomatic_message":
+    case "official_appointment":
+    case "government_appointment":
+    case "national_security_appointment":
+    case "internal_government_decision":
+      return "official_statement";
+    case "diplomatic_visit":
+    case "meeting":
+    case "summit":
+    case "defense_policy":
+    case "defense_appointment":
+    case "diplomatic_appointment":
+      return "diplomacy";
+    case "attack":
+    case "strike":
+    case "drone_strike":
+    case "missile_strike":
+    case "clash":
+    case "military_operation":
+    case "military_incident":
+    case "strategic_waterway":
+    case "maritime_security":
+      return "conflict";
+    case "sanctions_announcement":
+    case "sanctions_impact":
+    case "legal_decision":
+      return "sanctions_law";
+    case "humanitarian_crisis":
+    case "health_outbreak":
+      return "humanitarian";
+    default:
+      return undefined;
+  }
 }
 
 export function applySourceFilters(
@@ -155,12 +208,44 @@ export function applySourceFilters(
     const negativeMatches = keywordDictionaries.negativeNoise.filter((keyword) =>
       containsNormalizedPhrase(text, keyword),
     );
-    if (negativeMatches.length > 0 && !hasStrongTrigger) {
-      return emptyReject(item, "negative_noise");
-    }
     if (negativeMatches.length > 0) {
       relevanceScore = Math.max(0, relevanceScore - 5);
       priorityScore = Math.max(0, priorityScore - 5);
+    }
+
+    const contextStart = performance.now();
+    const context = classifySourceContext(item);
+    addEventEntityDetectionMs(performance.now() - contextStart);
+    incrementFullContextProcessedCount();
+
+    const contextDomain = domainForEventType(context.eventType);
+    const hasContextGeopoliticalOverride =
+      !!contextDomain && context.eventType !== "analysis_or_opinion";
+    const finalGuardReason = context.filterGuardReason;
+    const finalNoMarkerReason = context.noMarkerReason;
+
+    if (finalGuardReason && !hasContextGeopoliticalOverride) {
+      incrementCheapPrefilterRejectedCount();
+      return {
+        ...emptyReject(item, "negative_noise"),
+        eventType: context.eventType,
+        entityRoles: context.entityRoles,
+        contextReasons: context.contextReasons,
+        filterGuardReason: finalGuardReason,
+        noMarkerReason: finalNoMarkerReason,
+      };
+    }
+
+    if (negativeMatches.length > 0 && !hasStrongTrigger && !hasContextGeopoliticalOverride) {
+      incrementCheapPrefilterRejectedCount();
+      return {
+        ...emptyReject(item, "negative_noise"),
+        eventType: context.eventType,
+        entityRoles: context.entityRoles,
+        contextReasons: context.contextReasons,
+        filterGuardReason: finalGuardReason,
+        noMarkerReason: finalNoMarkerReason,
+      };
     }
 
     const inferred = defaults(item);
@@ -186,11 +271,37 @@ export function applySourceFilters(
       priorityScore += 10;
     }
 
+    if (contextDomain && context.eventType !== "analysis_or_opinion") {
+      const contextScore =
+        context.eventType === "unknown" ? 0 :
+        context.eventType === "health_outbreak" ? 28 :
+        28;
+      relevanceScore += contextScore;
+      priorityScore += contextScore;
+      matchedGroups.add(`context.${context.eventType}`);
+      matchedKeywords.add(context.eventType);
+      const existing = domainScores.get(contextDomain);
+      if (existing) {
+        existing.score += contextScore;
+        existing.matchedKeywords.push(context.eventType);
+        existing.matchedGroups.push(`context.${context.eventType}`);
+      } else {
+        domainScores.set(contextDomain, {
+          domain: contextDomain,
+          score: contextScore,
+          matchedKeywords: [context.eventType],
+          matchedGroups: [`context.${context.eventType}`],
+        });
+      }
+    }
+
     const matches = [...domainScores.values()].sort((a, b) => b.score - a.score);
     const primaryDomain = matches[0]?.domain;
     const accepted = relevanceScore >= FILTER_ACCEPTANCE_THRESHOLD && !!primaryDomain;
     const markerEligibility: MarkerEligibility = accepted
-      ? item.locationHint
+      ? context.eventType === "analysis_or_opinion"
+        ? "feed_only"
+        : item.locationHint
         ? "eligible"
         : "needs_location"
       : "rejected";
@@ -208,6 +319,11 @@ export function applySourceFilters(
       matchedKeywords: [...matchedKeywords],
       matches,
       markerEligibility,
+      eventType: context.eventType,
+      entityRoles: context.entityRoles,
+      noMarkerReason: context.noMarkerReason,
+      contextReasons: context.contextReasons,
+      filterGuardReason: context.filterGuardReason,
       rejectedBy: accepted ? undefined : "low_relevance",
     };
   });

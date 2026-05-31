@@ -8,11 +8,19 @@ import {
   type MapLibreGlobeHandle,
   type MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
-import { FloatingMonitoringCard } from "@/components/map/FloatingMonitoringCard";
+import {
+  FloatingMonitoringCard,
+  type MonitorCategoryOption,
+} from "@/components/map/FloatingMonitoringCard";
 import { MapControls } from "@/components/map/MapControls";
 import { MarkerInfoPopup } from "@/components/map/MarkerInfoPopup";
 import { LiveStatusPill } from "@/components/map/LiveStatusPill";
-import { SourceGlobalFeedPanel } from "@/components/source-intelligence/SourceGlobalFeedPanel";
+import {
+  ALL_SOURCES_FILTER,
+  SourceFilterList,
+  SourceGlobalFeedPanel,
+  buildSourceFilterOptions,
+} from "@/components/source-intelligence/SourceGlobalFeedPanel";
 import { useSourceIntelligenceItems } from "@/components/source-intelligence/useSourceIntelligenceItems";
 import { EventDetailModal } from "@/components/events/EventDetailModal";
 import { BookmarksView } from "@/components/events/BookmarksView";
@@ -29,6 +37,8 @@ import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
 import type { EventCategory, RegionKey } from "@/types/event";
 import { socmintMatchesConfidenceFilter } from "@/types/socmint";
+import { domainTags } from "@/data/source-intelligence/filters/geopoliticalFilterRules";
+import type { SourceFilterDomain } from "@/data/source-intelligence/sourceIntelligenceTypes";
 
 export type ViewMode = "situation" | "global" | "signals";
 type ActiveSection = "dashboard" | "sources" | "bookmarks";
@@ -47,6 +57,7 @@ export function AppShell() {
   const [activeView, setActiveView] = useState<ViewMode>("situation");
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
   const [activeCategory, setActiveCategory] = useState<EventCategory | "all">("all");
+  const [activeSourceCategory, setActiveSourceCategory] = useState<SourceFilterDomain | "all">("all");
   const [activeSignalRegion, setActiveSignalRegion] = useState<SignalCoverage>("global");
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
@@ -55,24 +66,81 @@ export function AppShell() {
   // and pager.  All three UI surfaces read from / write to this one value so
   // they can never disagree.
   const [selectedSourceItemId, setSelectedSourceItemId] = useState<string | null>(null);
+  const [selectedSourceFilterId, setSelectedSourceFilterId] =
+    useState(ALL_SOURCES_FILTER);
+  const [monitorCardCollapsed, setMonitorCardCollapsed] = useState(false);
+  const [sourceFilterCollapsed, setSourceFilterCollapsed] = useState(false);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
 
   // Same accepted source-intelligence candidates drive the feed and map pins.
-  const { markers: sourceMarkers } = useSourceIntelligenceItems();
+  const {
+    items: sourceItems,
+    markers: sourceMarkers,
+    loadState: sourceLoadState,
+  } = useSourceIntelligenceItems();
+
+  const sourceCategoryOptions = useMemo<MonitorCategoryOption[]>(() => {
+    const counts = new Map<SourceFilterDomain, number>();
+    for (const item of sourceItems) {
+      counts.set(item.primaryDomain, (counts.get(item.primaryDomain) ?? 0) + 1);
+    }
+
+    const domainOptions = (Object.keys(domainTags) as SourceFilterDomain[])
+      .filter((domain) => counts.has(domain))
+      .map((domain) => ({
+        key: domain,
+        label: domainTags[domain],
+      }));
+
+    return [{ key: "all", label: "All Source Categories" }, ...domainOptions];
+  }, [sourceItems]);
+
+  const displayedSourceItems = useMemo(
+    () =>
+      activeSourceCategory === "all"
+        ? sourceItems
+        : sourceItems.filter((item) => item.primaryDomain === activeSourceCategory),
+    [activeSourceCategory, sourceItems],
+  );
+  const sourceFilterOptions = useMemo(
+    () => buildSourceFilterOptions(displayedSourceItems),
+    [displayedSourceItems],
+  );
+  const effectiveSourceFilterId = useMemo(() => {
+    if (selectedSourceFilterId === ALL_SOURCES_FILTER) return ALL_SOURCES_FILTER;
+    return sourceFilterOptions.some((source) => source.id === selectedSourceFilterId)
+      ? selectedSourceFilterId
+      : ALL_SOURCES_FILTER;
+  }, [selectedSourceFilterId, sourceFilterOptions]);
+
+  const displayedSourceMarkers = useMemo(
+    () =>
+      activeSourceCategory === "all"
+        ? sourceMarkers
+        : sourceMarkers
+            .map((marker) => ({
+              ...marker,
+              items: marker.items.filter(
+                (item) => item.primaryDomain === activeSourceCategory,
+              ),
+            }))
+            .filter((marker) => marker.items.length > 0),
+    [activeSourceCategory, sourceMarkers],
+  );
 
   // O(1) lookup: source item id -> { markerId, itemIndex }.
   // Used by the feed-click handler to find the correct marker and item position
-  // without scanning the sourceMarkers array on every click.
+  // without scanning the filtered source marker array on every click.
   const sourceItemKeyToMarker = useMemo(() => {
     const map = new Map<string, { markerId: string; itemIndex: number }>();
-    for (const m of sourceMarkers) {
+    for (const m of displayedSourceMarkers) {
       m.items.forEach((item, idx) => {
         map.set(item.id, { markerId: m.id, itemIndex: idx });
       });
     }
     return map;
-  }, [sourceMarkers]);
+  }, [displayedSourceMarkers]);
 
   // Stable refs so the focus effects below only re-run when the selected ID
   // changes, not when the rail mode changes (avoids spurious camera jumps
@@ -156,9 +224,9 @@ export function AppShell() {
   const markerPopupSourceMarker = useMemo(
     () =>
       markerPopup?.kind === "global" && markerPopupEvent === null
-        ? (sourceMarkers.find((m) => m.id === markerPopup.id) ?? null)
+        ? (displayedSourceMarkers.find((m) => m.id === markerPopup.id) ?? null)
         : null,
-    [markerPopup, markerPopupEvent, sourceMarkers],
+    [displayedSourceMarkers, markerPopup, markerPopupEvent],
   );
   // Derive the pager index from selectedSourceItemId so the feed highlight and
   // the popup "REPORT XX / NN" label always agree.  Falls back to 0 when the
@@ -185,8 +253,8 @@ export function AppShell() {
   // items that have a deterministic location match in the source pipeline.
   // SOCMINT markers are untouched (separate signalsMarkers array below).
   const globalMarkers = useMemo<MarkerFeature[]>(
-    () => sourceMarkers,
-    [sourceMarkers],
+    () => displayedSourceMarkers,
+    [displayedSourceMarkers],
   );
 
   const signalsMarkers = useMemo<MarkerFeature[]>(
@@ -217,6 +285,7 @@ export function AppShell() {
     setActiveTopTab("situation");
     setActiveView(view);
     setActiveCategory("all");
+    setActiveSourceCategory("all");
     setSelectedId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
@@ -241,6 +310,7 @@ export function AppShell() {
     setActiveView("situation");
     setActiveRegion("middle-east");
     setActiveCategory("all");
+    setActiveSourceCategory("all");
     setSelectedId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
@@ -270,12 +340,12 @@ export function AppShell() {
     setMarkerPopup(null);
   }
 
-  function handleCategoryChange(category: EventCategory | "all") {
-    setActiveCategory(category);
-    if (activeTopTab === "politics" && category !== "politics") {
-      setActiveTopTab("situation");
-    }
+  function handleSourceCategoryChange(category: string) {
+    setActiveSourceCategory(
+      category === "all" ? "all" : (category as SourceFilterDomain),
+    );
     setSelectedId(null);
+    setSelectedSourceItemId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
   }
@@ -313,6 +383,7 @@ export function AppShell() {
       setActiveTopTab(tab);
       setActiveRailMode(null);
       setActiveCategory("all");
+      setActiveSourceCategory("all");
       setSelectedId(null);
       setEventDetailOpen(false);
       setMarkerPopup(null);
@@ -336,7 +407,7 @@ export function AppShell() {
     setMarkerPopup({ kind: "global", id });
     // For source markers: default to the first item unless the currently selected
     // item already belongs to this marker (e.g. user re-clicks the same pin).
-    const sourceMarker = sourceMarkers.find((m) => m.id === id);
+    const sourceMarker = displayedSourceMarkers.find((m) => m.id === id);
     if (sourceMarker) {
       const currentBelongs = sourceMarker.items.some(
         (it) => it.id === selectedSourceItemId,
@@ -482,13 +553,37 @@ export function AppShell() {
               <FloatingMonitoringCard
                 view={activeView}
                 activeRegion={activeRegion}
-                activeCategory={activeCategory}
+                activeCategory={activeSourceCategory}
+                categoryOptions={sourceCategoryOptions}
                 isPoliticsWatch={false}
-                eventCount={displayedEvents.length}
+                eventCount={displayedSourceItems.length}
                 onViewChange={handleViewChange}
                 onRegionChange={handleRegionChange}
-                onCategoryChange={handleCategoryChange}
+                onCategoryChange={handleSourceCategoryChange}
+                onCollapsedChange={setMonitorCardCollapsed}
               />
+              {(sourceLoadState === "loaded" || sourceLoadState === "partial") && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: monitorCardCollapsed ? "64px" : "286px",
+                    left: "16px",
+                    width: sourceFilterCollapsed ? "auto" : "206px",
+                    zIndex: 10,
+                    transition: "top 160ms ease",
+                  }}
+                >
+                  <SourceFilterList
+                    standalone
+                    collapsed={sourceFilterCollapsed}
+                    onCollapsedChange={setSourceFilterCollapsed}
+                    options={sourceFilterOptions}
+                    totalCount={displayedSourceItems.length}
+                    selectedSourceId={effectiveSourceFilterId}
+                    onSelectSource={setSelectedSourceFilterId}
+                  />
+                </div>
+              )}
             </div>
             <MapControls
               onCenterView={() => globeMapRef.current?.centerView()}
@@ -496,7 +591,9 @@ export function AppShell() {
               onZoomOut={() => globeMapRef.current?.zoomOut()}
               panelOffset={mapControlPanelOffset}
             />
-            {activeMapRailMode !== null && <LiveStatusPill />}
+            {activeMapRailMode !== null && (
+              <LiveStatusPill panelOffset={mapControlPanelOffset} />
+            )}
 
             <div
               style={{
@@ -518,6 +615,8 @@ export function AppShell() {
               {activeMapRailMode === "global" && (
                 <SourceGlobalFeedPanel
                   selectedItemId={selectedSourceItemId}
+                  items={displayedSourceItems}
+                  selectedSourceId={effectiveSourceFilterId}
                   onItemSelect={(itemId) => {
                     const entry = sourceItemKeyToMarker.get(itemId);
                     if (entry) {
@@ -525,7 +624,7 @@ export function AppShell() {
                       // Set selectedSourceItemId first so the derived index is
                       // already correct when the popup re-renders.
                       setSelectedSourceItemId(itemId);
-                      const grouped = sourceMarkers.find(
+                      const grouped = displayedSourceMarkers.find(
                         (m) => m.id === entry.markerId,
                       );
                       if (grouped) {

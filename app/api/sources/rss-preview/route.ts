@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { candidateSourceDefinitions } from "@/data/sources/sourceDefinitions";
-import { fetchRssPreview } from "@/lib/sources/rssPreviewAdapter";
+import {
+  RssPreviewDiagnosticError,
+  fetchRssPreview,
+} from "@/lib/sources/rssPreviewAdapter";
 
 // Narrow on-demand RSS feed route.
 //
@@ -152,8 +155,17 @@ export async function GET(request: Request) {
     );
   } catch (err) {
     let reason = "feed_fetch_failed";
+    let diagnosticCategory: string | undefined;
     if (err instanceof Error) {
-      if (err.name === "AbortError") {
+      if (err instanceof RssPreviewDiagnosticError) {
+        diagnosticCategory = err.diagnosticCategory;
+        reason =
+          err.diagnosticCategory === "fetch_failed"
+            ? err.message.startsWith("upstream_")
+              ? err.message
+              : "network_fetch_failed"
+            : "parse_failed";
+      } else if (err.name === "AbortError") {
         reason = "timeout";
       } else if (err.message === "missing_feed_url") {
         reason = "missing_feed_url";
@@ -168,6 +180,7 @@ export async function GET(request: Request) {
         sourceId: source.id,
         error: reason,
         reason,
+        diagnosticCategory,
       },
       { status: 502, headers: noCacheHeaders },
     );

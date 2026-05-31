@@ -55,6 +55,7 @@ export type MarkerFeature = {
   lat: number;
   severity?: "low" | "medium" | "high" | "critical";
   confidence?: "low" | "medium" | "high";
+  itemCount?: number;
 };
 
 interface MapLibreGlobeProps {
@@ -99,41 +100,94 @@ const MARKER_GLOW_GLOBAL    = "taipan-markers-global-glow";
 const MARKER_GLOW_SIGNALS   = "taipan-markers-signals-glow";
 const MARKER_LAYER_GLOBAL   = "taipan-markers-global-layer";
 const MARKER_LAYER_SIGNALS  = "taipan-markers-signals-layer";
+const MARKER_HOVER_GLOW_GLOBAL   = "taipan-markers-global-hover-glow";
+const MARKER_HOVER_GLOW_SIGNALS  = "taipan-markers-signals-hover-glow";
+const MARKER_HOVER_LAYER_GLOBAL  = "taipan-markers-global-hover-layer";
+const MARKER_HOVER_LAYER_SIGNALS = "taipan-markers-signals-hover-layer";
 const MARKER_SEL_GLOBAL     = "taipan-markers-global-selected";
 const MARKER_SEL_SIGNALS    = "taipan-markers-signals-selected";
+const MARKER_BADGE_GLOBAL   = "taipan-markers-global-count-badge";
+const MARKER_BADGE_TEXT_GLOBAL = "taipan-markers-global-count-badge-text";
 
 // Filter value used to make the selected-pin layer show nothing when there
 // is no active selection — matches a feature id that can never exist.
 const FILTER_MATCH_NONE: maplibregl.ExpressionSpecification =
   ["==", ["get", "id"], "__taipan_none__"];
+const MARKER_ITEM_COUNT_PROP = "itemCount";
+const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
+  ">",
+  ["to-number", ["get", MARKER_ITEM_COUNT_PROP], 1],
+  1,
+] as unknown as maplibregl.FilterSpecification;
 
 // ---------------------------------------------------------------------------
-// Uniform red location-pin icon — single shared icon image used by both the
-// Global View and SOCMINT marker symbol layers.  Vivid deep red on the dark
-// globe, sharp simple silhouette with a small dark cutout for the head.
+// Premium red location-pin icon — single shared SVG image used by both the
+// Global View and SOCMINT marker symbol layers.  Deep red body, dark inner
+// core, controlled rim/highlight detail, and a small shadow for legibility on
+// dark land/water without pushing into oversized neon bloom.
 //
-// Sizing: the SVG is 24x34 source pixels and registered with pixelRatio:2 so
-// MapLibre renders it at ~12x17 logical pixels — perceived footprint matches
-// the previous circle-marker dots (radius 3–6).  icon-anchor: "bottom" keeps
-// the pin tip aligned with the geographic coordinate during zoom / drag /
+// Sizing: the SVG is 28x34 source pixels and registered at pixelRatio:1.
+// The default icon-size below renders the marker at about 32px tall, while
+// selected/hover states remain restrained. icon-anchor: "bottom" keeps the
+// pin tip aligned with the geographic coordinate during zoom / drag /
 // auto-rotate.
 // ---------------------------------------------------------------------------
 const PIN_ICON_ID = "taipan-marker-pin";
 const PIN_ICON_PIXEL_RATIO = 2;
+const PIN_ICON_SIZE_DEFAULT = 1;
+const PIN_ICON_SIZE_SELECTED = 1.45;
 const PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
   '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="#ff1f2d"/>' +
   '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
   "</svg>";
 
-function registerPinIcon(map: maplibregl.Map): void {
+const GLOBAL_PIN_ICON_ID = "taipan-marker-pin-premium";
+const GLOBAL_PIN_ICON_PIXEL_RATIO = 1;
+const GLOBAL_PIN_ICON_SIZE_DEFAULT = 0.8;
+const GLOBAL_PIN_ICON_SIZE_HOVER = 0.86;
+const GLOBAL_PIN_ICON_SIZE_SELECTED = 0.94;
+const GLOBAL_PIN_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">' +
+  "<defs>" +
+  '<linearGradient id="pinBody" x1="7.5" y1="3" x2="21" y2="30" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#ff766f"/>' +
+  '<stop offset="0.42" stop-color="#e9333b"/>' +
+  '<stop offset="0.76" stop-color="#b50d1b"/>' +
+  '<stop offset="1" stop-color="#7c0712"/>' +
+  "</linearGradient>" +
+  '<linearGradient id="pinShade" x1="14" y1="4" x2="14" y2="31" gradientUnits="userSpaceOnUse">' +
+  '<stop offset="0" stop-color="#ffffff" stop-opacity=".07"/>' +
+  '<stop offset=".52" stop-color="#ffffff" stop-opacity=".01"/>' +
+  '<stop offset="1" stop-color="#000000" stop-opacity=".13"/>' +
+  "</linearGradient>" +
+  '<filter id="softRedHalo" x="-38%" y="-28%" width="176%" height="158%" color-interpolation-filters="sRGB">' +
+  '<feGaussianBlur stdDeviation="1.65"/>' +
+  "</filter>" +
+  "</defs>" +
+  '<path filter="url(#softRedHalo)" d="M14 31.05S4.45 20.25 4.45 12.65C4.45 6.35 8.78 2.05 14 2.05s9.55 4.3 9.55 10.6c0 7.6-9.55 18.4-9.55 18.4Z" fill="#ff4d47" opacity=".24"/>' +
+  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="#200308" opacity=".72"/>' +
+  '<path d="M14 30.45S5.28 20.18 5.28 12.85C5.28 6.95 9.18 3.02 14 3.02s8.72 3.93 8.72 9.83c0 7.33-8.72 17.6-8.72 17.6Z" fill="url(#pinBody)"/>' +
+  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="url(#pinShade)"/>' +
+  '<path d="M14 30.15S5.75 20.05 5.75 12.95C5.75 7.35 9.28 3.45 14 3.45s8.25 3.9 8.25 9.5c0 7.1-8.25 17.2-8.25 17.2Z" fill="none" stroke="#ff9a96" stroke-opacity=".16" stroke-width=".62"/>' +
+  '<path d="M8.65 9.6C9.5 7.18 11.38 5.65 13.82 5.48" fill="none" stroke="#ffd8d5" stroke-opacity=".28" stroke-width=".95" stroke-linecap="round"/>' +
+  '<circle cx="14" cy="12.8" r="4.18" fill="#05070b"/>' +
+  '<circle cx="14" cy="12.8" r="4.18" fill="none" stroke="#170309" stroke-opacity=".9" stroke-width=".52"/>' +
+  "</svg>";
+
+function registerSvgIcon(
+  map: maplibregl.Map,
+  iconId: string,
+  svg: string,
+  pixelRatio: number,
+): void {
   const tryLoad = () => {
-    if (map.hasImage(PIN_ICON_ID)) return;
+    if (map.hasImage(iconId)) return;
     const img = new Image();
     img.onload = () => {
       try {
-        if (!map.hasImage(PIN_ICON_ID)) {
-          map.addImage(PIN_ICON_ID, img, { pixelRatio: PIN_ICON_PIXEL_RATIO });
+        if (!map.hasImage(iconId)) {
+          map.addImage(iconId, img, { pixelRatio });
         }
       } catch {
         /* style mid-teardown — ignore */
@@ -142,15 +196,25 @@ function registerPinIcon(map: maplibregl.Map): void {
     img.onerror = () => {
       console.warn("[MapLibreGlobe] pin icon failed to decode");
     };
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(PIN_SVG);
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   };
   // Eager load so the icon is in the sprite cache before the first paint of
   // the symbol layers; styleimagemissing remains the safety net for any
   // unforeseen race during HMR / style reloads.
   tryLoad();
   map.on("styleimagemissing", (e: { id: string }) => {
-    if (e.id === PIN_ICON_ID) tryLoad();
+    if (e.id === iconId) tryLoad();
   });
+}
+
+function registerPinIcons(map: maplibregl.Map): void {
+  registerSvgIcon(map, PIN_ICON_ID, PIN_SVG, PIN_ICON_PIXEL_RATIO);
+  registerSvgIcon(
+    map,
+    GLOBAL_PIN_ICON_ID,
+    GLOBAL_PIN_SVG,
+    GLOBAL_PIN_ICON_PIXEL_RATIO,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -340,8 +404,22 @@ function setMarkerVisibility(
 ): void {
   const ids =
     kind === "global"
-      ? [MARKER_BLOOM_GLOBAL,  MARKER_GLOW_GLOBAL,  MARKER_LAYER_GLOBAL,  MARKER_SEL_GLOBAL]
-      : [MARKER_BLOOM_SIGNALS, MARKER_GLOW_SIGNALS, MARKER_LAYER_SIGNALS, MARKER_SEL_SIGNALS];
+      ? [
+          MARKER_BLOOM_GLOBAL,
+          MARKER_GLOW_GLOBAL,
+          MARKER_LAYER_GLOBAL,
+          MARKER_HOVER_GLOW_GLOBAL,
+          MARKER_HOVER_LAYER_GLOBAL,
+          MARKER_SEL_GLOBAL,
+          MARKER_BADGE_GLOBAL,
+          MARKER_BADGE_TEXT_GLOBAL,
+        ]
+      : [
+          MARKER_BLOOM_SIGNALS,
+          MARKER_GLOW_SIGNALS,
+          MARKER_LAYER_SIGNALS,
+          MARKER_SEL_SIGNALS,
+        ];
   const vis = visible ? "visible" : "none";
   try {
     for (const id of ids) {
@@ -373,7 +451,8 @@ function setupMarkerLayers(map: maplibregl.Map): void {
   const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
   const addGlowLayers = (source: string, bloomId: string, glowId: string) => {
-    // Outer bloom — large, very soft spread
+    const isGlobal = source === MARKER_SOURCE_GLOBAL;
+    // Outer selection bloom — soft and controlled, centered on the pin head.
     if (!map.getLayer(bloomId)) {
       map.addLayer({
         id: bloomId,
@@ -382,15 +461,15 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 22,
-          "circle-color": "#ff1a28",
-          "circle-blur": 1.0,
+          "circle-color": isGlobal ? "#e53634" : "#ff1a28",
+          "circle-blur": isGlobal ? 0.94 : 1,
           "circle-opacity": 0,
-          "circle-translate": [0, -11],
+          "circle-translate": isGlobal ? [0, -16] : [0, -11],
           "circle-translate-anchor": "viewport",
         },
       } as unknown as maplibregl.LayerSpecification);
     }
-    // Inner crisp ring — tight circle + bright stroke
+    // Selected ring — tight enough to read as premium, not a neon cloud.
     if (!map.getLayer(glowId)) {
       map.addLayer({
         id: glowId,
@@ -398,15 +477,118 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         source,
         layout: { visibility: "none" },
         paint: {
-          "circle-radius": 10,
-          "circle-color": "rgba(255,26,40,0.45)",
-          "circle-blur": 0.15,
+          "circle-radius": isGlobal ? 11 : 10,
+          "circle-color": isGlobal
+            ? "rgba(255,74,72,0.2)"
+            : "rgba(255,26,40,0.45)",
+          "circle-blur": isGlobal ? 0.34 : 0.15,
           "circle-opacity": 0,
-          "circle-stroke-width": 2.5,
-          "circle-stroke-color": "#ff2535",
+          "circle-stroke-width": isGlobal ? 1.2 : 2.5,
+          "circle-stroke-color": isGlobal ? "#ff6b68" : "#ff2535",
           "circle-stroke-opacity": 0,
-          "circle-translate": [0, -11],
+          "circle-translate": isGlobal ? [0, -16] : [0, -11],
           "circle-translate-anchor": "viewport",
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    }
+  };
+
+  const addHoverLayers = (
+    source: string,
+    hoverGlowId: string,
+    hoverLayerId: string,
+  ) => {
+    if (!map.getLayer(hoverGlowId)) {
+      map.addLayer({
+        id: hoverGlowId,
+        type: "circle",
+        source,
+        filter: FILTER_MATCH_NONE,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": 15,
+          "circle-color": "#ff5a54",
+          "circle-blur": 0.72,
+          "circle-opacity": 0.24,
+          "circle-translate": [0, -16],
+          "circle-translate-anchor": "viewport",
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    }
+    if (!map.getLayer(hoverLayerId)) {
+      map.addLayer({
+        id: hoverLayerId,
+        type: "symbol",
+        source,
+        filter: FILTER_MATCH_NONE,
+        layout: {
+          visibility: "none",
+          "icon-image": GLOBAL_PIN_ICON_ID,
+          "icon-anchor": "bottom",
+          "icon-size": GLOBAL_PIN_ICON_SIZE_HOVER,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": 1,
+          "icon-opacity-transition": { duration: 140, delay: 0 },
+        },
+      });
+    }
+  };
+
+  const addGlobalBadgeLayers = () => {
+    if (!map.getLayer(MARKER_BADGE_GLOBAL)) {
+      map.addLayer({
+        id: MARKER_BADGE_GLOBAL,
+        type: "circle",
+        source: MARKER_SOURCE_GLOBAL,
+        filter: MARKER_COUNT_BADGE_FILTER,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": [
+            "case",
+            [">=", ["to-number", ["get", MARKER_ITEM_COUNT_PROP], 1], 100],
+            8.4,
+            7.2,
+          ],
+          "circle-color": "#07090f",
+          "circle-opacity": 0.94,
+          "circle-stroke-width": 1.25,
+          "circle-stroke-color": "#f0444b",
+          "circle-stroke-opacity": 0.92,
+          "circle-translate": [9, -23],
+          "circle-translate-anchor": "viewport",
+        },
+      } as unknown as maplibregl.LayerSpecification);
+    }
+    if (!map.getLayer(MARKER_BADGE_TEXT_GLOBAL)) {
+      map.addLayer({
+        id: MARKER_BADGE_TEXT_GLOBAL,
+        type: "symbol",
+        source: MARKER_SOURCE_GLOBAL,
+        filter: MARKER_COUNT_BADGE_FILTER,
+        layout: {
+          visibility: "none",
+          "text-field": ["to-string", ["get", MARKER_ITEM_COUNT_PROP]],
+          "text-size": [
+            "case",
+            [">=", ["to-number", ["get", MARKER_ITEM_COUNT_PROP], 1], 100],
+            8,
+            9.5,
+          ],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#f4f7fb",
+          "text-halo-color": "rgba(0,0,0,0.72)",
+          "text-halo-width": 0.55,
+          "text-opacity": 1,
+          "text-translate": [9, -23],
+          "text-translate-anchor": "viewport",
         },
       } as unknown as maplibregl.LayerSpecification);
     }
@@ -417,6 +599,10 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     layerId: string,
     selId: string,
   ) => {
+    const isGlobal = source === MARKER_SOURCE_GLOBAL;
+    const iconId = isGlobal ? GLOBAL_PIN_ICON_ID : PIN_ICON_ID;
+    const defaultSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_DEFAULT : PIN_ICON_SIZE_DEFAULT;
+    const selectedSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_SELECTED : PIN_ICON_SIZE_SELECTED;
     // Normal pins — all features; selected feature excluded once a selection exists
     if (!map.getLayer(layerId)) {
       map.addLayer({
@@ -425,9 +611,9 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         source,
         layout: {
           visibility: "none",
-          "icon-image": PIN_ICON_ID,
+          "icon-image": iconId,
           "icon-anchor": "bottom",
-          "icon-size": 1,
+          "icon-size": defaultSize,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },
@@ -446,9 +632,9 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         filter: FILTER_MATCH_NONE,
         layout: {
           visibility: "none",
-          "icon-image": PIN_ICON_ID,
+          "icon-image": iconId,
           "icon-anchor": "bottom",
-          "icon-size": 1.45,
+          "icon-size": selectedSize,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },
@@ -467,6 +653,12 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     }
     addGlowLayers(MARKER_SOURCE_GLOBAL, MARKER_BLOOM_GLOBAL, MARKER_GLOW_GLOBAL);
     addPinLayers(MARKER_SOURCE_GLOBAL, MARKER_LAYER_GLOBAL, MARKER_SEL_GLOBAL);
+    addHoverLayers(
+      MARKER_SOURCE_GLOBAL,
+      MARKER_HOVER_GLOW_GLOBAL,
+      MARKER_HOVER_LAYER_GLOBAL,
+    );
+    addGlobalBadgeLayers();
 
     // ── SOCMINT ──────────────────────────────────────────────────────────────
     if (!map.getSource(MARKER_SOURCE_SIGNALS)) {
@@ -474,6 +666,11 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     }
     addGlowLayers(MARKER_SOURCE_SIGNALS, MARKER_BLOOM_SIGNALS, MARKER_GLOW_SIGNALS);
     addPinLayers(MARKER_SOURCE_SIGNALS, MARKER_LAYER_SIGNALS, MARKER_SEL_SIGNALS);
+    addHoverLayers(
+      MARKER_SOURCE_SIGNALS,
+      MARKER_HOVER_GLOW_SIGNALS,
+      MARKER_HOVER_LAYER_SIGNALS,
+    );
   } catch (e) {
     console.warn("[MapLibreGlobe] marker layer setup failed:", e);
   }
@@ -503,16 +700,18 @@ function applyMarkerSelection(
 
   try {
     if (selectedId) {
+      applyMarkerHover(map, kind, null);
       // Match expressions route the selected feature to highlight values;
       // all other features get transparent (0) so glow is exclusive.
       const matchOpacity = (on: number): maplibregl.ExpressionSpecification =>
         ["match", ["get", "id"], selectedId, on, 0] as maplibregl.ExpressionSpecification;
+      const isGlobal = kind === "global";
 
       // Outer bloom
-      map.setPaintProperty(bloomId, "circle-opacity", matchOpacity(0.45));
+      map.setPaintProperty(bloomId, "circle-opacity", matchOpacity(isGlobal ? 0.24 : 0.45));
       // Inner ring: fill + vivid stroke
-      map.setPaintProperty(glowId, "circle-opacity", matchOpacity(0.70));
-      map.setPaintProperty(glowId, "circle-stroke-opacity", matchOpacity(1.0));
+      map.setPaintProperty(glowId, "circle-opacity", matchOpacity(isGlobal ? 0.42 : 0.7));
+      map.setPaintProperty(glowId, "circle-stroke-opacity", matchOpacity(isGlobal ? 0.68 : 1));
 
       // Normal layer excludes selected so the selected-pin layer (larger, on top)
       // renders cleanly without stacking.
@@ -537,6 +736,27 @@ function applyMarkerSelection(
 
   if (kind === "global" && revealCount !== undefined) {
     applyGlobalMarkerReveal(map, revealCount);
+  }
+}
+
+function applyMarkerHover(
+  map: maplibregl.Map,
+  kind: MarkerKind,
+  hoveredId: string | null | undefined,
+): void {
+  const hoverGlowId =
+    kind === "global" ? MARKER_HOVER_GLOW_GLOBAL : MARKER_HOVER_GLOW_SIGNALS;
+  const hoverLayerId =
+    kind === "global" ? MARKER_HOVER_LAYER_GLOBAL : MARKER_HOVER_LAYER_SIGNALS;
+  const filter = hoveredId
+    ? (["==", ["get", "id"], hoveredId] as unknown as maplibregl.FilterSpecification)
+    : (FILTER_MATCH_NONE as unknown as maplibregl.FilterSpecification);
+
+  try {
+    map.setFilter(hoverGlowId, filter);
+    map.setFilter(hoverLayerId, filter);
+  } catch {
+    /* layers may not exist yet — initial load race, safe to ignore */
   }
 }
 
@@ -567,7 +787,7 @@ function applyGlobalMarkerReveal(
       map.setLayoutProperty(
         MARKER_LAYER_GLOBAL,
         "icon-size",
-        markerRevealExpression(visibleCount, 1, 0.35),
+        markerRevealExpression(visibleCount, GLOBAL_PIN_ICON_SIZE_DEFAULT, 0.35),
       );
     }
     if (map.getLayer(MARKER_SEL_GLOBAL)) {
@@ -579,7 +799,26 @@ function applyGlobalMarkerReveal(
       map.setLayoutProperty(
         MARKER_SEL_GLOBAL,
         "icon-size",
-        markerRevealExpression(visibleCount, 1.45, 0.45),
+        markerRevealExpression(visibleCount, GLOBAL_PIN_ICON_SIZE_SELECTED, 0.45),
+      );
+    }
+    if (map.getLayer(MARKER_BADGE_GLOBAL)) {
+      map.setPaintProperty(
+        MARKER_BADGE_GLOBAL,
+        "circle-opacity",
+        markerRevealExpression(visibleCount, 0.94, 0),
+      );
+      map.setPaintProperty(
+        MARKER_BADGE_GLOBAL,
+        "circle-stroke-opacity",
+        markerRevealExpression(visibleCount, 0.92, 0),
+      );
+    }
+    if (map.getLayer(MARKER_BADGE_TEXT_GLOBAL)) {
+      map.setPaintProperty(
+        MARKER_BADGE_TEXT_GLOBAL,
+        "text-opacity",
+        markerRevealExpression(visibleCount, 1, 0),
       );
     }
   } catch {
@@ -600,17 +839,25 @@ function applyMarkerData(
   if (!source || source.type !== "geojson") return;
   const fc: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
-    features: features.map((f, index) => ({
-      type: "Feature",
-      id: f.id,
-      geometry: { type: "Point", coordinates: [f.lng, f.lat] },
-      properties: {
+    features: features.map((f, index) => {
+      const groupedItems = (f as MarkerFeature & { items?: unknown[] }).items;
+      const itemCount = Math.max(
+        1,
+        f.itemCount ?? (Array.isArray(groupedItems) ? groupedItems.length : 1),
+      );
+      return {
+        type: "Feature",
         id: f.id,
-        severity: f.severity ?? null,
-        confidence: f.confidence ?? null,
-        [MARKER_REVEAL_INDEX_PROP]: index,
-      },
-    })),
+        geometry: { type: "Point", coordinates: [f.lng, f.lat] },
+        properties: {
+          id: f.id,
+          severity: f.severity ?? null,
+          confidence: f.confidence ?? null,
+          [MARKER_ITEM_COUNT_PROP]: itemCount,
+          [MARKER_REVEAL_INDEX_PROP]: index,
+        },
+      };
+    }),
   };
   try {
     (source as maplibregl.GeoJSONSource).setData(fc);
@@ -1052,6 +1299,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     const globalMarkerRevealTimerRef = useRef<number | null>(null);
     const globalMarkerRevealCountRef = useRef(0);
     const selectedGlobalIdRef = useRef<string | null | undefined>(selectedGlobalId);
+    const selectedSignalsIdRef = useRef<string | null | undefined>(selectedSignalsId);
     const autoRotatePausedPropRef = useRef(autoRotatePaused);
     const setAutoRotatePausedRef = useRef<(paused: boolean) => void>(() => {});
 
@@ -1076,6 +1324,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     useEffect(() => {
       selectedGlobalIdRef.current = selectedGlobalId;
     }, [selectedGlobalId]);
+
+    useEffect(() => {
+      selectedSignalsIdRef.current = selectedSignalsId;
+    }, [selectedSignalsId]);
 
     useEffect(() => {
       autoRotatePausedPropRef.current = autoRotatePaused;
@@ -1253,6 +1505,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       };
       let markerClickGlobal: ((e: LayerClickEvent) => void) | null = null;
       let markerClickSignals: ((e: LayerClickEvent) => void) | null = null;
+      let markerHoverGlobal: ((e: LayerClickEvent) => void) | null = null;
+      let markerHoverSignals: ((e: LayerClickEvent) => void) | null = null;
+      let markerLeaveGlobal: (() => void) | null = null;
+      let markerLeaveSignals: (() => void) | null = null;
 
       let resolved = false;
 
@@ -1286,7 +1542,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Register the shared red pin icon before adding the symbol layers
         // that reference it; styleimagemissing acts as a safety net if the
         // image add races the layer add.
-        registerPinIcon(map);
+        registerPinIcons(map);
         // Marker foundation — empty sources + symbol layers for Global View
         // and SOCMINT.  Visibility/data driven by props via useEffects below.
         setupMarkerLayers(map);
@@ -1305,12 +1561,54 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           const id = String(feature.properties.id ?? "");
           if (id) onMarkerClickRef.current?.(id, "signals", { x: e.point.x, y: e.point.y });
         };
+        markerHoverGlobal = (e: LayerClickEvent) => {
+          cursorEnter();
+          const feature = e.features?.[0];
+          const id = feature?.properties ? String(feature.properties.id ?? "") : "";
+          applyMarkerHover(
+            map,
+            "global",
+            id && id !== selectedGlobalIdRef.current ? id : null,
+          );
+        };
+        markerHoverSignals = (e: LayerClickEvent) => {
+          cursorEnter();
+          const feature = e.features?.[0];
+          const id = feature?.properties ? String(feature.properties.id ?? "") : "";
+          applyMarkerHover(
+            map,
+            "signals",
+            id && id !== selectedSignalsIdRef.current ? id : null,
+          );
+        };
+        markerLeaveGlobal = () => {
+          cursorLeave();
+          applyMarkerHover(map, "global", null);
+        };
+        markerLeaveSignals = () => {
+          cursorLeave();
+          applyMarkerHover(map, "signals", null);
+        };
         map.on("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
+        map.on("click", MARKER_HOVER_LAYER_GLOBAL, markerClickGlobal);
+        map.on("click", MARKER_SEL_GLOBAL, markerClickGlobal);
+        map.on("click", MARKER_BADGE_GLOBAL, markerClickGlobal);
+        map.on("click", MARKER_BADGE_TEXT_GLOBAL, markerClickGlobal);
         map.on("click", MARKER_LAYER_SIGNALS, markerClickSignals);
-        map.on("mouseenter", MARKER_LAYER_GLOBAL, cursorEnter);
-        map.on("mouseleave", MARKER_LAYER_GLOBAL, cursorLeave);
-        map.on("mouseenter", MARKER_LAYER_SIGNALS, cursorEnter);
-        map.on("mouseleave", MARKER_LAYER_SIGNALS, cursorLeave);
+        map.on("click", MARKER_HOVER_LAYER_SIGNALS, markerClickSignals);
+        map.on("click", MARKER_SEL_SIGNALS, markerClickSignals);
+        map.on("mousemove", MARKER_LAYER_GLOBAL, markerHoverGlobal);
+        map.on("mousemove", MARKER_SEL_GLOBAL, markerHoverGlobal);
+        map.on("mousemove", MARKER_BADGE_GLOBAL, markerHoverGlobal);
+        map.on("mousemove", MARKER_BADGE_TEXT_GLOBAL, markerHoverGlobal);
+        map.on("mouseleave", MARKER_LAYER_GLOBAL, markerLeaveGlobal);
+        map.on("mouseleave", MARKER_SEL_GLOBAL, markerLeaveGlobal);
+        map.on("mouseleave", MARKER_BADGE_GLOBAL, markerLeaveGlobal);
+        map.on("mouseleave", MARKER_BADGE_TEXT_GLOBAL, markerLeaveGlobal);
+        map.on("mousemove", MARKER_LAYER_SIGNALS, markerHoverSignals);
+        map.on("mousemove", MARKER_SEL_SIGNALS, markerHoverSignals);
+        map.on("mouseleave", MARKER_LAYER_SIGNALS, markerLeaveSignals);
+        map.on("mouseleave", MARKER_SEL_SIGNALS, markerLeaveSignals);
 
         // Force a resize after style commit in case the container was sized
         // during a transition / mount race.
@@ -1569,12 +1867,38 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           map.off("style.load", handleStyleLoad);
           map.off("load", handleLoad);
           map.off("error", handleError);
-          if (markerClickGlobal) map.off("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
-          if (markerClickSignals) map.off("click", MARKER_LAYER_SIGNALS, markerClickSignals);
-          map.off("mouseenter", MARKER_LAYER_GLOBAL, cursorEnter);
-          map.off("mouseleave", MARKER_LAYER_GLOBAL, cursorLeave);
-          map.off("mouseenter", MARKER_LAYER_SIGNALS, cursorEnter);
-          map.off("mouseleave", MARKER_LAYER_SIGNALS, cursorLeave);
+          if (markerClickGlobal) {
+            map.off("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
+            map.off("click", MARKER_HOVER_LAYER_GLOBAL, markerClickGlobal);
+            map.off("click", MARKER_SEL_GLOBAL, markerClickGlobal);
+            map.off("click", MARKER_BADGE_GLOBAL, markerClickGlobal);
+            map.off("click", MARKER_BADGE_TEXT_GLOBAL, markerClickGlobal);
+          }
+          if (markerClickSignals) {
+            map.off("click", MARKER_LAYER_SIGNALS, markerClickSignals);
+            map.off("click", MARKER_HOVER_LAYER_SIGNALS, markerClickSignals);
+            map.off("click", MARKER_SEL_SIGNALS, markerClickSignals);
+          }
+          if (markerHoverGlobal) {
+            map.off("mousemove", MARKER_LAYER_GLOBAL, markerHoverGlobal);
+            map.off("mousemove", MARKER_SEL_GLOBAL, markerHoverGlobal);
+            map.off("mousemove", MARKER_BADGE_GLOBAL, markerHoverGlobal);
+            map.off("mousemove", MARKER_BADGE_TEXT_GLOBAL, markerHoverGlobal);
+          }
+          if (markerHoverSignals) {
+            map.off("mousemove", MARKER_LAYER_SIGNALS, markerHoverSignals);
+            map.off("mousemove", MARKER_SEL_SIGNALS, markerHoverSignals);
+          }
+          if (markerLeaveGlobal) {
+            map.off("mouseleave", MARKER_LAYER_GLOBAL, markerLeaveGlobal);
+            map.off("mouseleave", MARKER_SEL_GLOBAL, markerLeaveGlobal);
+            map.off("mouseleave", MARKER_BADGE_GLOBAL, markerLeaveGlobal);
+            map.off("mouseleave", MARKER_BADGE_TEXT_GLOBAL, markerLeaveGlobal);
+          }
+          if (markerLeaveSignals) {
+            map.off("mouseleave", MARKER_LAYER_SIGNALS, markerLeaveSignals);
+            map.off("mouseleave", MARKER_SEL_SIGNALS, markerLeaveSignals);
+          }
           map.remove();
         } catch {
           // Defensive: removal during HMR can race with internal teardown.

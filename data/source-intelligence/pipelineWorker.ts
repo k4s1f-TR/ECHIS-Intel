@@ -23,6 +23,7 @@
 
 import { runSourceIntelligencePipeline } from "./sourceIntelligencePipeline";
 import { sourceItemsToMarkers } from "./markers/sourceItemsToMarkers";
+import { logSourceIntelProfile } from "./pipelineProfiling";
 import { getSourceDefinition } from "./sourceRegistry";
 import type { WorkerRequest, WorkerResponse } from "./pipelineWorkerMessages";
 
@@ -39,7 +40,7 @@ const workerSelf = globalThis as unknown as WorkerGlobal;
 
 // ── Message handler ───────────────────────────────────────────────────────────
 workerSelf.onmessage = (ev: MessageEvent<WorkerRequest>) => {
-  const { type, normalizedItems, runId } = ev.data;
+  const { type, normalizedItems, runId, batchId } = ev.data;
   if (type !== "RUN_PIPELINE") return;
 
   try {
@@ -49,24 +50,34 @@ workerSelf.onmessage = (ev: MessageEvent<WorkerRequest>) => {
     const result = runSourceIntelligencePipeline(normalizedItems, getSourceDefinition);
 
     // Group accepted candidates into globe marker features
+    const markersStart = performance.now();
     const markerCandidates = sourceItemsToMarkers(result.eventCandidates);
+    const sourceItemsToMarkersMs = performance.now() - markersStart;
 
     const perfMs = performance.now() - t0;
 
     const response: WorkerResponse = {
       type: "PIPELINE_RESULT",
       runId,
+      batchId,
       itemCount: normalizedItems.length,
       filterResults: result.filterResults,
       eventCandidates: result.eventCandidates,
       markerCandidates,
       perfMs,
+      profile: {
+        ...result.profile,
+        sourceItemsToMarkersMs,
+        totalMs: perfMs,
+      },
     };
+    logSourceIntelProfile("worker pipeline", response.profile);
     workerSelf.postMessage(response);
   } catch (err) {
     const errorResponse: WorkerResponse = {
       type: "PIPELINE_ERROR",
       runId,
+      batchId,
       error: err instanceof Error ? err.message : String(err),
     };
     workerSelf.postMessage(errorResponse);

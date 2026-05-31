@@ -634,6 +634,41 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     aliases: ["red sea", "kizildeniz", "kizil deniz", "bab el mandeb", "bab al mandab"],
   },
   {
+    label: "Strait of Hormuz",
+    latitude: 26.6,
+    longitude: 56.25,
+    region: "Persian Gulf",
+    aliases: ["strait of hormuz", "hormuz strait", "hurmuz bogazi", "hurmuz"],
+  },
+  {
+    label: "Suez Canal",
+    latitude: 30.6,
+    longitude: 32.3,
+    region: "Suez Canal",
+    aliases: ["suez canal", "suveys kanali"],
+  },
+  {
+    label: "Eastern Mediterranean",
+    latitude: 34.4,
+    longitude: 32.8,
+    region: "Eastern Mediterranean",
+    aliases: ["eastern mediterranean", "dogu akdeniz"],
+  },
+  {
+    label: "Persian Gulf",
+    latitude: 26.8,
+    longitude: 51.6,
+    region: "Persian Gulf",
+    aliases: ["persian gulf", "basra korfezi"],
+  },
+  {
+    label: "Gulf of Aden",
+    latitude: 12.5,
+    longitude: 48.0,
+    region: "Gulf of Aden",
+    aliases: ["gulf of aden", "aden korfezi"],
+  },
+  {
     label: "Black Sea",
     latitude: 43.4,
     longitude: 34.3,
@@ -681,6 +716,20 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
     longitude: 110.0,
     region: "Indo-Pacific",
     aliases: ["indo pacific", "indo-pacific", "hint pasifik"],
+  },
+  {
+    label: "Gaza Strip",
+    latitude: 31.42,
+    longitude: 34.36,
+    countryCode: "PS",
+    aliases: ["gaza strip", "gaza", "gazze", "gazze seridi", "gazzeye", "gazzede"],
+  },
+  {
+    label: "West Bank",
+    latitude: 31.95,
+    longitude: 35.23,
+    countryCode: "PS",
+    aliases: ["west bank", "bati seria", "ramallah"],
   },
   {
     label: "Palestine / Gaza",
@@ -1044,6 +1093,10 @@ const LOCATION_DICTIONARY: readonly LocationEntry[] = [
       "democratic republic of the congo",
       "dr congo",
       "drc",
+      "d r congo",
+      "demokratik kongo cumhuriyeti",
+      "kongo demokratik cumhuriyeti",
+      "kongo dc",
       "congo kinshasa",
       "kinshasa",
     ],
@@ -1320,6 +1373,20 @@ export function resolveLocationByText(text: string): ResolvedLocation | null {
 
   const best = matches.sort((a, b) => b.score - a.score)[0];
   return best ? { ...best.entry } : null;
+}
+
+export function resolveLocationByAnchor(text: string): ResolvedLocation | null {
+  const normalized = normalizeFilterText(text);
+  if (!normalized) return null;
+
+  for (const entry of ALL_LOCATION_ENTRIES) {
+    if (normalizeFilterText(entry.label) === normalized) return { ...entry };
+    if (entry.aliases.some((alias) => normalizeFilterText(alias) === normalized)) {
+      return { ...entry };
+    }
+  }
+
+  return resolveLocationByText(text);
 }
 
 export function resolveOfficialActorLocation(

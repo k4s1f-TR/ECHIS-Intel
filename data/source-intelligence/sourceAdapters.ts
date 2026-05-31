@@ -10,6 +10,8 @@ type SourceRouteResponse = {
   sourceId?: string;
   items?: RawSourceItem[];
   error?: string;
+  reason?: string;
+  diagnosticCategory?: string;
 };
 
 async function fetchRouteItems(source: SourceDefinition): Promise<RawSourceItem[]> {
@@ -22,6 +24,19 @@ async function fetchRouteItems(source: SourceDefinition): Promise<RawSourceItem[
     throw new Error(response.ok ? "parse_failed" : `source_route_${response.status}`);
   }
   if (!response.ok || payload.error) {
+    if (
+      process.env.NODE_ENV === "development" &&
+      payload.diagnosticCategory
+    ) {
+      console.warn("[source-route-adapter] source diagnostic", {
+        sourceId: source.id,
+        sourceName: source.name,
+        endpoint: source.endpoint,
+        error: payload.error,
+        reason: payload.reason,
+        diagnosticCategory: payload.diagnosticCategory,
+      });
+    }
     if (response.status === 404) {
       throw new Error("source_route_not_found");
     }

@@ -1,16 +1,25 @@
 export function normalizeFilterText(value: string): string {
-  return value
+  const normalized = value
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\u0131/g, "i")
-    .replace(/ı/g, "i")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ö/g, "o")
-    .replace(/ş/g, "s")
-    .replace(/ü/g, "u")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/Ä±/g, "i")
+    .replace(/Ã§/g, "c")
+    .replace(/ÄŸ/g, "g")
+    .replace(/Ã¶/g, "o")
+    .replace(/ÅŸ/g, "s")
+    .replace(/Ã¼/g, "u")
+    .replace(/[^a-z0-9]+/g, " ");
+
+  return normalized
+    .replace(/\bgazz(e|a)(ye|de|den|nin)?\b/g, " gazze ")
+    .replace(/\bgazze(ye|de|den|nin)?\b/g, " gazze ")
+    .replace(/\blubnan(a|da|dan|in|nin)?\b/g, " lubnan ")
+    .replace(/\bisrail(den|de|e|li|liler|in|nin)?\b/g, " israil ")
+    .replace(/\bbati seria(da|dan|ya|nin)?\b/g, " bati seria ")
+    .replace(/\bdso(den|de|ye|nun)?\b/g, " dso ")
+    .replace(/\bbmmyk\b/g, " bmm yk ")
     .replace(/\s+/g, " ")
     .trim();
 }

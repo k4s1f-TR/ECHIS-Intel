@@ -11,6 +11,9 @@ export type ResolvedGeoBasis = {
   geoBasis?: GeoBasis;
   location?: ResolvedLocation;
   markerEligibility: MarkerEligibility;
+  markerAnchor?: IntelligenceEventCandidate["markerAnchor"];
+  markerReason?: IntelligenceEventCandidate["markerReason"];
+  noMarkerReason?: IntelligenceEventCandidate["noMarkerReason"];
 };
 
 export function resolveGeoBasis(
