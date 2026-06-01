@@ -120,6 +120,12 @@ const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
   1,
 ] as unknown as maplibregl.FilterSpecification;
 
+const selectedMarkerOpacityExpression = (
+  selectedId: string,
+  baseOpacity: number,
+): maplibregl.ExpressionSpecification =>
+  ["match", ["get", "id"], selectedId, baseOpacity, 0] as maplibregl.ExpressionSpecification;
+
 // ---------------------------------------------------------------------------
 // Premium red location-pin icon — single shared SVG image used by both the
 // Global View and SOCMINT marker symbol layers.  Deep red body, dark inner
@@ -510,6 +516,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "circle-color": "#ff5a54",
           "circle-blur": 0.72,
           "circle-opacity": 0.24,
+          "circle-opacity-transition": { duration: 180, delay: 0 },
           "circle-translate": [0, -16],
           "circle-translate-anchor": "viewport",
         },
@@ -531,7 +538,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         },
         paint: {
           "icon-opacity": 1,
-          "icon-opacity-transition": { duration: 140, delay: 0 },
+          "icon-opacity-transition": { duration: 180, delay: 0 },
         },
       });
     }
@@ -554,9 +561,11 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           ],
           "circle-color": "#07090f",
           "circle-opacity": 0.94,
+          "circle-opacity-transition": { duration: 180, delay: 0 },
           "circle-stroke-width": 1.25,
           "circle-stroke-color": "#f0444b",
           "circle-stroke-opacity": 0.92,
+          "circle-stroke-opacity-transition": { duration: 180, delay: 0 },
           "circle-translate": [9, -23],
           "circle-translate-anchor": "viewport",
         },
@@ -577,7 +586,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
             8,
             9.5,
           ],
-          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-font": ["Noto Sans Regular"],
           "text-anchor": "center",
           "text-allow-overlap": true,
           "text-ignore-placement": true,
@@ -587,6 +596,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "text-halo-color": "rgba(0,0,0,0.72)",
           "text-halo-width": 0.55,
           "text-opacity": 1,
+          "text-opacity-transition": { duration: 180, delay: 0 },
           "text-translate": [9, -23],
           "text-translate-anchor": "viewport",
         },
@@ -619,7 +629,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         },
         paint: {
           "icon-opacity": 1,
-          "icon-opacity-transition": { duration: 220, delay: 0 },
+          "icon-opacity-transition": { duration: 180, delay: 0 },
         },
       });
     }
@@ -640,7 +650,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         },
         paint: {
           "icon-opacity": 1,
-          "icon-opacity-transition": { duration: 220, delay: 0 },
+          "icon-opacity-transition": { duration: 180, delay: 0 },
         },
       });
     }
@@ -691,7 +701,6 @@ function applyMarkerSelection(
   map: maplibregl.Map,
   kind: MarkerKind,
   selectedId: string | null | undefined,
-  revealCount?: number,
 ): void {
   const bloomId  = kind === "global" ? MARKER_BLOOM_GLOBAL  : MARKER_BLOOM_SIGNALS;
   const glowId   = kind === "global" ? MARKER_GLOW_GLOBAL   : MARKER_GLOW_SIGNALS;
@@ -703,15 +712,25 @@ function applyMarkerSelection(
       applyMarkerHover(map, kind, null);
       // Match expressions route the selected feature to highlight values;
       // all other features get transparent (0) so glow is exclusive.
-      const matchOpacity = (on: number): maplibregl.ExpressionSpecification =>
-        ["match", ["get", "id"], selectedId, on, 0] as maplibregl.ExpressionSpecification;
       const isGlobal = kind === "global";
 
       // Outer bloom
-      map.setPaintProperty(bloomId, "circle-opacity", matchOpacity(isGlobal ? 0.24 : 0.45));
+      map.setPaintProperty(
+        bloomId,
+        "circle-opacity",
+        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.24 : 0.45),
+      );
       // Inner ring: fill + vivid stroke
-      map.setPaintProperty(glowId, "circle-opacity", matchOpacity(isGlobal ? 0.42 : 0.7));
-      map.setPaintProperty(glowId, "circle-stroke-opacity", matchOpacity(isGlobal ? 0.68 : 1));
+      map.setPaintProperty(
+        glowId,
+        "circle-opacity",
+        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.42 : 0.7),
+      );
+      map.setPaintProperty(
+        glowId,
+        "circle-stroke-opacity",
+        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.68 : 1),
+      );
 
       // Normal layer excludes selected so the selected-pin layer (larger, on top)
       // renders cleanly without stacking.
@@ -734,9 +753,6 @@ function applyMarkerSelection(
     /* layers may not exist yet — initial load race, safe to ignore */
   }
 
-  if (kind === "global" && revealCount !== undefined) {
-    applyGlobalMarkerReveal(map, revealCount);
-  }
 }
 
 function applyMarkerHover(
@@ -760,67 +776,29 @@ function applyMarkerHover(
   }
 }
 
-function markerRevealExpression(
-  visibleCount: number,
-  visibleValue: number,
-  hiddenValue: number,
-): maplibregl.ExpressionSpecification {
-  return [
-    "case",
-    ["<", ["to-number", ["get", MARKER_REVEAL_INDEX_PROP], -1], visibleCount],
-    visibleValue,
-    hiddenValue,
-  ] as maplibregl.ExpressionSpecification;
-}
-
-function applyGlobalMarkerReveal(
+function setGlobalMarkerLayerOpacity(
   map: maplibregl.Map,
-  visibleCount: number,
+  opacity: number,
+  duration: number,
 ): void {
+  const setPaint = (
+    layerId: string,
+    property: string,
+    value: number,
+  ) => {
+    if (!map.getLayer(layerId)) return;
+    map.setPaintProperty(layerId, `${property}-transition`, { duration, delay: 0 });
+    map.setPaintProperty(layerId, property, value);
+  };
+
   try {
-    if (map.getLayer(MARKER_LAYER_GLOBAL)) {
-      map.setPaintProperty(
-        MARKER_LAYER_GLOBAL,
-        "icon-opacity",
-        markerRevealExpression(visibleCount, 1, 0),
-      );
-      map.setLayoutProperty(
-        MARKER_LAYER_GLOBAL,
-        "icon-size",
-        markerRevealExpression(visibleCount, GLOBAL_PIN_ICON_SIZE_DEFAULT, 0.35),
-      );
-    }
-    if (map.getLayer(MARKER_SEL_GLOBAL)) {
-      map.setPaintProperty(
-        MARKER_SEL_GLOBAL,
-        "icon-opacity",
-        markerRevealExpression(visibleCount, 1, 0),
-      );
-      map.setLayoutProperty(
-        MARKER_SEL_GLOBAL,
-        "icon-size",
-        markerRevealExpression(visibleCount, GLOBAL_PIN_ICON_SIZE_SELECTED, 0.45),
-      );
-    }
-    if (map.getLayer(MARKER_BADGE_GLOBAL)) {
-      map.setPaintProperty(
-        MARKER_BADGE_GLOBAL,
-        "circle-opacity",
-        markerRevealExpression(visibleCount, 0.94, 0),
-      );
-      map.setPaintProperty(
-        MARKER_BADGE_GLOBAL,
-        "circle-stroke-opacity",
-        markerRevealExpression(visibleCount, 0.92, 0),
-      );
-    }
-    if (map.getLayer(MARKER_BADGE_TEXT_GLOBAL)) {
-      map.setPaintProperty(
-        MARKER_BADGE_TEXT_GLOBAL,
-        "text-opacity",
-        markerRevealExpression(visibleCount, 1, 0),
-      );
-    }
+    setPaint(MARKER_LAYER_GLOBAL, "icon-opacity", opacity);
+    setPaint(MARKER_SEL_GLOBAL, "icon-opacity", opacity);
+    setPaint(MARKER_HOVER_LAYER_GLOBAL, "icon-opacity", opacity);
+    setPaint(MARKER_HOVER_GLOW_GLOBAL, "circle-opacity", 0.24 * opacity);
+    setPaint(MARKER_BADGE_GLOBAL, "circle-opacity", 0.94 * opacity);
+    setPaint(MARKER_BADGE_GLOBAL, "circle-stroke-opacity", 0.92 * opacity);
+    setPaint(MARKER_BADGE_TEXT_GLOBAL, "text-opacity", opacity);
   } catch {
     /* layers may not exist yet — initial load race, safe to ignore */
   }
@@ -839,7 +817,7 @@ function applyMarkerData(
   if (!source || source.type !== "geojson") return;
   const fc: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
-    features: features.map((f, index) => {
+    features: features.map((f) => {
       const groupedItems = (f as MarkerFeature & { items?: unknown[] }).items;
       const itemCount = Math.max(
         1,
@@ -854,7 +832,6 @@ function applyMarkerData(
           severity: f.severity ?? null,
           confidence: f.confidence ?? null,
           [MARKER_ITEM_COUNT_PROP]: itemCount,
-          [MARKER_REVEAL_INDEX_PROP]: index,
         },
       };
     }),
@@ -866,13 +843,33 @@ function applyMarkerData(
   }
 }
 
+function markerItemCount(feature: MarkerFeature): number {
+  const groupedItems = (feature as MarkerFeature & { items?: unknown[] }).items;
+  return Math.max(
+    1,
+    feature.itemCount ?? (Array.isArray(groupedItems) ? groupedItems.length : 1),
+  );
+}
+
+function markerDataSignature(features: MarkerFeature[]): string {
+  return features
+    .map((feature) =>
+      [
+        feature.id,
+        feature.lng,
+        feature.lat,
+        feature.severity ?? "",
+        feature.confidence ?? "",
+        markerItemCount(feature),
+      ].join(":"),
+    )
+    .join("|");
+}
+
 // Time after which a still-loading map is treated as failed.  Prevents the
 // loading placeholder from sitting forever if the style/tiles never arrive.
 const LOAD_TIMEOUT_MS = 9000;
 const MARKER_DATA_DEBOUNCE_MS = 400;
-const MARKER_REVEAL_BATCH_SIZE = 10;
-const MARKER_REVEAL_BATCH_DELAY_MS = 130;
-const MARKER_REVEAL_INDEX_PROP = "revealIndex";
 
 // ---------------------------------------------------------------------------
 // Auto-rotate — calm, ambient globe motion when the operator is idle.
@@ -1296,8 +1293,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     const mapRef = useRef<maplibregl.Map | null>(null);
     const pendingGlobalMarkersRef = useRef<MarkerFeature[]>([]);
     const globalMarkerDebounceTimerRef = useRef<number | null>(null);
-    const globalMarkerRevealTimerRef = useRef<number | null>(null);
-    const globalMarkerRevealCountRef = useRef(0);
+    const globalMarkerRevealFrameRef = useRef<number | null>(null);
+    const globalMarkerRenderedIdsRef = useRef<Set<string>>(new Set());
+    const globalMarkerTargetSignatureRef = useRef("");
+    const signalsMarkerTargetSignatureRef = useRef("");
+    const globalMarkerVisibleCountRef = useRef(0);
     const selectedGlobalIdRef = useRef<string | null | undefined>(selectedGlobalId);
     const selectedSignalsIdRef = useRef<string | null | undefined>(selectedSignalsId);
     const autoRotatePausedPropRef = useRef(autoRotatePaused);
@@ -1923,7 +1923,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Still keep marker visibility in sync in case it desynced
         setMarkerVisibility(map, "global", activeView === "global");
         setMarkerVisibility(map, "signals", activeView === "signals");
-        if (activeView === "global" && globalMarkerRevealCountRef.current > 0) {
+        if (activeView === "global" && globalMarkerVisibleCountRef.current > 0) {
           window.requestAnimationFrame(() => {
             onGlobalMarkerRevealStartRef.current?.();
           });
@@ -1940,7 +1940,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       }
       pauseAutoRotateRef.current(VIEW_TRANSITION_MS + CENTRAL_VIEW_IDLE_DELAY_MS);
       applyViewMode(map, activeView, true);
-      if (activeView === "global" && globalMarkerRevealCountRef.current > 0) {
+      if (activeView === "global" && globalMarkerVisibleCountRef.current > 0) {
         window.requestAnimationFrame(() => {
           onGlobalMarkerRevealStartRef.current?.();
         });
@@ -1985,56 +1985,37 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         const latestMap = mapRef.current;
         if (!latestMap) return;
         const latestMarkers = pendingGlobalMarkersRef.current;
-        applyMarkerData(latestMap, "global", latestMarkers);
-        globalMarkerRevealCountRef.current = 0;
-        applyGlobalMarkerReveal(latestMap, 0);
+        const nextSignature = markerDataSignature(latestMarkers);
+        if (nextSignature === globalMarkerTargetSignatureRef.current) return;
+        globalMarkerTargetSignatureRef.current = nextSignature;
 
-        if (globalMarkerRevealTimerRef.current !== null) {
-          window.clearTimeout(globalMarkerRevealTimerRef.current);
-          globalMarkerRevealTimerRef.current = null;
+        if (globalMarkerRevealFrameRef.current !== null) {
+          window.cancelAnimationFrame(globalMarkerRevealFrameRef.current);
+          globalMarkerRevealFrameRef.current = null;
         }
 
-        const revealTotal = latestMarkers.length;
-        if (revealTotal === 0) return;
+        const previousRenderedIds = globalMarkerRenderedIdsRef.current;
+        const hasEntering =
+          latestMarkers.length > 0 &&
+          (previousRenderedIds.size === 0 ||
+            latestMarkers.some((marker) => !previousRenderedIds.has(marker.id)));
 
-        const revealNextBatch = () => {
-          const revealMap = mapRef.current;
-          if (!revealMap) return;
-          const wasHidden = globalMarkerRevealCountRef.current === 0;
-          const nextCount = Math.min(
-            globalMarkerRevealCountRef.current + MARKER_REVEAL_BATCH_SIZE,
-            revealTotal,
-          );
-
-          globalMarkerRevealCountRef.current = nextCount;
-          applyGlobalMarkerReveal(revealMap, nextCount);
-          applyMarkerSelection(
-            revealMap,
-            "global",
-            selectedGlobalIdRef.current,
-            nextCount,
-          );
-
-          if (wasHidden && nextCount > 0) {
-            window.requestAnimationFrame(() => {
-              onGlobalMarkerRevealStartRef.current?.();
-            });
-          }
-
-          if (nextCount < revealTotal) {
-            globalMarkerRevealTimerRef.current = window.setTimeout(
-              revealNextBatch,
-              MARKER_REVEAL_BATCH_DELAY_MS,
-            );
-          } else {
-            globalMarkerRevealTimerRef.current = null;
-          }
-        };
-
-        globalMarkerRevealTimerRef.current = window.setTimeout(
-          revealNextBatch,
-          MARKER_REVEAL_BATCH_DELAY_MS,
+        globalMarkerVisibleCountRef.current = latestMarkers.length;
+        applyMarkerData(latestMap, "global", latestMarkers);
+        applyMarkerSelection(latestMap, "global", selectedGlobalIdRef.current);
+        globalMarkerRenderedIdsRef.current = new Set(
+          latestMarkers.map((marker) => marker.id),
         );
+
+        // Count-only updates must not replay a full-layer reveal; keep the
+        // marker layer visible while the GeoJSON badge data refreshes.
+        setGlobalMarkerLayerOpacity(latestMap, 1, 0);
+        if (hasEntering) {
+          globalMarkerRevealFrameRef.current = window.requestAnimationFrame(() => {
+            globalMarkerRevealFrameRef.current = null;
+            onGlobalMarkerRevealStartRef.current?.();
+          });
+        }
       }, MARKER_DATA_DEBOUNCE_MS);
     }, [globalMarkers, loadState]);
 
@@ -2044,18 +2025,26 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           window.clearTimeout(globalMarkerDebounceTimerRef.current);
           globalMarkerDebounceTimerRef.current = null;
         }
-        if (globalMarkerRevealTimerRef.current !== null) {
-          window.clearTimeout(globalMarkerRevealTimerRef.current);
-          globalMarkerRevealTimerRef.current = null;
+        if (globalMarkerRevealFrameRef.current !== null) {
+          window.cancelAnimationFrame(globalMarkerRevealFrameRef.current);
+          globalMarkerRevealFrameRef.current = null;
         }
         pendingGlobalMarkersRef.current = [];
+        globalMarkerRenderedIdsRef.current = new Set();
+        globalMarkerTargetSignatureRef.current = "";
+        signalsMarkerTargetSignatureRef.current = "";
+        globalMarkerVisibleCountRef.current = 0;
       };
     }, []);
 
     useEffect(() => {
       const map = mapRef.current;
       if (!map || loadState !== "ready") return;
-      applyMarkerData(map, "signals", signalsMarkers ?? []);
+      const latestMarkers = signalsMarkers ?? [];
+      const nextSignature = markerDataSignature(latestMarkers);
+      if (nextSignature === signalsMarkerTargetSignatureRef.current) return;
+      signalsMarkerTargetSignatureRef.current = nextSignature;
+      applyMarkerData(map, "signals", latestMarkers);
     }, [signalsMarkers, loadState]);
 
     // ── Selected-marker highlight sync ──────────────────────────────────────
@@ -2065,12 +2054,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     useEffect(() => {
       const map = mapRef.current;
       if (!map || loadState !== "ready") return;
-      applyMarkerSelection(
-        map,
-        "global",
-        selectedGlobalId,
-        globalMarkerRevealCountRef.current,
-      );
+      applyMarkerSelection(map, "global", selectedGlobalId);
     }, [selectedGlobalId, loadState]);
 
     useEffect(() => {

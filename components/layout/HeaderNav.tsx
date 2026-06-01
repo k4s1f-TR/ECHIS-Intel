@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
 import { Sun } from "lucide-react";
+import { GeoLiveClock } from "@/components/ui/GeoLiveClock";
 import type { ReactNode } from "react";
 
 type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
@@ -46,22 +46,6 @@ export function HeaderNav({
   activeTab: TopNavTab;
   onTabSelect: (tab: TopNavTab) => void;
 }) {
-  const [clock, setClock] = useState("--:--:--");
-
-  useEffect(() => {
-    const updateClock = () => {
-      setClock(new Date().toISOString().slice(11, 19));
-    };
-    const firstTickId = setTimeout(updateClock, 0);
-    const id = setInterval(() => {
-      updateClock();
-    }, 1000);
-    return () => {
-      clearTimeout(firstTickId);
-      clearInterval(id);
-    };
-  }, []);
-
   return (
     <header
       className="flex items-center flex-shrink-0 px-5"
@@ -129,7 +113,7 @@ export function HeaderNav({
 
       {/* Right controls */}
       <div className="flex items-center gap-1">
-        {/* Live UTC clock */}
+        {/* Live IP timezone clock */}
         <div
           className="flex items-center mr-2 px-2.5 py-1 rounded-md select-none"
           style={{
@@ -143,7 +127,7 @@ export function HeaderNav({
             fontFamily: "ui-monospace, monospace",
           }}
         >
-          {clock}
+          <GeoLiveClock />
         </div>
 
         <IconBtn>
