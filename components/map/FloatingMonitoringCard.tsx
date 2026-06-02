@@ -92,7 +92,7 @@ export function FloatingMonitoringCard({
   if (collapsed) {
     return (
       <button
-        className="absolute top-4 left-4 rounded-xl z-10 flex items-center gap-2"
+        className="absolute top-4 left-4 rounded-xl z-30 flex items-center gap-2"
         onClick={() => {
           setCollapsed(false);
           onCollapsedChange?.(false);
@@ -121,7 +121,7 @@ export function FloatingMonitoringCard({
   return (
     <div
       ref={cardRef}
-      className="absolute top-4 left-4 rounded-xl z-10"
+      className="absolute top-4 left-4 rounded-xl z-30"
       style={{
         padding: "14px 16px",
         background: "rgba(12,12,12,0.88)",

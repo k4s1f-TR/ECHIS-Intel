@@ -678,7 +678,7 @@ export function SourceFilterList({
       <div
         className="source-filter-scrollbar"
         style={{
-          maxHeight: 104,
+          maxHeight: 214,
           overflowY: "auto",
           paddingRight: 2,
           scrollbarWidth: "thin",

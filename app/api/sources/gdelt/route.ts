@@ -10,10 +10,10 @@ const GDELT_SOURCE_ID = "gdelt-geopolitical";
 // value in fetching more often than that; a 5-minute server-side cache
 // absorbs burst reloads without burning the API quota.
 const GDELT_CACHE_TTL_MS = 5 * 60 * 1000;
-// Minimum gap between sequential outbound GDELT requests.  Kept short (1 s)
-// because the in-flight deduplication already serialises truly concurrent
-// requests; this only protects against rapid manual "Load Feed" clicks.
-const GDELT_MIN_REQUEST_INTERVAL_MS = 1_000;
+// Minimum gap between sequential outbound GDELT requests.  GDELT currently
+// enforces a 5-second request floor for this endpoint, so keep a small buffer
+// above that to avoid burst clicks or automatic refreshes tripping 429s.
+const GDELT_MIN_REQUEST_INTERVAL_MS = 5_500;
 
 type GdeltRoutePayload = {
   sourceId: string;

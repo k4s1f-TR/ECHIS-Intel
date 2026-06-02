@@ -1511,9 +1511,17 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       let markerLeaveSignals: (() => void) | null = null;
 
       let resolved = false;
+      let styleReady = false;
+
+      const markMapUiReady = () => {
+        if (resolved) return;
+        resolved = true;
+        setLoadState("ready");
+      };
 
       // ── Style load → projection + dark tuning ────────────────────────────
       const handleStyleLoad = () => {
+        styleReady = true;
         if (hasWebGL2) {
           try {
             map.setProjection({ type: "globe" });
@@ -1617,12 +1625,22 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         } catch {
           /* noop */
         }
+
+        // Some public basemap providers fully commit the style and start
+        // rendering, but MapLibre's broader "load" event can lag or never
+        // settle if late tiles keep streaming. Once style.load has completed,
+        // the globe is usable enough for the UI to leave the blocking loading
+        // state.
+        if (map.isStyleLoaded()) {
+          window.requestAnimationFrame(() => {
+            markMapUiReady();
+          });
+        }
       };
 
       // ── Load complete → flip UI to "ready" ───────────────────────────────
       const handleLoad = () => {
-        resolved = true;
-        setLoadState("ready");
+        markMapUiReady();
       };
 
       // ── Error sink — log; only surface fatal failures to the user ────────
@@ -1645,6 +1663,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       // ── Watchdog — if load never resolves, surface a visible error ──────
       const timeoutId = window.setTimeout(() => {
         if (!resolved) {
+          if (styleReady || map.isStyleLoaded()) {
+            markMapUiReady();
+            return;
+          }
           resolved = true;
           mapErrored = true;
           setErrorMsg("Map did not load within " + LOAD_TIMEOUT_MS + "ms.");
@@ -2086,28 +2108,6 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             background: PANEL_BG,
-          }}
-        />
-
-        {/*
-          Premium surface polish overlay — non-interactive, very low opacity.
-          Two stacked gradients:
-            • a soft top sheen (faint cool highlight near the top edge), and
-            • a gentle bottom depth fade (slightly darker toward the bottom).
-          Both alphas stay under ~5% so the dark map style remains intact and
-          labels/borders remain readable — no neon, no vignette ring, no
-          oval blob, no cyberpunk glow.
-        */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            backgroundImage: [
-              "radial-gradient(120% 55% at 50% -8%, rgba(200, 215, 225, 0.045), rgba(200, 215, 225, 0) 60%)",
-              "linear-gradient(180deg, rgba(210, 220, 228, 0.025) 0%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.10) 100%)",
-            ].join(", "),
           }}
         />
 

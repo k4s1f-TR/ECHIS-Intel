@@ -33,6 +33,11 @@ type FeedResponse = {
   contentType: string;
 };
 
+type FeedRequestRelaxation = {
+  allowInsecureCert: boolean;
+  insecureHttpParser: boolean;
+};
+
 export class RssPreviewDiagnosticError extends Error {
   readonly diagnosticCategory: RssPreviewDiagnosticCategory;
   readonly status?: number;
@@ -185,7 +190,14 @@ function safeIsoDate(value: string): string {
  */
 function fetchFeed(feedUrl: string): Promise<FeedResponse> {
   return new Promise((resolve, reject) => {
-    const makeRequest = (url: string, hops = 0): void => {
+    const makeRequest = (
+      url: string,
+      hops = 0,
+      relaxation: FeedRequestRelaxation = {
+        allowInsecureCert: false,
+        insecureHttpParser: false,
+      },
+    ): void => {
       if (hops > 5) {
         reject(new Error("upstream_too_many_redirects"));
         return;
@@ -205,6 +217,10 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
         : parsed.protocol === "https:"
           ? 443
           : 80;
+      const agent =
+        parsed.protocol === "https:" && relaxation.allowInsecureCert
+          ? new https.Agent({ rejectUnauthorized: false })
+          : undefined;
 
       const req = lib.request(
         {
@@ -212,7 +228,10 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           port,
           path: parsed.pathname + parsed.search,
           method: "GET",
+          agent,
+          insecureHTTPParser: relaxation.insecureHttpParser,
           headers: {
+            "User-Agent": "TaipanMonitor/1.0",
             Accept:
               "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5",
           },
@@ -230,7 +249,7 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           ) {
             res.destroy();
             const next = new URL(resHeaders.location, url).href;
-            makeRequest(next, hops + 1);
+            makeRequest(next, hops + 1, relaxation);
             return;
           }
 
@@ -257,6 +276,24 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           const abort = new Error("Feed request timed out");
           abort.name = "AbortError";
           reject(abort);
+        } else if (
+          parsed.protocol === "https:" &&
+          !relaxation.allowInsecureCert &&
+          (err.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+            err.code === "SELF_SIGNED_CERT_IN_CHAIN")
+        ) {
+          makeRequest(url, hops, {
+            ...relaxation,
+            allowInsecureCert: true,
+          });
+        } else if (
+          !relaxation.insecureHttpParser &&
+          err.code === "HPE_CR_EXPECTED"
+        ) {
+          makeRequest(url, hops, {
+            ...relaxation,
+            insecureHttpParser: true,
+          });
         } else {
           reject(err);
         }

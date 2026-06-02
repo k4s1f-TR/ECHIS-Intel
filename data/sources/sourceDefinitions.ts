@@ -484,7 +484,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     sourceBasis: "single_public_source",
     extractionMethod: "rss_summary",
     baseUrl: "https://www.euronews.com/",
-    candidateFeedUrl: "https://www.euronews.com/rss",
+    candidateFeedUrl: "https://www.euronews.com/rss?format=mrss&level=theme&name=news",
     language: "en",
     regionScope: "europe",
     targetScreens: ["monitor", "intel_watch"],
@@ -1277,7 +1277,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     extractionMethod: "rss_summary",
     baseUrl: "https://qna.org.qa/",
     candidateFeedUrl:
-      "https://qna.org.qa/en/Pages/https://qna.org.qa/en/Pages/RSS-Feeds/GeneralRSS-Feeds/Qatar",
+      "https://qna.org.qa/en/Pages/RSS-Feeds/General",
     language: "en",
     regionScope: "middle_east",
     targetScreens: ["monitor", "intel_watch"],
