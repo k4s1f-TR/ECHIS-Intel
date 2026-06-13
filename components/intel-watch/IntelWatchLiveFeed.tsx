@@ -23,22 +23,22 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
       className="flex flex-col min-h-0 overflow-hidden flex-1"
       style={{
         width: "330px",
-        background: "rgba(8,10,16,0.98)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "8px",
+        background: "var(--bg-panel-alt)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-md)",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-3.5 py-2.5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
         <div className="flex items-center gap-2">
           <span
             style={{
-              fontSize: "10px",
+              fontSize: "var(--fs-sm)",
               fontWeight: 700,
-              color: "rgba(155,170,190,0.9)",
+              color: "var(--text-secondary)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
@@ -50,7 +50,7 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
             className="flex items-center gap-1 px-1.5 py-0.5 rounded"
             style={{
               background: "rgba(127,29,29,0.25)",
-              border: "1px solid rgba(239,68,68,0.3)",
+              border: "1px solid var(--sev-critical-border)",
             }}
           >
             <span
@@ -58,16 +58,16 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                 width: 5,
                 height: 5,
                 borderRadius: "50%",
-                background: "rgba(239,68,68,0.9)",
+                background: "var(--sev-critical-text)",
                 display: "inline-block",
                 animation: "pulse 2s infinite",
               }}
             />
             <span
               style={{
-                fontSize: "8px",
+                fontSize: "var(--fs-2xs)",
                 fontWeight: 700,
-                color: "rgba(239,68,68,0.9)",
+                color: "var(--sev-critical-text)",
                 letterSpacing: "0.08em",
               }}
             >
@@ -77,12 +77,12 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
         </div>
         <button
           style={{
-            fontSize: "9.5px",
+            fontSize: "var(--fs-xs)",
             fontWeight: 500,
-            color: "rgba(110,125,145,0.8)",
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: "4px",
+            color: "var(--text-tertiary)",
+            background: "var(--bg-surface-hover)",
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-sm)",
             padding: "2px 8px",
             cursor: "pointer",
           }}
@@ -92,14 +92,14 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
       </div>
 
       {/* Feed cards */}
-      <div className="intel-watch-scrollbar flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ padding: "4px 0" }}>
+      <div className="tm-scrollbar intel-watch-scrollbar flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ padding: "4px 0" }}>
         {liveFeedEvents.map((event) => {
           const cs = CATEGORY_STYLE[event.category];
           return (
             <div
               key={event.id}
               className="flex gap-2.5 px-3.5 py-2"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+              style={{ borderBottom: "1px solid var(--border-subtle)" }}
             >
               {/* Agency circle */}
               <div
@@ -107,11 +107,11 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                 style={{
                   width: 28,
                   height: 28,
-                  background: "rgba(255,255,255,0.055)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "var(--border-dim)",
+                  border: "1px solid var(--border-hover)",
                   fontSize: "7.5px",
                   fontWeight: 700,
-                  color: "rgba(180,195,215,0.85)",
+                  color: "var(--text-body)",
                   letterSpacing: "0.03em",
                   marginTop: 1,
                 }}
@@ -123,9 +123,9 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
               <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                 <span
                   style={{
-                    fontSize: "11px",
+                    fontSize: "var(--fs-base)",
                     fontWeight: 600,
-                    color: "rgba(210,220,235,0.93)",
+                    color: "var(--text-body)",
                     lineHeight: 1.35,
                     overflow: "hidden",
                     display: "-webkit-box",
@@ -137,8 +137,8 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                 </span>
                 <span
                   style={{
-                    fontSize: "10px",
-                    color: "rgba(125,140,160,0.8)",
+                    fontSize: "var(--fs-sm)",
+                    color: "var(--text-tertiary)",
                     lineHeight: 1.45,
                     overflow: "hidden",
                     display: "-webkit-box",
@@ -161,13 +161,13 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                   >
                     {cs.label}
                   </span>
-                  <span style={{ fontSize: "9px", color: "rgba(100,115,135,0.7)" }}>
+                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
                     {event.source}
                   </span>
                   <span
                     style={{
-                      fontSize: "9px",
-                      color: "rgba(85,100,120,0.65)",
+                      fontSize: "var(--fs-xs)",
+                      color: "var(--text-dim)",
                       fontFamily: "ui-monospace, monospace",
                       marginLeft: "auto",
                     }}
@@ -184,13 +184,13 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
       {/* Footer */}
       <div
         className="flex-shrink-0 px-3.5 py-2"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderTop: "1px solid var(--border-dim)" }}
       >
         <button
           onClick={onOpenDrawer}
           style={{
-            fontSize: "10px",
-            color: "rgba(74,222,128,0.8)",
+            fontSize: "var(--fs-sm)",
+            color: "var(--accent-green)",
             background: "none",
             border: "none",
             cursor: "pointer",

@@ -14,22 +14,22 @@ export function SupplyChainPressurePanel() {
     <div
       className="flex flex-col h-full"
       style={{
-        background: "rgba(7,8,11,0.985)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center gap-2 flex-shrink-0 px-3.5 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
-        <Boxes size={12} style={{ color: "rgba(165,180,195,0.4)" }} />
+        <Boxes size={12} style={{ color: "var(--icon-default)" }} />
         <span
           style={{
-            fontSize: "10px",
+            fontSize: "var(--fs-sm)",
             fontWeight: 700,
-            color: "rgba(155,170,180,0.88)",
+            color: "var(--text-secondary)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
           }}
@@ -37,19 +37,19 @@ export function SupplyChainPressurePanel() {
           Supply Chain Pressure
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 defense-scrollbar">
+      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 defense-scrollbar">
         {defenseSupplyChainPressure.map((row) => {
           const tone = STATUS_COLOR[row.status] ?? STATUS_COLOR.Moderate;
           return (
             <div key={row.name} className="flex flex-col gap-1.5">
               <div className="flex items-end justify-between">
-                <span style={{ fontSize: "10px", fontWeight: 600, color: "rgba(195,210,220,0.85)" }}>
+                <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text-body)" }}>
                   {row.name}
                 </span>
                 <div className="flex items-center gap-2">
                   <span
                     style={{
-                      fontSize: "8px",
+                      fontSize: "var(--fs-2xs)",
                       fontWeight: 600,
                       color: tone.color,
                       letterSpacing: "0.05em",
@@ -60,9 +60,9 @@ export function SupplyChainPressurePanel() {
                   </span>
                   <span
                     style={{
-                      fontSize: "10px",
+                      fontSize: "var(--fs-sm)",
                       fontWeight: 700,
-                      color: "rgba(255,255,255,0.8)",
+                      color: "var(--text-primary)",
                       fontVariantNumeric: "tabular-nums",
                       minWidth: "24px",
                       textAlign: "right",

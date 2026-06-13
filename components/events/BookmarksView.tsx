@@ -112,7 +112,7 @@ export function BookmarksView({
             </div>
           ) : (
             <div
-              className="politics-feed-scrollbar grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-3 lg:grid-cols-2"
+              className="tm-scrollbar politics-feed-scrollbar grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-3 lg:grid-cols-2"
             >
               {items.map((item, index) =>
                 item.type === "event" ? (

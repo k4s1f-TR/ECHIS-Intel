@@ -1,15 +1,111 @@
 @import "tailwindcss";
 
 :root {
-  --bg-base: #04080f;
-  --bg-panel: #080c16;
-  --bg-card: #0b101c;
-  --border-dim: rgba(255, 255, 255, 0.055);
-  --border-accent: rgba(59, 130, 246, 0.45);
-  --text-primary: #dde4f0;
-  --text-secondary: #6b7a9a;
-  --text-muted: #3d4860;
-  --accent-blue: #3b82f6;
+  /* ── Background layers ─────────────────────────────────── */
+  --bg-base: #050507;
+  --bg-shell: rgba(8, 8, 9, 0.99);
+  --bg-panel: rgba(7, 7, 9, 0.99);
+  --bg-panel-alt: rgba(8, 8, 11, 0.99);
+  --bg-card: rgba(10, 10, 12, 0.98);
+  --bg-card-alt: rgba(9, 9, 12, 0.98);
+  --bg-surface: rgba(255, 255, 255, 0.018);
+  --bg-surface-hover: rgba(255, 255, 255, 0.035);
+  --bg-surface-active: rgba(255, 255, 255, 0.055);
+  --bg-overlay: rgba(8, 8, 10, 0.94);
+  --bg-backdrop: rgba(2, 2, 3, 0.68);
+  --bg-info-strip: rgba(4, 4, 6, 0.95);
+
+  /* ── Border layers ─────────────────────────────────────── */
+  --border-primary: rgba(255, 255, 255, 0.06);
+  --border-dim: rgba(255, 255, 255, 0.045);
+  --border-subtle: rgba(255, 255, 255, 0.03);
+  --border-hover: rgba(255, 255, 255, 0.09);
+  --border-accent: rgba(80, 140, 220, 0.4);
+  --border-divider: rgba(255, 255, 255, 0.04);
+
+  /* ── Text layers ───────────────────────────────────────── */
+  --text-heading: rgba(240, 242, 245, 0.97);
+  --text-primary: rgba(218, 222, 228, 0.93);
+  --text-body: rgba(185, 192, 202, 0.85);
+  --text-secondary: rgba(140, 150, 168, 0.76);
+  --text-tertiary: rgba(100, 110, 125, 0.6);
+  --text-muted: rgba(75, 82, 92, 0.65);
+  --text-dim: rgba(55, 60, 68, 0.45);
+
+  /* ── Icon layers ───────────────────────────────────────── */
+  --icon-default: rgba(70, 76, 86, 0.7);
+  --icon-hover: rgba(175, 182, 192, 0.88);
+  --icon-active: rgba(120, 165, 225, 0.88);
+
+  /* ── Accent: blue ──────────────────────────────────────── */
+  --accent-blue: #4088e0;
+  --accent-blue-text: rgba(100, 162, 240, 0.88);
+  --accent-blue-bg: rgba(55, 120, 210, 0.07);
+  --accent-blue-bg-strong: rgba(55, 120, 210, 0.11);
+  --accent-blue-border: rgba(55, 120, 210, 0.2);
+  --accent-blue-glow: rgba(55, 120, 210, 0.08);
+
+  /* ── Accent: green ─────────────────────────────────────── */
+  --accent-green: rgba(56, 198, 105, 0.85);
+  --accent-green-dim: rgba(56, 198, 105, 0.22);
+  --accent-green-bg: rgba(16, 72, 38, 0.18);
+  --accent-green-border: rgba(30, 178, 78, 0.2);
+  --accent-green-dot: rgba(46, 172, 82, 0.65);
+
+  /* ── Severity: critical ────────────────────────────────── */
+  --sev-critical-text: rgba(235, 72, 72, 0.92);
+  --sev-critical-bg: rgba(235, 72, 72, 0.08);
+  --sev-critical-border: rgba(235, 72, 72, 0.28);
+
+  /* ── Severity: high ────────────────────────────────────── */
+  --sev-high-text: rgba(242, 115, 28, 0.92);
+  --sev-high-bg: rgba(242, 115, 28, 0.07);
+  --sev-high-border: rgba(242, 115, 28, 0.26);
+
+  /* ── Severity: medium ──────────────────────────────────── */
+  --sev-medium-text: rgba(225, 175, 12, 0.9);
+  --sev-medium-bg: rgba(225, 175, 12, 0.065);
+  --sev-medium-border: rgba(225, 175, 12, 0.24);
+
+  /* ── Severity: low ─────────────────────────────────────── */
+  --sev-low-text: rgba(130, 138, 148, 0.78);
+  --sev-low-bg: rgba(95, 100, 110, 0.06);
+  --sev-low-border: rgba(95, 100, 110, 0.18);
+
+  /* ── Semantic: category colors ─────────────────────────── */
+  --cat-diplomatic: rgba(155, 132, 238, 0.85);
+  --cat-diplomatic-bg: rgba(72, 30, 142, 0.12);
+  --cat-diplomatic-border: rgba(155, 132, 238, 0.2);
+  --cat-intelligence: rgba(45, 200, 142, 0.82);
+  --cat-amber: rgba(235, 185, 35, 0.85);
+  --cat-amber-bg: rgba(108, 62, 16, 0.12);
+  --cat-amber-border: rgba(235, 185, 35, 0.2);
+
+  /* ── Shadow ────────────────────────────────────────────── */
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --shadow-inset-highlight: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+
+  /* ── Typography scale ──────────────────────────────────── */
+  --fs-2xs: 8px;
+  --fs-xs: 9px;
+  --fs-sm: 10px;
+  --fs-base: 11px;
+  --fs-md: 12px;
+  --fs-lg: 14px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+
+  /* ── Spacing scale ─────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  /* ── Scrollbar accent (override per-section) ───────────── */
+  --scrollbar-accent: rgba(255, 255, 255, 0.08);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.15);
+  --scrollbar-track: transparent;
 }
 
 * {
@@ -41,120 +137,52 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(255, 255, 255, 0.12);
 }
 
+/* ── Parametric scrollbar ────────────────────────────────── */
+.tm-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-accent) var(--scrollbar-track);
+}
+.tm-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.tm-scrollbar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+.tm-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-accent);
+  border-radius: 999px;
+}
+.tm-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-accent-hover);
+}
+
+/* Per-section scrollbar accent overrides */
 .politics-feed-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(96, 165, 250, 0.28) rgba(255, 255, 255, 0.035);
+  --scrollbar-accent: rgba(255, 255, 255, 0.06);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.12);
 }
-
-.politics-feed-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.politics-feed-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.025);
-  border-radius: 999px;
-}
-
-.politics-feed-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(96, 165, 250, 0.24);
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.045);
-}
-
-.politics-feed-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(96, 165, 250, 0.36);
-}
-
 .sources-registry-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(96, 165, 250, 0.22) rgba(255, 255, 255, 0.025);
+  --scrollbar-accent: rgba(255, 255, 255, 0.05);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.1);
 }
-
-.sources-registry-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sources-registry-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.sources-registry-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(96, 165, 250, 0.2);
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.sources-registry-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(96, 165, 250, 0.32);
-}
-
 .cyber-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(74, 222, 128, 0.18) rgba(255, 255, 255, 0.02);
+  --scrollbar-accent: rgba(255, 255, 255, 0.05);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.1);
 }
-
-.cyber-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.cyber-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.015);
-}
-
-.cyber-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(74, 222, 128, 0.16);
-  border-radius: 999px;
-}
-
-.cyber-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(74, 222, 128, 0.28);
-}
-
 .defense-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 180, 195, 0.28) rgba(255, 255, 255, 0.02);
+  --scrollbar-accent: rgba(255, 255, 255, 0.05);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.1);
 }
-
-.defense-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.defense-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.015);
-}
-
-.defense-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(165, 180, 195, 0.22);
-  border-radius: 999px;
-}
-
-.defense-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(165, 180, 195, 0.36);
-}
-
 .intel-watch-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-}
-.intel-watch-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.intel-watch-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.intel-watch-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 2px;
-}
-.intel-watch-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  --scrollbar-accent: rgba(255, 255, 255, 0.06);
+  --scrollbar-accent-hover: rgba(255, 255, 255, 0.12);
 }
 
 @keyframes ui-fade-in-kf {

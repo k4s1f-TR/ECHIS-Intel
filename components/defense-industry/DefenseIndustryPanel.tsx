@@ -12,20 +12,20 @@ function MapLegend() {
   return (
     <div
       className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
-      style={{ borderTop: "1px solid rgba(255,255,255,0.055)", background: "rgba(4,6,10,0.9)" }}
+      style={{ borderTop: "1px solid var(--border-dim)", background: "var(--bg-info-strip)" }}
     >
       <span
         style={{
-          fontSize: "9px",
+          fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "rgba(120,135,150,0.7)",
+          color: "var(--text-tertiary)",
           letterSpacing: "0.08em",
           textTransform: "uppercase",
         }}
       >
         Static View
       </span>
-      <span style={{ fontSize: "9px", color: "rgba(100,115,130,0.5)" }}>•</span>
+      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
       <div className="flex items-center gap-1.5">
         <span
           style={{
@@ -37,10 +37,10 @@ function MapLegend() {
             flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: "9.5px", color: "rgba(165,180,195,0.75)" }}>Industry Hub</span>
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>Industry Hub</span>
       </div>
-      <span style={{ fontSize: "9px", color: "rgba(100,115,130,0.5)" }}>•</span>
-      <span style={{ fontSize: "9.5px", color: "rgba(120,135,150,0.6)" }}>
+      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
+      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
         Public-source markers — no live tracking
       </span>
     </div>
@@ -53,7 +53,7 @@ export function DefenseIndustryPanel() {
   return (
     <main
       className="flex flex-1 min-h-0 overflow-hidden gap-2.5 p-2.5"
-      style={{ background: "rgba(4,6,9,0.985)" }}
+      style={{ background: "var(--bg-base)" }}
     >
       {/* LEFT COLUMN */}
       <div className="flex flex-col gap-2.5" style={{ flex: "2 1 0%" }}>
@@ -61,23 +61,23 @@ export function DefenseIndustryPanel() {
         <div
           className="flex-1 min-h-0 flex flex-col"
           style={{
-            background: "rgba(7,8,11,0.985)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: "10px",
+            background: "var(--bg-panel)",
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-lg)",
             overflow: "hidden",
           }}
         >
           <div
             className="flex items-center justify-between flex-shrink-0 px-3.5 py-2"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+            style={{ borderBottom: "1px solid var(--border-dim)" }}
           >
             <div className="flex items-center gap-2">
-              <Factory size={12} style={{ color: "rgba(165,180,195,0.4)" }} />
+              <Factory size={12} style={{ color: "var(--icon-default)" }} />
               <span
                 style={{
-                  fontSize: "10px",
+                  fontSize: "var(--fs-sm)",
                   fontWeight: 700,
-                  color: "rgba(155,170,180,0.88)",
+                  color: "var(--text-secondary)",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                 }}

@@ -13,12 +13,12 @@ import { defenseFeedItems } from "@/data/defenseIndustryMockData";
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex items-center gap-2 mb-1">
-      <Icon size={11} style={{ color: "rgba(165,180,195,0.45)", flexShrink: 0 }} />
+      <Icon size={11} style={{ color: "var(--icon-default)", flexShrink: 0 }} />
       <span
         style={{
-          fontSize: "9px",
+          fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "rgba(120,135,150,0.7)",
+          color: "var(--text-tertiary)",
           letterSpacing: "0.1em",
           textTransform: "uppercase" as const,
         }}
@@ -33,9 +33,9 @@ function SectionValue({ children }: { children: React.ReactNode }) {
   return (
     <p
       style={{
-        fontSize: "12px",
+        fontSize: "var(--fs-md)",
         fontWeight: 500,
-        color: "rgba(210,225,235,0.9)",
+        color: "var(--text-primary)",
         marginBottom: "12px",
         paddingLeft: "19px",
       }}
@@ -49,13 +49,13 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div
       className="flex items-center justify-between py-2"
-      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+      style={{ borderBottom: "1px solid var(--border-subtle)" }}
     >
       <span
         style={{
-          fontSize: "9.5px",
+          fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "rgba(120,135,150,0.7)",
+          color: "var(--text-tertiary)",
           letterSpacing: "0.06em",
           textTransform: "uppercase" as const,
         }}
@@ -64,9 +64,9 @@ function MetaRow({ label, value }: { label: string; value: string }) {
       </span>
       <span
         style={{
-          fontSize: "10.5px",
+          fontSize: "var(--fs-sm)",
           fontWeight: 500,
-          color: "rgba(195,210,220,0.85)",
+          color: "var(--text-body)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -90,13 +90,13 @@ function StatusBar({
   return (
     <div
       className="flex items-center justify-between py-2"
-      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+      style={{ borderBottom: "1px solid var(--border-subtle)" }}
     >
       <span
         style={{
-          fontSize: "9.5px",
+          fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "rgba(120,135,150,0.7)",
+          color: "var(--text-tertiary)",
           letterSpacing: "0.06em",
           textTransform: "uppercase" as const,
         }}
@@ -112,12 +112,12 @@ function StatusBar({
                 width: 14,
                 height: 4,
                 borderRadius: 1,
-                background: i <= level ? color : "rgba(255,255,255,0.05)",
+                background: i <= level ? color : "var(--bg-surface-active)",
               }}
             />
           ))}
         </div>
-        <span style={{ fontSize: "10px", fontWeight: 600, color, minWidth: 32 }}>{caption}</span>
+        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color, minWidth: 32 }}>{caption}</span>
       </div>
     </div>
   );
@@ -131,22 +131,22 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
     <div
       className="flex flex-col h-full"
       style={{
-        background: "rgba(7,8,11,0.985)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
-        <Factory size={12} style={{ color: "rgba(165,180,195,0.4)" }} />
+        <Factory size={12} style={{ color: "var(--icon-default)" }} />
         <span
           style={{
-            fontSize: "10px",
+            fontSize: "var(--fs-sm)",
             fontWeight: 700,
-            color: "rgba(155,170,180,0.88)",
+            color: "var(--text-secondary)",
             letterSpacing: "0.1em",
             textTransform: "uppercase" as const,
           }}
@@ -155,7 +155,7 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
         </span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col defense-scrollbar">
+      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col defense-scrollbar">
         <SectionLabel icon={Flag} label="Country / Region" />
         <SectionValue>{ctx.countryRegion}</SectionValue>
 
@@ -177,9 +177,9 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
         <SectionLabel icon={FileText} label="Summary" />
         <p
           style={{
-            fontSize: "11px",
+            fontSize: "var(--fs-base)",
             fontWeight: 400,
-            color: "rgba(165,180,195,0.8)",
+            color: "var(--text-secondary)",
             lineHeight: 1.65,
             marginBottom: 16,
             paddingLeft: 19,
@@ -188,7 +188,7 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
           {ctx.summary}
         </p>
 
-        <div className="mt-auto" style={{ borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
+        <div className="mt-auto" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
           <MetaRow label="Source Type" value={ctx.sourceType} />
           <MetaRow label="First Seen" value={ctx.firstSeen} />
           <MetaRow label="Last Update" value={ctx.lastUpdate} />

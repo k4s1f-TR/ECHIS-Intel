@@ -9,17 +9,17 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
   return (
     <div
       className="flex items-center gap-2 py-[5px]"
-      style={{ borderBottom: "1px solid rgba(255,255,255,0.025)" }}
+      style={{ borderBottom: "1px solid var(--border-subtle)" }}
     >
       <span
         className="flex-shrink-0"
-        style={{ width: 14, fontSize: "9px", color: "rgba(100,115,130,0.5)", fontWeight: 600, textAlign: "right" }}
+        style={{ width: 14, fontSize: "var(--fs-xs)", color: "var(--text-dim)", fontWeight: 600, textAlign: "right" }}
       >
         {item.rank}
       </span>
       <span
         className="flex-shrink-0"
-        style={{ width: 110, fontSize: "10px", color: "rgba(175,190,200,0.85)", fontWeight: 500 }}
+        style={{ width: 110, fontSize: "var(--fs-sm)", color: "var(--text-body)", fontWeight: 500 }}
       >
         {item.segment}
       </span>
@@ -35,9 +35,9 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
       </div>
       <span
         style={{
-          fontSize: "10px",
+          fontSize: "var(--fs-sm)",
           fontWeight: 600,
-          color: "rgba(195,210,220,0.85)",
+          color: "var(--text-body)",
           fontVariantNumeric: "tabular-nums",
           width: 40,
           textAlign: "right",
@@ -53,7 +53,7 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
         )}
         <span
           style={{
-            fontSize: "9px",
+            fontSize: "var(--fs-xs)",
             fontWeight: 600,
             color: positive ? "rgba(160,200,180,0.85)" : "rgba(220,140,120,0.8)",
           }}
@@ -72,22 +72,22 @@ export function KeySegmentsPanel() {
     <div
       className="h-full flex flex-col"
       style={{
-        background: "rgba(7,8,11,0.985)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center gap-2 flex-shrink-0 px-3 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
-        <Layers size={11} style={{ color: "rgba(165,180,195,0.4)" }} />
+        <Layers size={11} style={{ color: "var(--icon-default)" }} />
         <span
           style={{
-            fontSize: "9.5px",
+            fontSize: "var(--fs-xs)",
             fontWeight: 700,
-            color: "rgba(155,170,180,0.88)",
+            color: "var(--text-secondary)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
           }}
@@ -95,7 +95,7 @@ export function KeySegmentsPanel() {
           Key Segments
         </span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1 defense-scrollbar">
+      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-1 defense-scrollbar">
         {defenseKeySegments.map((s) => (
           <SegmentRow key={s.segment} item={s} maxCount={maxCount} />
         ))}

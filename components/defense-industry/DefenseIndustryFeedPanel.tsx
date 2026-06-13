@@ -6,8 +6,8 @@ import { defenseFeedItems, type DefenseFeedItem } from "@/data/defenseIndustryMo
 const PRIORITY: Record<string, { text: string; bg: string; border: string }> = {
   elevated: { text: "rgba(249,115,22,0.9)", bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.3)" },
   high: { text: "rgba(234,179,8,0.9)", bg: "rgba(234,179,8,0.08)", border: "rgba(234,179,8,0.3)" },
-  medium: { text: "rgba(140,165,190,0.85)", bg: "rgba(100,120,140,0.08)", border: "rgba(100,120,140,0.25)" },
-  low: { text: "rgba(140,140,140,0.85)", bg: "rgba(100,100,100,0.06)", border: "rgba(100,100,100,0.22)" },
+  medium: { text: "var(--text-secondary)", bg: "rgba(100,120,140,0.08)", border: "rgba(100,120,140,0.25)" },
+  low: { text: "var(--text-muted)", bg: "rgba(100,100,100,0.06)", border: "rgba(100,100,100,0.22)" },
 };
 
 function FeedCard({
@@ -29,16 +29,16 @@ function FeedCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         background: isSelected
-          ? "rgba(255,255,255,0.05)"
+          ? "var(--bg-surface-active)"
           : hovered
-          ? "rgba(255,255,255,0.03)"
-          : "rgba(255,255,255,0.015)",
+          ? "var(--bg-surface-hover)"
+          : "var(--bg-surface)",
         border: isSelected
           ? "1px solid rgba(165,180,195,0.32)"
           : hovered
-          ? "1px solid rgba(255,255,255,0.08)"
-          : "1px solid rgba(255,255,255,0.04)",
-        borderRadius: "7px",
+          ? "1px solid var(--border-hover)"
+          : "1px solid var(--border-subtle)",
+        borderRadius: "var(--radius-md)",
         padding: "10px 12px 10px 14px",
         marginBottom: "6px",
         transition: "all 120ms ease",
@@ -53,21 +53,21 @@ function FeedCard({
       <p
         className="line-clamp-2 leading-snug mb-1.5"
         style={{
-          fontSize: "11.5px",
+          fontSize: "var(--fs-base)",
           fontWeight: 600,
-          color: hovered ? "rgba(220,235,245,0.97)" : "rgba(195,210,220,0.88)",
+          color: hovered ? "var(--text-heading)" : "var(--text-body)",
         }}
       >
         {item.headline}
       </p>
       <div className="flex items-center gap-1.5 mb-2">
-        <span style={{ fontSize: "9.5px", color: "rgba(110,125,140,0.8)", fontWeight: 500 }}>{item.source}</span>
-        <span style={{ fontSize: "9px", color: "rgba(80,90,100,0.5)" }}>•</span>
-        <span style={{ fontSize: "9.5px", color: "rgba(100,115,130,0.7)" }}>{item.timeAgo}</span>
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)", fontWeight: 500 }}>{item.source}</span>
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>{item.timeAgo}</span>
       </div>
       <p
         className="mb-2.5 leading-relaxed"
-        style={{ fontSize: "10.5px", color: "rgba(145,160,175,0.75)", lineHeight: 1.55 }}
+        style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", lineHeight: 1.55 }}
       >
         {item.summary}
       </p>
@@ -75,11 +75,11 @@ function FeedCard({
         <span
           className="px-1.5 py-0.5 rounded"
           style={{
-            fontSize: "8px",
+            fontSize: "var(--fs-2xs)",
             fontWeight: 600,
-            color: "rgba(180,195,210,0.85)",
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            color: "var(--text-body)",
+            background: "var(--border-subtle)",
+            border: "1px solid var(--border-primary)",
           }}
         >
           {item.activityType}
@@ -87,7 +87,7 @@ function FeedCard({
         <span
           className="px-1.5 py-0.5 rounded uppercase"
           style={{
-            fontSize: "8px",
+            fontSize: "var(--fs-2xs)",
             fontWeight: 700,
             background: pri.bg,
             color: pri.text,
@@ -112,23 +112,23 @@ export function DefenseIndustryFeedPanel({
     <div
       className="flex flex-col h-full"
       style={{
-        background: "rgba(7,8,11,0.985)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center justify-between flex-shrink-0 px-3.5 py-2.5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
         <div className="flex items-center gap-2">
-          <Factory size={12} style={{ color: "rgba(165,180,195,0.4)" }} />
+          <Factory size={12} style={{ color: "var(--icon-default)" }} />
           <span
             style={{
-              fontSize: "10px",
+              fontSize: "var(--fs-sm)",
               fontWeight: 700,
-              color: "rgba(155,170,180,0.88)",
+              color: "var(--text-secondary)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
@@ -138,10 +138,10 @@ export function DefenseIndustryFeedPanel({
         </div>
         <div className="flex items-center gap-1.5">
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(160,180,200,0.5)" }} />
-          <span style={{ fontSize: "9px", color: "rgba(165,180,195,0.55)", fontWeight: 600 }}>OSINT</span>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)", fontWeight: 600 }}>OSINT</span>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-2 defense-scrollbar">
+      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-2 defense-scrollbar">
         {defenseFeedItems.map((item) => (
           <FeedCard
             key={item.id}

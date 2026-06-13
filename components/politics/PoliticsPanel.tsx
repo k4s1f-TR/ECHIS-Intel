@@ -22,17 +22,17 @@ const SEVERITY_PILLS: { key: SeverityFilter; label: string }[] = [
 ];
 
 const SEV: Record<EventSeverity, { text: string; border: string; bg: string; accent: string }> = {
-  critical: { text: "rgba(239,68,68,0.95)", border: "rgba(239,68,68,0.4)", bg: "rgba(239,68,68,0.1)", accent: "#ef4444" },
-  high:     { text: "rgba(249,115,22,0.95)", border: "rgba(249,115,22,0.4)", bg: "rgba(249,115,22,0.1)", accent: "#f97316" },
-  medium:   { text: "rgba(234,179,8,0.95)",  border: "rgba(234,179,8,0.4)",  bg: "rgba(234,179,8,0.1)",  accent: "#eab308" },
-  low:      { text: "rgba(140,140,140,0.9)", border: "rgba(100,100,100,0.3)", bg: "rgba(100,100,100,0.08)", accent: "#555" },
+  critical: { text: "var(--sev-critical-text)", border: "var(--sev-critical-border)", bg: "var(--sev-critical-bg)", accent: "#ef4444" },
+  high:     { text: "var(--sev-high-text)", border: "var(--sev-high-border)", bg: "var(--sev-high-bg)", accent: "#f97316" },
+  medium:   { text: "var(--sev-medium-text)", border: "var(--sev-medium-border)", bg: "var(--sev-medium-bg)", accent: "#eab308" },
+  low:      { text: "var(--sev-low-text)", border: "var(--sev-low-border)", bg: "var(--sev-low-bg)", accent: "#555" },
 };
 
 const PILL_ACTIVE: Record<SeverityFilter, { text: string; border: string; bg: string }> = {
   all:      { text: "rgba(147,197,253,0.95)", border: "rgba(96,165,250,0.45)", bg: "rgba(96,165,250,0.1)" },
-  critical: { text: "rgba(239,68,68,0.95)",  border: "rgba(239,68,68,0.5)",   bg: "rgba(239,68,68,0.12)" },
-  high:     { text: "rgba(249,115,22,0.95)", border: "rgba(249,115,22,0.5)",  bg: "rgba(249,115,22,0.12)" },
-  medium:   { text: "rgba(234,179,8,0.95)",  border: "rgba(234,179,8,0.5)",   bg: "rgba(234,179,8,0.12)" },
+  critical: { text: "var(--sev-critical-text)", border: "rgba(239,68,68,0.5)", bg: "rgba(239,68,68,0.12)" },
+  high:     { text: "var(--sev-high-text)", border: "rgba(249,115,22,0.5)", bg: "rgba(249,115,22,0.12)" },
+  medium:   { text: "var(--sev-medium-text)", border: "rgba(234,179,8,0.5)", bg: "rgba(234,179,8,0.12)" },
   low:      { text: "rgba(160,160,160,0.95)", border: "rgba(100,100,100,0.4)", bg: "rgba(100,100,100,0.1)" },
 };
 
@@ -141,10 +141,10 @@ function SourceFilterDropdown({
         onKeyDown={handleTriggerKeyDown}
         className="flex h-[32px] w-full items-center justify-between rounded-md px-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-blue-400/45"
         style={{
-          fontSize: "10.5px",
-          color: "rgba(150,160,175,0.9)",
-          background: open ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.04)",
-          border: open ? "1px solid rgba(96,165,250,0.28)" : "1px solid rgba(255,255,255,0.07)",
+          fontSize: "var(--fs-sm)",
+          color: "var(--text-secondary)",
+          background: open ? "var(--border-dim)" : "var(--border-subtle)",
+          border: open ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-primary)",
           boxShadow: open ? "0 0 0 1px rgba(59,130,246,0.04)" : "none",
         }}
       >
@@ -152,18 +152,18 @@ function SourceFilterDropdown({
         <ChevronDown
           size={11}
           className={`ml-2 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
-          style={{ color: "rgba(120,135,155,0.85)" }}
+          style={{ color: "var(--text-tertiary)" }}
         />
       </button>
 
       {open && (
         <div
           role="listbox"
-          className="politics-feed-scrollbar absolute right-0 top-[36px] z-50 max-h-[186px] w-[220px] overflow-y-auto rounded-md py-1"
+          className="tm-scrollbar politics-feed-scrollbar absolute right-0 top-[36px] z-50 max-h-[186px] w-[220px] overflow-y-auto rounded-md py-1"
           style={{
             background: "rgba(12,12,12,0.99)",
-            border: "1px solid rgba(255,255,255,0.085)",
-            boxShadow: "0 18px 44px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.035)",
+            border: "1px solid var(--border-hover)",
+            boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
           }}
         >
           {options.map((option, index) => {
@@ -182,10 +182,10 @@ function SourceFilterDropdown({
                   background: selected
                     ? "rgba(59,130,246,0.16)"
                     : highlighted
-                      ? "rgba(255,255,255,0.05)"
+                      ? "var(--bg-surface-active)"
                       : "transparent",
-                  color: selected ? "rgba(205,225,255,0.97)" : "rgba(145,150,160,0.92)",
-                  fontSize: "10.5px",
+                  color: selected ? "rgba(205,225,255,0.97)" : "var(--text-secondary)",
+                  fontSize: "var(--fs-sm)",
                   fontWeight: selected ? 600 : 500,
                 }}
               >
@@ -425,21 +425,21 @@ function SignalRow({ label, value, change, up, detail }: SignalRowData) {
   const changeColor =
     up === true  ? "rgba(74,222,128,0.85)"
     : up === false ? "rgba(239,68,68,0.85)"
-    : "rgba(90,90,90,0.8)";
+    : "var(--text-muted)";
   const detailUpColor = "rgba(74,222,128,0.85)";
   const detailDownColor = "rgba(239,68,68,0.85)";
   return (
     <div
       className="flex items-center justify-between"
-      style={{ padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+      style={{ padding: "5px 0", borderBottom: "1px solid var(--border-subtle)" }}
     >
-      <span style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.9)" }}>{label}</span>
+      <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>{label}</span>
       <div className="flex items-center gap-1.5">
         <span
           style={{
-            fontSize: "11px",
+            fontSize: "var(--fs-base)",
             fontWeight: 600,
-            color: "rgba(195,205,220,0.9)",
+            color: "var(--text-body)",
             fontVariantNumeric: "tabular-nums",
           }}
         >
@@ -449,24 +449,24 @@ function SignalRow({ label, value, change, up, detail }: SignalRowData) {
           <div
             className="flex items-center gap-1"
             style={{
-              fontSize: "9.5px",
+              fontSize: "var(--fs-xs)",
               fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            <span style={{ color: "rgba(195,205,220,0.9)" }}>{detail.left}</span>
+            <span style={{ color: "var(--text-body)" }}>{detail.left}</span>
             <span style={{ color: detail.leftUp ? detailUpColor : detailDownColor }}>
               {detail.leftUp ? "▲" : "▼"}
             </span>
-            <span style={{ color: "rgba(90,90,90,0.8)" }}>/</span>
-            <span style={{ color: "rgba(195,205,220,0.9)" }}>{detail.right}</span>
+            <span style={{ color: "var(--text-muted)" }}>/</span>
+            <span style={{ color: "var(--text-body)" }}>{detail.right}</span>
             <span style={{ color: detail.rightUp ? detailUpColor : detailDownColor }}>
               {detail.rightUp ? "▲" : "▼"}
             </span>
           </div>
         )}
         {change !== undefined && (
-          <span style={{ fontSize: "9.5px", fontWeight: 600, color: changeColor }}>
+          <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: changeColor }}>
             {up === true ? "▲" : up === false ? "▼" : ""}{change}
           </span>
         )}
@@ -486,17 +486,17 @@ function CompactMarketPanel({
     <div
       style={{
         width: "100%",
-        background: "rgba(12,12,12,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         padding: "12px 14px",
       }}
     >
       <p
         style={{
-          fontSize: "10.5px",
+          fontSize: "var(--fs-sm)",
           fontWeight: 700,
-          color: "rgba(175,185,200,0.88)",
+          color: "var(--text-secondary)",
           marginBottom: "8px",
         }}
       >
@@ -529,17 +529,17 @@ function PoliticsSidePanel({
         width: "100%",
         flex: fill ? 1 : "0 0 auto",
         minHeight: fill ? 0 : undefined,
-        background: "rgba(12,12,12,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "10px",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-lg)",
         padding: "10px 12px",
       }}
     >
       <p
         style={{
-          fontSize: "10px",
+          fontSize: "var(--fs-sm)",
           fontWeight: 700,
-          color: "rgba(175,185,200,0.88)",
+          color: "var(--text-secondary)",
           marginBottom: "7px",
           letterSpacing: "0.04em",
         }}
@@ -562,12 +562,12 @@ function PoliticsSidePanel({
               onClick={() => onSelect(item)}
               className="flex items-center justify-between rounded-md px-2 py-1 transition-colors duration-150"
               style={{
-                background: active ? "rgba(59,130,246,0.09)" : "transparent",
+                background: active ? "var(--accent-blue-bg)" : "transparent",
                 border: active
                   ? "1px solid rgba(59,130,246,0.18)"
                   : "1px solid transparent",
-                color: active ? "rgba(180,210,250,0.94)" : "rgba(120,120,120,0.9)",
-                fontSize: "10.5px",
+                color: active ? "rgba(180,210,250,0.94)" : "var(--text-muted)",
+                fontSize: "var(--fs-sm)",
                 fontWeight: active ? 600 : 500,
                 textAlign: "left",
                 minHeight: "24px",
@@ -575,16 +575,16 @@ function PoliticsSidePanel({
               onMouseEnter={(e) => {
                 if (!active) {
                   (e.currentTarget as HTMLElement).style.background =
-                    "rgba(255,255,255,0.035)";
+                    "var(--bg-surface-hover)";
                   (e.currentTarget as HTMLElement).style.color =
-                    "rgba(170,170,170,0.9)";
+                    "var(--text-secondary)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!active) {
                   (e.currentTarget as HTMLElement).style.background = "transparent";
                   (e.currentTarget as HTMLElement).style.color =
-                    "rgba(120,120,120,0.9)";
+                    "var(--text-muted)";
                 }
               }}
             >
@@ -603,7 +603,7 @@ function SevBadge({ severity }: { severity: EventSeverity }) {
   return (
     <span
       className="px-1.5 py-0.5 rounded uppercase tracking-wide"
-      style={{ fontSize: "9px", fontWeight: 700, background: s.bg, color: s.text, border: `1px solid ${s.border}`, flexShrink: 0 }}
+      style={{ fontSize: "var(--fs-xs)", fontWeight: 700, background: s.bg, color: s.text, border: `1px solid ${s.border}`, flexShrink: 0 }}
     >
       {severity}
     </span>
@@ -627,23 +627,23 @@ function ListCard({
       onClick={onSelect}
       className="relative cursor-pointer"
       style={{
-        background: selected ? "rgba(59,130,246,0.06)" : "rgba(255,255,255,0.018)",
-        border: selected ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.055)",
-        borderRadius: "7px",
+        background: selected ? "rgba(59,130,246,0.06)" : "var(--bg-surface)",
+        border: selected ? "1px solid rgba(59,130,246,0.4)" : "1px solid var(--border-dim)",
+        borderRadius: "var(--radius-md)",
         padding: "10px 12px 10px 16px",
         marginBottom: "5px",
         flexShrink: 0,
       }}
       onMouseEnter={(e) => {
         if (!selected) {
-          (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
-          (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.09)";
+          (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--border-hover)";
         }
       }}
       onMouseLeave={(e) => {
         if (!selected) {
-          (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.018)";
-          (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.055)";
+          (e.currentTarget as HTMLElement).style.background = "var(--bg-surface)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--border-dim)";
         }
       }}
     >
@@ -657,15 +657,15 @@ function ListCard({
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <p
           className="leading-snug line-clamp-2 flex-1"
-          style={{ fontSize: "12px", fontWeight: 500, color: selected ? "rgba(220,235,255,0.97)" : "rgba(185,205,230,0.85)" }}
+          style={{ fontSize: "var(--fs-md)", fontWeight: 500, color: selected ? "var(--text-heading)" : "var(--text-body)" }}
         >
           {event.title}
         </p>
         <button
-          style={{ color: "rgba(60,60,60,0.8)", flexShrink: 0, marginTop: "1px" }}
+          style={{ color: "var(--text-dim)", flexShrink: 0, marginTop: "1px" }}
           onClick={(e) => e.stopPropagation()}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(147,197,253,0.8)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(60,60,60,0.8)")}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-dim)")}
         >
           <Bookmark size={12} />
         </button>
@@ -673,9 +673,9 @@ function ListCard({
 
       {/* meta row */}
       <div className="flex items-center justify-between">
-        <span style={{ fontSize: "10px", color: "rgba(75,75,75,0.9)" }}>{event.time}</span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)" }}>{event.time}</span>
         <div className="flex items-center gap-1.5">
-          <span style={{ fontSize: "10px", color: "rgba(95,95,95,0.85)" }}>{getSourceName(event.sourceId)}</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>{getSourceName(event.sourceId)}</span>
           <SevBadge severity={event.severity} />
         </div>
       </div>
@@ -717,7 +717,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
   return (
     <div
       className="flex flex-1 min-h-0 overflow-hidden"
-      style={{ background: "rgba(10,10,10,0.97)" }}
+      style={{ background: "var(--bg-shell)" }}
     >
       {/* Left panel area */}
       <div
@@ -750,18 +750,18 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
         <div
           className="flex-shrink-0 px-4 py-3"
           style={{
-            background: "rgba(12,12,12,0.97)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: "10px",
-          }}
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-lg)",
+              }}
         >
           {/* Title row */}
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
-              <Building2 size={13} style={{ color: "rgba(100,100,100,0.7)" }} />
+              <Building2 size={13} style={{ color: "var(--icon-default)" }} />
               <span
                 className="tracking-widest uppercase font-semibold"
-                style={{ fontSize: "10px", color: "rgba(155,155,155,0.85)" }}
+                style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}
               >
                 Policy Monitor
               </span>
@@ -784,9 +784,9 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
                   onClick={() => setSeverityFilter(pill.key)}
                   className="px-2.5 py-1 rounded transition-all duration-150"
                   style={{
-                    fontSize: "10.5px",
+                    fontSize: "var(--fs-sm)",
                     fontWeight: active ? 600 : 400,
-                    color: active ? pa!.text : "rgba(65,65,65,0.85)",
+                    color: active ? pa!.text : "var(--text-dim)",
                     background: active ? pa!.bg : "transparent",
                     border: active ? `1px solid ${pa!.border}` : "1px solid rgba(255,255,255,0.06)",
                   }}
@@ -800,16 +800,16 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
           {/* Search */}
           <div
             className="flex items-center gap-2 rounded px-2.5 py-1.5"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-surface-hover)", border: "1px solid var(--border-primary)" }}
           >
-            <Search size={11} style={{ color: "rgba(65,65,65,0.8)", flexShrink: 0 }} />
+            <Search size={11} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
             <input
               type="text"
               placeholder="Search politics events..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 bg-transparent outline-none"
-              style={{ fontSize: "11px", color: "rgba(155,155,155,0.9)" }}
+              style={{ fontSize: "var(--fs-base)", color: "var(--text-secondary)" }}
             />
           </div>
         </div>
@@ -818,21 +818,21 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
         <div
           className="flex flex-col flex-1 min-h-0"
           style={{
-            background: "rgba(12,12,12,0.97)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: "10px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-lg)",
             overflow: "hidden",
-          }}
+              }}
         >
 
         {/* Card list */}
-        <div className="politics-feed-scrollbar flex-1 min-h-0 overflow-y-auto" style={{ padding: "8px 10px" }}>
+        <div className="tm-scrollbar politics-feed-scrollbar flex-1 min-h-0 overflow-y-auto" style={{ padding: "8px 10px" }}>
           {filtered.length === 0 ? (
             <div
               className="flex h-full flex-col items-center justify-center gap-1 text-center"
-              style={{ fontSize: "11px", color: "rgba(70,70,70,0.9)" }}
+              style={{ fontSize: "var(--fs-base)", color: "var(--text-dim)" }}
             >
-              <span style={{ color: "rgba(120,120,120,0.9)", fontWeight: 600 }}>
+              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>
                 No matching political events
               </span>
               <span>Try changing the monitor or regional focus.</span>
@@ -852,16 +852,16 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
         {/* Footer */}
         <div
           className="flex-shrink-0 px-4 py-2 flex items-center justify-between"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+          style={{ borderTop: "1px solid var(--border-dim)" }}
         >
-          <span style={{ fontSize: "10px", color: "rgba(60,60,60,0.85)" }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-dim)" }}>
             {filtered.length} of {events.length} results
           </span>
           <button
             className="flex items-center gap-1 transition-colors duration-150"
-            style={{ fontSize: "10.5px", color: "rgba(96,165,250,0.6)" }}
+            style={{ fontSize: "var(--fs-sm)", color: "var(--accent-blue-text)" }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(147,197,253,0.9)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(96,165,250,0.6)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)")}
           >
             View all <ArrowRight size={10} />
           </button>
@@ -879,21 +879,21 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
         <CompactMarketPanel title="Crypto Assets" rows={CRYPTO_ROWS} />
         <div
           style={{
-            background: "rgba(12,12,12,0.97)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: "10px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-primary)",
+            borderRadius: "var(--radius-lg)",
             padding: "8px 14px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-          }}
+              }}
         >
           <span
             style={{
-              fontSize: "9.5px",
+              fontSize: "var(--fs-xs)",
               fontWeight: 700,
               letterSpacing: "0.08em",
-              color: "rgba(80,80,80,0.9)",
+              color: "var(--text-muted)",
               textTransform: "uppercase",
             }}
           >
@@ -905,15 +905,15 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
                 width: "5px",
                 height: "5px",
                 borderRadius: "50%",
-                background: "rgba(74,222,128,0.75)",
+                background: "var(--accent-green-dot)",
                 flexShrink: 0,
               }}
             />
             <span
               style={{
-                fontSize: "11px",
+                fontSize: "var(--fs-base)",
                 fontWeight: 600,
-                color: "rgba(195,205,220,0.9)",
+                color: "var(--text-body)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >

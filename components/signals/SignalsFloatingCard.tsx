@@ -19,8 +19,8 @@ interface Props {
 }
 
 const LABEL_STYLE = {
-  fontSize: "8.5px",
-  color: "rgba(100,100,100,0.8)",
+  fontSize: "var(--fs-2xs)",
+  color: "var(--text-muted)",
   fontWeight: 600,
 } as const;
 
@@ -32,10 +32,10 @@ const THRESHOLD_OPTIONS: { label: string; value: number }[] = [
 ];
 
 const DROPDOWN_STYLE = {
-  background: "rgba(12,12,12,0.98)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--bg-card)",
+  border: "1px solid var(--border-hover)",
   backdropFilter: "blur(14px)",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+  boxShadow: "var(--shadow-md)",
 } as const;
 
 const TYPE_COLORS: Record<SocmintReportType, string> = {
@@ -59,8 +59,8 @@ function itemStyle(active: boolean) {
     textAlign: "left" as const,
     padding: "7px 12px",
     fontSize: "12px",
-    color: active ? "rgba(147,197,253,0.9)" : "rgba(170,170,170,0.8)",
-    background: active ? "rgba(59,130,246,0.08)" : "transparent",
+    color: active ? "var(--icon-active)" : "var(--text-secondary)",
+    background: active ? "var(--accent-blue-bg)" : "transparent",
     cursor: "pointer",
   };
 }
@@ -103,18 +103,17 @@ export function SignalsFloatingCard({
         onClick={() => setCollapsed(false)}
         style={{
           padding: "10px 12px",
-          background: "rgba(12,12,12,0.9)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "var(--bg-overlay)",
+          border: "1px solid var(--border-primary)",
           backdropFilter: "blur(14px)",
-          boxShadow:
-            "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
+          boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
         }}
       >
-        <Radio size={10} style={{ color: "rgba(96,165,250,0.78)" }} />
-        <span style={{ fontSize: "10px", fontWeight: 700, color: "rgba(185,195,210,0.9)", letterSpacing: "0.1em" }}>
+        <Radio size={10} style={{ color: "var(--accent-blue-text)" }} />
+        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-body)", letterSpacing: "0.1em" }}>
           SOCMINT
         </span>
-        <ChevronRight size={12} style={{ color: "rgba(100,100,100,0.78)" }} />
+        <ChevronRight size={12} style={{ color: "var(--text-muted)" }} />
       </button>
     );
   }
@@ -125,31 +124,30 @@ export function SignalsFloatingCard({
       className="absolute top-4 left-4 rounded-xl z-10"
       style={{
         padding: "14px 16px",
-        background: "rgba(12,12,12,0.88)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--bg-overlay)",
+        border: "1px solid var(--border-primary)",
         backdropFilter: "blur(14px)",
         width: "214px",
         minWidth: "214px",
-        boxShadow:
-          "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
+        boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
       }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5">
-            <Radio size={9} style={{ color: "rgba(96,165,250,0.7)" }} />
+            <Radio size={9} style={{ color: "var(--accent-blue-text)" }} />
             <span className="tracking-widest uppercase font-semibold" style={LABEL_STYLE}>
               SOCMINT Watch
             </span>
           </div>
-          <span style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.85)" }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
             Public social source monitoring
           </span>
         </div>
         <button
           onClick={() => setCollapsed(true)}
           aria-label="Collapse SOCMINT card"
-          style={{ color: "rgba(100,100,100,0.8)" }}
+          style={{ color: "var(--text-muted)" }}
         >
           <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
         </button>
@@ -165,14 +163,14 @@ export function SignalsFloatingCard({
         >
           <span
             className="font-semibold"
-            style={{ fontSize: "14px", color: "rgba(210,210,210,0.95)" }}
+            style={{ fontSize: "var(--fs-lg)", color: "var(--text-primary)" }}
           >
             {regionLabel}
           </span>
           <ChevronDown
             size={12}
             style={{
-              color: "rgba(100,100,100,0.7)",
+              color: "var(--text-muted)",
               transform: regionOpen ? "rotate(180deg)" : undefined,
               transition: "transform 150ms",
             }}
@@ -180,7 +178,7 @@ export function SignalsFloatingCard({
         </button>
         <span
           className="block mt-0.5"
-          style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.85)" }}
+          style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}
         >
           {regionSubtitle}
         </span>
@@ -199,7 +197,7 @@ export function SignalsFloatingCard({
                   onMouseEnter={(e) => {
                     if (!active)
                       (e.currentTarget as HTMLElement).style.background =
-                        "rgba(255,255,255,0.04)";
+                        "var(--bg-surface-hover)";
                   }}
                   onMouseLeave={(e) => {
                     if (!active)
@@ -215,13 +213,13 @@ export function SignalsFloatingCard({
                 </button>
               );
             })}
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
+            <div style={{ borderTop: "1px solid var(--border-dim)" }} />
             <button
               style={itemStyle(isGlobal)}
               onMouseEnter={(e) => {
                 if (!isGlobal)
                   (e.currentTarget as HTMLElement).style.background =
-                    "rgba(255,255,255,0.04)";
+                    "var(--bg-surface-hover)";
               }}
               onMouseLeave={(e) => {
                 if (!isGlobal)
@@ -242,7 +240,7 @@ export function SignalsFloatingCard({
       <div
         className="mb-3"
         style={{
-          borderTop: "1px solid rgba(255,255,255,0.05)",
+          borderTop: "1px solid var(--border-dim)",
           paddingTop: "11px",
         }}
       >
@@ -257,16 +255,16 @@ export function SignalsFloatingCard({
                 key={opt.value}
                 onClick={() => onConfidenceChange(opt.value)}
                 style={{
-                  fontSize: "9.5px",
+                  fontSize: "var(--fs-xs)",
                   fontWeight: 600,
                   padding: "4px 7px",
                   borderRadius: "6px",
                   whiteSpace: "nowrap",
-                  color: active ? "rgba(147,197,253,0.95)" : "rgba(100,100,100,0.85)",
-                  background: active ? "rgba(59,130,246,0.12)" : "rgba(255,255,255,0.03)",
+                  color: active ? "var(--icon-active)" : "var(--text-muted)",
+                  background: active ? "var(--accent-blue-bg-strong)" : "var(--bg-surface)",
                   border: active
-                    ? "1px solid rgba(59,130,246,0.22)"
-                    : "1px solid rgba(255,255,255,0.05)",
+                    ? "1px solid var(--accent-blue-border)"
+                    : "1px solid var(--border-dim)",
                   transition: "all 150ms",
                 }}
               >
@@ -279,7 +277,7 @@ export function SignalsFloatingCard({
 
       <div
         style={{
-          borderTop: "1px solid rgba(255,255,255,0.05)",
+          borderTop: "1px solid var(--border-dim)",
           paddingTop: "11px",
           maxHeight: "168px",
           overflowY: "auto",
@@ -293,7 +291,7 @@ export function SignalsFloatingCard({
             const count = filtered.filter((report) => report.type === type).length;
             return (
               <div key={type} className="flex items-center justify-between">
-                <span style={{ fontSize: "10.5px", color: "rgba(140,140,140,0.85)" }}>
+                <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
                   {SOCMINT_TYPE_LABELS[type]}
                 </span>
                 <span
@@ -310,20 +308,20 @@ export function SignalsFloatingCard({
           })}
           <div
             style={{
-              borderTop: "1px solid rgba(255,255,255,0.05)",
+              borderTop: "1px solid var(--border-dim)",
               paddingTop: "6px",
               marginTop: "2px",
             }}
             className="flex items-center justify-between"
           >
-            <span style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.8)" }}>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
               Total Reports
             </span>
             <span
               style={{
                 fontSize: "16px",
                 fontWeight: 700,
-                color: "rgba(220,220,220,0.97)",
+                color: "var(--text-primary)",
               }}
             >
               {filtered.length}

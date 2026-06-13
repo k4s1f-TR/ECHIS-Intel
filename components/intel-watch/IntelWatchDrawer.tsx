@@ -59,7 +59,7 @@ export function IntelWatchDrawer({
         style={{
           position: "absolute",
           inset: 0,
-          background: "rgba(8,12,20,0.55)",
+          background: "var(--bg-backdrop)",
           backdropFilter: "blur(2px)",
           opacity: open ? 1 : 0,
           transition: "opacity 200ms",
@@ -76,7 +76,7 @@ export function IntelWatchDrawer({
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          background: "var(--bg-panel)",
+          background: "var(--bg-panel-alt)",
           transform: open ? "translateY(0)" : "translateY(-100%)",
           transition: open
             ? "transform 220ms ease-out"
@@ -93,7 +93,7 @@ export function IntelWatchDrawer({
             justifyContent: "space-between",
             gap: 16,
             padding: "0 20px",
-            borderBottom: "1px solid rgba(51,65,85,0.3)",
+            borderBottom: "1px solid var(--border-divider)",
           }}
         >
           <div
@@ -111,7 +111,7 @@ export function IntelWatchDrawer({
                 fontWeight: 600,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "rgba(195,208,225,0.95)",
+                color: "var(--text-body)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -121,7 +121,7 @@ export function IntelWatchDrawer({
               <span
                 style={{
                   fontSize: 11,
-                  color: "rgba(110,125,145,0.75)",
+                  color: "var(--text-tertiary)",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -147,15 +147,15 @@ export function IntelWatchDrawer({
               background: "transparent",
               border: "1px solid transparent",
               cursor: "pointer",
-              color: "rgba(110,125,145,0.7)",
+              color: "var(--text-tertiary)",
               transition: "color 120ms ease, border-color 120ms ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "rgba(195,208,225,0.9)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.color = "var(--text-body)";
+              e.currentTarget.style.borderColor = "var(--border-hover)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = "rgba(110,125,145,0.7)";
+              e.currentTarget.style.color = "var(--text-tertiary)";
               e.currentTarget.style.borderColor = "transparent";
             }}
           >
@@ -165,7 +165,7 @@ export function IntelWatchDrawer({
 
         {/* Body — scrollable */}
         <div
-          className="intel-watch-scrollbar"
+          className="tm-scrollbar intel-watch-scrollbar"
           style={{
             flex: 1,
             minHeight: 0,

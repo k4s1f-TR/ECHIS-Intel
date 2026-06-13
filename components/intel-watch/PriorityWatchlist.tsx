@@ -30,21 +30,21 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
     <div
       className="flex flex-col h-full min-h-0 overflow-hidden"
       style={{
-        background: "rgba(10,12,18,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "8px",
+        background: "var(--bg-card-alt)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-md)",
       }}
     >
       {/* Header */}
       <div
         className="flex-shrink-0 px-3.5 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
         <span
           style={{
-            fontSize: "9.5px",
+            fontSize: "var(--fs-xs)",
             fontWeight: 700,
-            color: "rgba(140,155,175,0.9)",
+            color: "var(--text-secondary)",
             letterSpacing: "0.09em",
             textTransform: "uppercase",
           }}
@@ -55,8 +55,8 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
 
       {/* Rows — scrollable, stacked for compact side-panel width */}
       <div
-        className="intel-watch-scrollbar flex flex-col flex-1 min-h-0 divide-y"
-        style={{ overflowY: "auto", overflowX: "hidden", borderColor: "rgba(255,255,255,0.045)" }}
+        className="tm-scrollbar intel-watch-scrollbar flex flex-col flex-1 min-h-0 divide-y"
+        style={{ overflowY: "auto", overflowX: "hidden", borderColor: "var(--border-subtle)" }}
       >
         {watchlistEntries.map((entry) => {
           const ps = PRIORITY_STYLE[entry.priority];
@@ -67,9 +67,9 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                 <div className="flex flex-col min-w-0 flex-1">
                   <span
                     style={{
-                      fontSize: "10.5px",
+                      fontSize: "var(--fs-sm)",
                       fontWeight: 500,
-                      color: "rgba(195,208,225,0.9)",
+                      color: "var(--text-body)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -79,8 +79,8 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                   </span>
                   <span
                     style={{
-                      fontSize: "10px",
-                      color: "rgba(120,135,155,0.75)",
+                      fontSize: "var(--fs-sm)",
+                      color: "var(--text-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -113,7 +113,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                     style={{
                       fontSize: "9.5px",
                       fontWeight: 500,
-                      color: "rgba(140,155,175,0.75)",
+                      color: "var(--text-tertiary)",
                       fontVariantNumeric: "tabular-nums",
                       fontFamily: "ui-monospace, monospace",
                       minWidth: 26,
@@ -126,7 +126,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                     style={{
                       height: "2px",
                       borderRadius: "1px",
-                      background: "rgba(255,255,255,0.07)",
+                      background: "var(--border-primary)",
                       overflow: "hidden",
                     }}
                   >
@@ -144,7 +144,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                   className="flex-shrink-0"
                   style={{
                     fontSize: "9.5px",
-                    color: "rgba(120,135,155,0.7)",
+                    color: "var(--text-tertiary)",
                     fontFamily: "ui-monospace, monospace",
                     fontVariantNumeric: "tabular-nums",
                   }}
@@ -161,13 +161,13 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
       {onOpenDrawer && (
         <div
           className="px-3.5 py-2 flex-shrink-0"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
         >
           <button
             onClick={onOpenDrawer}
             style={{
-              fontSize: "10px",
-              color: "rgba(74,222,128,0.8)",
+              fontSize: "var(--fs-sm)",
+              color: "var(--accent-green)",
               background: "none",
               border: "none",
               cursor: "pointer",

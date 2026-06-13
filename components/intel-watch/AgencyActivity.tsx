@@ -27,22 +27,22 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
     <div
       className="flex flex-col h-full min-h-0 overflow-hidden"
       style={{
-        background: "rgba(10,12,18,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        borderRadius: "8px",
+        background: "var(--bg-card-alt)",
+        border: "1px solid var(--border-primary)",
+        borderRadius: "var(--radius-md)",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-3 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
         <div className="flex items-center gap-1.5">
           <span
             style={{
-              fontSize: "9.5px",
+              fontSize: "var(--fs-xs)",
               fontWeight: 700,
-              color: "rgba(140,155,175,0.9)",
+              color: "var(--text-secondary)",
               letterSpacing: "0.09em",
               textTransform: "uppercase",
             }}
@@ -51,8 +51,8 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
           </span>
           <span
             style={{
-              fontSize: "9px",
-              color: "rgba(100,115,135,0.7)",
+              fontSize: "var(--fs-xs)",
+              color: "var(--text-tertiary)",
               cursor: "default",
             }}
             title="Top agencies by mention volume in the last 7 days"
@@ -64,8 +64,8 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
           <button
             onClick={onOpenDrawer}
             style={{
-              fontSize: "9px",
-              color: "rgba(74,222,128,0.8)",
+              fontSize: "var(--fs-xs)",
+              color: "var(--accent-green)",
               background: "none",
               border: "none",
               cursor: "pointer",
@@ -81,8 +81,8 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
       <div className="px-3 pt-1 flex-shrink-0">
         <span
           style={{
-            fontSize: "9px",
-            color: "rgba(90,105,125,0.75)",
+            fontSize: "var(--fs-xs)",
+            color: "var(--text-dim)",
             letterSpacing: "0.04em",
           }}
         >
@@ -92,7 +92,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
 
       {/* Scrollable agency rows */}
       <div
-        className="intel-watch-scrollbar flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2"
+        className="tm-scrollbar intel-watch-scrollbar flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2"
         style={{ display: "flex", flexDirection: "column", gap: "7px" }}
       >
         {SORTED.map((agency) => {
@@ -104,9 +104,9 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span
                     style={{
-                      fontSize: "10.5px",
+                      fontSize: "var(--fs-sm)",
                       fontWeight: 500,
-                      color: "rgba(195,208,225,0.9)",
+                      color: "var(--text-body)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -131,8 +131,8 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                 </div>
                 <span
                   style={{
-                    fontSize: "10px",
-                    color: "rgba(140,155,175,0.75)",
+                    fontSize: "var(--fs-sm)",
+                    color: "var(--text-tertiary)",
                     fontVariantNumeric: "tabular-nums",
                     fontFamily: "ui-monospace, monospace",
                     flexShrink: 0,
@@ -145,7 +145,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                 style={{
                   height: "3px",
                   borderRadius: "2px",
-                  background: "rgba(255,255,255,0.06)",
+                  background: "var(--border-dim)",
                   overflow: "hidden",
                 }}
               >

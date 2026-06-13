@@ -152,17 +152,17 @@ function Pill({
   const styles = {
     neutral: {
       color: "rgba(170,180,194,0.78)",
-      background: "rgba(255,255,255,0.032)",
-      border: "rgba(255,255,255,0.065)",
+      background: "var(--bg-surface)",
+      border: "var(--border-primary)",
     },
     blue: {
       color: "rgba(147,197,253,0.86)",
-      background: "rgba(59,130,246,0.08)",
+      background: "var(--accent-blue-bg)",
       border: "rgba(96,165,250,0.18)",
     },
     green: {
       color: "rgba(74,222,128,0.88)",
-      background: "rgba(22,101,52,0.13)",
+      background: "var(--accent-green-bg)",
       border: "rgba(74,222,128,0.19)",
     },
     amber: {
@@ -179,7 +179,7 @@ function Pill({
         color: styles.color,
         background: styles.background,
         border: `1px solid ${styles.border}`,
-        fontSize: "9px",
+        fontSize: "var(--fs-xs)",
         letterSpacing: "0.08em",
         lineHeight: 1,
       }}
@@ -198,7 +198,7 @@ function StatusPill({ status }: { status: SourceStatus }) {
         color: style.color,
         background: style.background,
         border: `1px solid ${style.border}`,
-        fontSize: "9px",
+        fontSize: "var(--fs-xs)",
         letterSpacing: "0.08em",
         lineHeight: 1,
       }}
@@ -218,12 +218,12 @@ function RuntimeStatePill({
   const styles = {
     blue: {
       color: "rgba(147,197,253,0.88)",
-      background: "rgba(59,130,246,0.09)",
+      background: "var(--accent-blue-bg)",
       border: "rgba(96,165,250,0.2)",
     },
     green: {
       color: "rgba(74,222,128,0.88)",
-      background: "rgba(22,101,52,0.13)",
+      background: "var(--accent-green-bg)",
       border: "rgba(74,222,128,0.2)",
     },
     amber: {
@@ -238,7 +238,7 @@ function RuntimeStatePill({
     },
     neutral: {
       color: "rgba(148,163,184,0.74)",
-      background: "rgba(255,255,255,0.025)",
+      background: "var(--bg-surface)",
       border: "rgba(255,255,255,0.06)",
     },
   }[tone];
@@ -250,7 +250,7 @@ function RuntimeStatePill({
         color: styles.color,
         background: styles.background,
         border: `1px solid ${styles.border}`,
-        fontSize: "9px",
+        fontSize: "var(--fs-xs)",
         letterSpacing: "0.08em",
         lineHeight: 1,
       }}
@@ -276,7 +276,7 @@ function MetricTile({
       className="min-w-0 rounded-md px-3 py-2.5"
       style={{
         background: "rgba(13,13,13,0.86)",
-        border: "1px solid rgba(255,255,255,0.065)",
+        border: "1px solid var(--border-primary)",
       }}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -284,8 +284,8 @@ function MetricTile({
           className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded"
           style={{
             color: tone,
-            background: "rgba(255,255,255,0.035)",
-            border: "1px solid rgba(255,255,255,0.055)",
+            background: "var(--bg-surface-hover)",
+            border: "1px solid var(--border-dim)",
           }}
         >
           {icon}
@@ -293,8 +293,8 @@ function MetricTile({
         <span
           className="truncate font-semibold uppercase"
           style={{
-            color: "rgba(120,130,145,0.84)",
-            fontSize: "9px",
+            color: "var(--text-tertiary)",
+            fontSize: "var(--fs-xs)",
             letterSpacing: "0.08em",
           }}
         >
@@ -303,7 +303,7 @@ function MetricTile({
       </div>
       <div
         className="truncate font-semibold"
-        style={{ color: "rgba(235,240,245,0.94)", fontSize: "20px", lineHeight: 1 }}
+        style={{ color: "var(--text-heading)", fontSize: "20px", lineHeight: 1 }}
       >
         {value}
       </div>
@@ -323,8 +323,8 @@ function Field({
       <div
         className="mb-1 truncate font-semibold uppercase"
         style={{
-          color: "rgba(92,103,118,0.92)",
-          fontSize: "9px",
+          color: "var(--text-dim)",
+          fontSize: "var(--fs-xs)",
           letterSpacing: "0.08em",
         }}
       >
@@ -333,8 +333,8 @@ function Field({
       <div
         className="min-w-0 truncate"
         style={{
-          color: "rgba(206,215,225,0.88)",
-          fontSize: "12px",
+          color: "var(--text-body)",
+          fontSize: "var(--fs-md)",
           lineHeight: 1.35,
         }}
       >
@@ -360,21 +360,21 @@ function NeedsLocationReview({
     <section
       className="flex flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
       style={{
-        background: "rgba(12,12,12,0.96)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-primary)",
       }}
     >
       <div
         className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+        style={{ borderBottom: "1px solid var(--border-dim)" }}
       >
         <div className="flex min-w-0 items-center gap-2">
           <AlertTriangle size={12} style={{ color: "rgba(248,113,113,0.78)" }} />
           <span
             className="truncate font-semibold uppercase"
             style={{
-              color: "rgba(158,168,184,0.86)",
-              fontSize: "10px",
+              color: "var(--text-secondary)",
+              fontSize: "var(--fs-sm)",
               letterSpacing: "0.1em",
             }}
           >
@@ -396,7 +396,7 @@ function NeedsLocationReview({
             <article
               key={item.id}
               className="px-4 py-3"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.045)" }}
+              style={{ borderTop: "1px solid var(--border-subtle)" }}
             >
               <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -408,7 +408,7 @@ function NeedsLocationReview({
                   <div
                     className="line-clamp-2 font-semibold"
                     style={{
-                      color: "rgba(235,240,245,0.94)",
+                      color: "var(--text-heading)",
                       fontSize: "12.5px",
                       lineHeight: 1.35,
                     }}
@@ -424,9 +424,9 @@ function NeedsLocationReview({
                     className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded"
                     title="Open original source"
                     style={{
-                      color: "rgba(148,163,184,0.82)",
-                      background: "rgba(255,255,255,0.035)",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      color: "var(--text-secondary)",
+                      background: "var(--bg-surface-hover)",
+                      border: "1px solid var(--border-primary)",
                     }}
                   >
                     <ExternalLink size={12} />
@@ -528,7 +528,7 @@ function SourceRow({
       className="px-4 py-3.5 transition-colors duration-150"
       style={{
         background: "rgba(255,255,255,0.008)",
-        borderTop: "1px solid rgba(255,255,255,0.045)",
+        borderTop: "1px solid var(--border-subtle)",
       }}
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -536,7 +536,7 @@ function SourceRow({
           <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
             <h2
               className="min-w-0 truncate font-semibold"
-              style={{ color: "rgba(235,240,245,0.95)", fontSize: "13.5px" }}
+              style={{ color: "var(--text-heading)", fontSize: "13.5px" }}
             >
               {source.name}
             </h2>
@@ -564,9 +564,9 @@ function SourceRow({
               rel="noreferrer"
               title="Open source endpoint"
               style={{
-                color: "rgba(148,163,184,0.82)",
-                background: "rgba(255,255,255,0.035)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                color: "var(--text-secondary)",
+                background: "var(--bg-surface-hover)",
+                border: "1px solid var(--border-primary)",
               }}
             >
               <ExternalLink size={14} />
@@ -585,14 +585,14 @@ function SourceRow({
                   : "rgba(226,232,240,0.94)",
               background:
                 !canLoad || isLoading
-                  ? "rgba(255,255,255,0.024)"
+                  ? "var(--bg-surface)"
                   : "rgba(59,130,246,0.12)",
               border:
                 !canLoad || isLoading
                   ? "1px solid rgba(255,255,255,0.06)"
-                  : "1px solid rgba(96,165,250,0.22)",
+                  : "1px solid var(--accent-blue-border)",
               cursor: !canLoad || isLoading ? "not-allowed" : "pointer",
-              fontSize: "10px",
+              fontSize: "var(--fs-sm)",
               letterSpacing: "0.08em",
             }}
           >
@@ -642,9 +642,9 @@ function SourceRow({
           ) : itemCount > 0 ? (
             <span style={{ color: "rgba(251,191,36,0.82)" }}>No accepted domains</span>
           ) : hasBeenChecked ? (
-            <span style={{ color: "rgba(148,163,184,0.68)" }}>No items returned</span>
+            <span style={{ color: "var(--text-tertiary)" }}>No items returned</span>
           ) : (
-            <span style={{ color: "rgba(120,130,145,0.7)" }}>Not loaded</span>
+            <span style={{ color: "var(--text-tertiary)" }}>Not loaded</span>
           )}
         </Field>
       </div>
@@ -656,7 +656,7 @@ function SourceRow({
             color: "rgba(252,165,165,0.9)",
             background: "rgba(127,29,29,0.11)",
             border: "1px solid rgba(248,113,113,0.16)",
-            fontSize: "11px",
+            fontSize: "var(--fs-base)",
             lineHeight: 1.45,
           }}
         >
@@ -873,7 +873,7 @@ export function SourcesScreen() {
       className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
       style={{ background: "#080808" }}
     >
-      <div className="sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-3 pt-3">
+      <div className="tm-scrollbar sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-3 pt-3">
         <section className="flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2">
@@ -881,8 +881,8 @@ export function SourcesScreen() {
               <span
                 className="font-semibold uppercase"
                 style={{
-                  color: "rgba(145,155,170,0.86)",
-                  fontSize: "10px",
+                  color: "var(--text-secondary)",
+                  fontSize: "var(--fs-sm)",
                   letterSpacing: "0.12em",
                 }}
               >
@@ -891,7 +891,7 @@ export function SourcesScreen() {
             </div>
             <h1
               className="truncate font-semibold"
-              style={{ color: "rgba(238,242,247,0.96)", fontSize: "19px" }}
+              style={{ color: "var(--text-heading)", fontSize: "19px" }}
             >
               Runtime Sources
             </h1>
@@ -950,21 +950,21 @@ export function SourcesScreen() {
         <section
           className="flex min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
           style={{
-            background: "rgba(12,12,12,0.96)",
-            border: "1px solid rgba(255,255,255,0.07)",
-          }}
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-primary)",
+              }}
         >
           <div
             className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}
+            style={{ borderBottom: "1px solid var(--border-dim)" }}
           >
             <div className="flex min-w-0 items-center gap-2">
               <Radio size={12} style={{ color: "rgba(96,165,250,0.72)" }} />
               <span
                 className="truncate font-semibold uppercase"
                 style={{
-                  color: "rgba(158,168,184,0.86)",
-                  fontSize: "10px",
+                  color: "var(--text-secondary)",
+                  fontSize: "var(--fs-sm)",
                   letterSpacing: "0.1em",
                 }}
               >
@@ -974,8 +974,8 @@ export function SourcesScreen() {
             <span
               className="hidden font-semibold uppercase sm:inline"
               style={{
-                color: "rgba(88,98,112,0.9)",
-                fontSize: "9px",
+                color: "var(--text-dim)",
+                fontSize: "var(--fs-xs)",
                 letterSpacing: "0.1em",
               }}
             >
@@ -1008,8 +1008,8 @@ export function SourcesScreen() {
                 <div
                   className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
                   style={{
-                    borderTop: "1px solid rgba(255,255,255,0.055)",
-                    background: "rgba(255,255,255,0.013)",
+                    borderTop: "1px solid var(--border-dim)",
+                    background: "var(--bg-surface)",
                   }}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -1017,8 +1017,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(200,210,224,0.86)",
-                        fontSize: "10px",
+                        color: "var(--text-body)",
+                        fontSize: "var(--fs-sm)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1027,8 +1027,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(88,98,112,0.9)",
-                        fontSize: "9px",
+                        color: "var(--text-dim)",
+                        fontSize: "var(--fs-xs)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1046,13 +1046,13 @@ export function SourcesScreen() {
                         ? "rgba(145,155,170,0.62)"
                         : "rgba(226,232,240,0.94)",
                       background: isFrance24Loading
-                        ? "rgba(255,255,255,0.024)"
+                        ? "var(--bg-surface)"
                         : "rgba(251,191,36,0.09)",
                       border: isFrance24Loading
                         ? "1px solid rgba(255,255,255,0.06)"
                         : "1px solid rgba(251,191,36,0.22)",
                       cursor: isFrance24Loading ? "not-allowed" : "pointer",
-                      fontSize: "10px",
+                      fontSize: "var(--fs-sm)",
                       letterSpacing: "0.08em",
                     }}
                   >
@@ -1089,8 +1089,8 @@ export function SourcesScreen() {
                 <div
                   className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
                   style={{
-                    borderTop: "1px solid rgba(255,255,255,0.055)",
-                    background: "rgba(255,255,255,0.013)",
+                    borderTop: "1px solid var(--border-dim)",
+                    background: "var(--bg-surface)",
                   }}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -1098,8 +1098,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(200,210,224,0.86)",
-                        fontSize: "10px",
+                        color: "var(--text-body)",
+                        fontSize: "var(--fs-sm)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1108,8 +1108,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(88,98,112,0.9)",
-                        fontSize: "9px",
+                        color: "var(--text-dim)",
+                        fontSize: "var(--fs-xs)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1127,13 +1127,13 @@ export function SourcesScreen() {
                         ? "rgba(145,155,170,0.62)"
                         : "rgba(226,232,240,0.94)",
                       background: isArabnewsLoading
-                        ? "rgba(255,255,255,0.024)"
+                        ? "var(--bg-surface)"
                         : "rgba(251,146,60,0.09)",
                       border: isArabnewsLoading
                         ? "1px solid rgba(255,255,255,0.06)"
                         : "1px solid rgba(251,146,60,0.22)",
                       cursor: isArabnewsLoading ? "not-allowed" : "pointer",
-                      fontSize: "10px",
+                      fontSize: "var(--fs-sm)",
                       letterSpacing: "0.08em",
                     }}
                   >
@@ -1170,8 +1170,8 @@ export function SourcesScreen() {
                 <div
                   className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
                   style={{
-                    borderTop: "1px solid rgba(255,255,255,0.055)",
-                    background: "rgba(255,255,255,0.013)",
+                    borderTop: "1px solid var(--border-dim)",
+                    background: "var(--bg-surface)",
                   }}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -1179,8 +1179,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(200,210,224,0.86)",
-                        fontSize: "10px",
+                        color: "var(--text-body)",
+                        fontSize: "var(--fs-sm)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1189,8 +1189,8 @@ export function SourcesScreen() {
                     <span
                       className="font-semibold uppercase"
                       style={{
-                        color: "rgba(88,98,112,0.9)",
-                        fontSize: "9px",
+                        color: "var(--text-dim)",
+                        fontSize: "var(--fs-xs)",
                         letterSpacing: "0.1em",
                       }}
                     >
@@ -1208,13 +1208,13 @@ export function SourcesScreen() {
                         ? "rgba(145,155,170,0.62)"
                         : "rgba(226,232,240,0.94)",
                       background: isSkynewsLoading
-                        ? "rgba(255,255,255,0.024)"
+                        ? "var(--bg-surface)"
                         : "rgba(147,197,253,0.09)",
                       border: isSkynewsLoading
                         ? "1px solid rgba(255,255,255,0.06)"
                         : "1px solid rgba(147,197,253,0.22)",
                       cursor: isSkynewsLoading ? "not-allowed" : "pointer",
-                      fontSize: "10px",
+                      fontSize: "var(--fs-sm)",
                       letterSpacing: "0.08em",
                     }}
                   >

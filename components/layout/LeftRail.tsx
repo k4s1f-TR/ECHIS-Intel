@@ -49,22 +49,22 @@ function RailIcon({
       style={
         active
           ? {
-              background: "rgba(59,130,246,0.08)",
-              color: "rgba(147,197,253,0.9)",
+              background: "var(--accent-blue-bg)",
+              color: "var(--icon-active)",
             }
           : {
-              color: "rgba(90,90,90,0.9)",
+              color: "var(--icon-default)",
             }
       }
       onMouseEnter={(e) => {
         if (!active) {
-          (e.currentTarget as HTMLElement).style.color = "rgba(190,190,190,0.9)";
-          (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+          (e.currentTarget as HTMLElement).style.color = "var(--icon-hover)";
+          (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
-          (e.currentTarget as HTMLElement).style.color = "rgba(90,90,90,0.9)";
+          (e.currentTarget as HTMLElement).style.color = "var(--icon-default)";
           (e.currentTarget as HTMLElement).style.background = "transparent";
         }
       }}
@@ -73,7 +73,7 @@ function RailIcon({
       {active && (
         <span
           className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full"
-          style={{ background: "rgba(96,165,250,0.85)" }}
+          style={{ background: "var(--accent-blue-text)" }}
         />
       )}
       <Icon size={16} strokeWidth={active ? 1.8 : 1.5} />
@@ -100,8 +100,8 @@ export function LeftRail({
       style={{
         width: "68px",
         minWidth: "68px",
-        background: "rgba(10, 10, 10, 0.98)",
-        borderRight: "1px solid rgba(255,255,255,0.05)",
+        background: "var(--bg-shell)",
+        borderRight: "1px solid var(--border-dim)",
       }}
     >
       {/* Logo mark */}
@@ -114,11 +114,11 @@ export function LeftRail({
           className="w-8 h-8 rounded-[9px] flex items-center justify-center"
           style={{
             background: "linear-gradient(145deg, #0f2545 0%, #091830 100%)",
-            border: "1px solid rgba(59,130,246,0.22)",
-            boxShadow: "0 0 14px rgba(59,130,246,0.1)",
+            border: "1px solid var(--accent-blue-border)",
+            boxShadow: "0 0 14px var(--accent-blue-glow)",
           }}
         >
-          <Eye size={16} strokeWidth={1.6} color="rgba(96,165,250,0.9)" />
+          <Eye size={16} strokeWidth={1.6} color="var(--accent-blue-text)" />
         </button>
       </div>
 
@@ -151,7 +151,7 @@ export function LeftRail({
       <div className="flex flex-col w-full px-2 gap-0.5 mt-2">
         <div
           className="mx-1 mb-2"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
         />
         {bottomIcons.map((item) => (
           <RailIcon key={item.label} {...item} />

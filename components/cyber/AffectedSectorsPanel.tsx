@@ -12,22 +12,22 @@ export function AffectedSectorsPanel() {
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "rgba(7,8,11,0.985)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "10px", overflow: "hidden" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
       {/* Header */}
-      <div className="flex items-center gap-2 flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
-        <Target size={12} style={{ color: "rgba(74,222,128,0.28)" }} />
-        <span style={{ fontSize: "10px", fontWeight: 700, color: "rgba(155,170,180,0.88)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Affected Sectors / Exposure</span>
+      <div className="flex items-center gap-2 flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
+        <Target size={12} style={{ color: "var(--accent-green-dim)" }} />
+        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Affected Sectors / Exposure</span>
       </div>
       
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 cyber-scrollbar">
+      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 cyber-scrollbar">
         {sectors.map((sec, i) => (
           <div key={i} className="flex flex-col gap-1.5">
             <div className="flex items-end justify-between">
-              <span style={{ fontSize: "10px", fontWeight: 600, color: "rgba(195,210,220,0.85)" }}>{sec.name}</span>
+              <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text-body)" }}>{sec.name}</span>
               <div className="flex items-center gap-2">
-                <span style={{ fontSize: "8px", fontWeight: 600, color: sec.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{sec.status}</span>
-                <span style={{ fontSize: "10px", fontWeight: 700, color: "rgba(255,255,255,0.8)", fontVariantNumeric: "tabular-nums", minWidth: "24px", textAlign: "right" }}>{sec.score}%</span>
+                <span style={{ fontSize: "var(--fs-2xs)", fontWeight: 600, color: sec.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{sec.status}</span>
+                <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", minWidth: "24px", textAlign: "right" }}>{sec.score}%</span>
               </div>
             </div>
             <div className="w-full rounded-full overflow-hidden" style={{ height: "3px", background: sec.track }}>
