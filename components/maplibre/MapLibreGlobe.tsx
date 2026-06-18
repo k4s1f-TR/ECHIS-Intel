@@ -915,7 +915,10 @@ const LAND_OVERLAY = "#181C1A";
 const WATER_FILL = "#070A0B";
 const WATERWAY_FILL = "#0a0e10";
 
-const BORDER_COUNTRY = "rgba(120, 132, 128, 0.34)";
+// National border — the primary boundary line, kept lighter and more opaque
+// than the sub-national admin grey so the country skeleton reads as the
+// dominant hierarchy on the globe.
+const BORDER_COUNTRY = "rgba(150, 162, 158, 0.55)";
 const BORDER_ADMIN = "rgba(120, 132, 128, 0.22)";
 
 const LABEL_MAJOR = "rgba(190, 198, 194, 0.72)";

@@ -100,8 +100,8 @@ export function LeftRail({
       style={{
         width: "68px",
         minWidth: "68px",
-        background: "var(--bg-shell)",
-        borderRight: "1px solid var(--border-dim)",
+        background: "#000000",
+        borderRight: "1px solid rgba(255, 255, 255, 0.08)",
       }}
     >
       {/* Logo mark */}

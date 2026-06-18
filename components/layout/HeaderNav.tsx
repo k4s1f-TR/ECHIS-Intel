@@ -51,8 +51,8 @@ export function HeaderNav({
       className="flex items-center flex-shrink-0 px-5"
       style={{
         height: "52px",
-        background: "var(--bg-shell)",
-        borderBottom: "1px solid var(--border-dim)",
+        background: "#000000",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
       }}
     >
       {/* Brand */}

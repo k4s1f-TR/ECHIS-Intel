@@ -753,7 +753,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
             background: "var(--bg-card)",
             border: "1px solid var(--border-primary)",
             borderRadius: "var(--radius-lg)",
-              }}
+                  }}
         >
           {/* Title row */}
           <div className="flex items-center justify-between mb-2.5">
@@ -822,7 +822,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
             border: "1px solid var(--border-primary)",
             borderRadius: "var(--radius-lg)",
             overflow: "hidden",
-              }}
+                  }}
         >
 
         {/* Card list */}
@@ -886,7 +886,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-              }}
+                  }}
         >
           <span
             style={{

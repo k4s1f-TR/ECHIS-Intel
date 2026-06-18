@@ -952,7 +952,7 @@ export function SourcesScreen() {
           style={{
             background: "var(--bg-card)",
             border: "1px solid var(--border-primary)",
-              }}
+                  }}
         >
           <div
             className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"

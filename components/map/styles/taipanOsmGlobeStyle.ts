@@ -15,7 +15,10 @@ const OSM_ATTRIBUTION =
   '<a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> ' +
   '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener noreferrer">&copy; OpenMapTiles</a> ' +
   'Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>';
-const OSM_ADMIN_BOUNDARY = "rgba(142, 154, 150, 0.72)";
+// Sub-national (state / province / district) lines sit *below* national
+// borders in the visual hierarchy, so their grey is kept dimmer than the
+// country border colour passed in via `borderCountry`.
+const OSM_ADMIN_BOUNDARY = "rgba(142, 154, 150, 0.55)";
 
 export type TaipanOsmGlobeStylePalette = {
   landFill: string;
@@ -105,7 +108,7 @@ export function createTaipanOsmGlobeStyle({
         ],
         paint: {
           "line-color": OSM_ADMIN_BOUNDARY,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 3.2, 0.32, 5.5, 0.65, 8, 0.85],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3.2, 0.3, 5.5, 0.5, 8, 0.7],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.2, 0, 4.2, 0.48, 7, 0.72],
         },
       },
@@ -131,12 +134,16 @@ export function createTaipanOsmGlobeStyle({
         ...sourceLayer("boundary"),
         filter: [
           "all",
-          ["==", ["get", "admin_level"], 2],
+          // Coerce admin_level to a number before comparing — some vector
+          // tile sources encode it as a string ("2"), which a strict `==` 2
+          // would silently miss and drop every national border.  Matches the
+          // defensive pattern used by the regional / local admin layers.
+          ["==", ["to-number", ["get", "admin_level"], 99], 2],
           ["!=", ["get", "maritime"], 1],
         ],
         paint: {
           "line-color": borderCountry,
-          "line-width": 0.6,
+          "line-width": 0.8,
           "line-opacity": 0.9,
         },
       },
