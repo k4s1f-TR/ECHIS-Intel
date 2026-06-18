@@ -6,16 +6,16 @@ export function AffectedSectorsPanel() {
     { name: "Energy", score: 92, status: "Critical", color: "rgba(239,68,68,0.85)", track: "rgba(239,68,68,0.15)" },
     { name: "Telecommunications", score: 84, status: "High", color: "rgba(249,115,22,0.85)", track: "rgba(249,115,22,0.15)" },
     { name: "Finance", score: 76, status: "High", color: "rgba(249,115,22,0.85)", track: "rgba(249,115,22,0.15)" },
-    { name: "Government", score: 63, status: "Elevated", color: "rgba(74,222,128,0.85)", track: "rgba(74,222,128,0.15)" },
-    { name: "Manufacturing", score: 58, status: "Elevated", color: "rgba(74,222,128,0.85)", track: "rgba(74,222,128,0.15)" },
-    { name: "Healthcare", score: 41, status: "Elevated", color: "rgba(74,222,128,0.85)", track: "rgba(74,222,128,0.15)" },
+    { name: "Government", score: 63, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
+    { name: "Manufacturing", score: 58, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
+    { name: "Healthcare", score: 41, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
       {/* Header */}
       <div className="flex items-center gap-2 flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <Target size={12} style={{ color: "var(--accent-green-dim)" }} />
+        <Target size={12} style={{ color: "var(--silver-dim)" }} />
         <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Affected Sectors / Exposure</span>
       </div>
       

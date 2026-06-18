@@ -40,11 +40,11 @@ export function CyberSecPanel() {
       {/* ── LEFT COLUMN ─────────────────────────── */}
       <div className="flex flex-col gap-2.5" style={{ flex: "2 1 0%" }}>
         {/* CYBER THREAT MAP */}
-        <div className="flex-1 min-h-0 flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        <div className="flex-1 min-h-0 flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
           {/* Map header */}
           <div className="flex items-center justify-between flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
             <div className="flex items-center gap-2">
-              <Shield size={12} style={{ color: "var(--accent-green-dim)" }} />
+              <Shield size={12} style={{ color: "var(--silver-dim)" }} />
               <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cyber Threat Map</span>
             </div>
           </div>

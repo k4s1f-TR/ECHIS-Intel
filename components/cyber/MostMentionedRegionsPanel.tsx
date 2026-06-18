@@ -14,15 +14,15 @@ function RegionRow({ item, maxCount }: { item: CyberRegionMention; maxCount: num
       <span className="flex-shrink-0" style={{ width: 90, fontSize: "var(--fs-sm)", color: "var(--text-body)", fontWeight: 500 }}>
         {item.region}
       </span>
-      <div className="flex-1 h-[4px] rounded-full" style={{ background: "rgba(34,197,94,0.06)" }}>
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, rgba(34,197,94,0.35), rgba(34,197,94,0.65))", transition: "width 300ms ease" }} />
+      <div className="flex-1 h-[4px] rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, rgba(150,158,170,0.35), var(--silver))", transition: "width 300ms ease" }} />
       </div>
       <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text-body)", fontVariantNumeric: "tabular-nums", width: 36, textAlign: "right" }}>
         {item.count.toLocaleString()}
       </span>
       <div className="flex items-center gap-0.5 flex-shrink-0" style={{ width: 50 }}>
-        {positive ? <TrendingUp size={9} style={{ color: "var(--accent-green)" }} /> : <TrendingDown size={9} style={{ color: "var(--sev-critical-text)" }} />}
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: positive ? "var(--accent-green)" : "var(--sev-critical-text)" }}>
+        {positive ? <TrendingUp size={9} style={{ color: "var(--silver)" }} /> : <TrendingDown size={9} style={{ color: "var(--sev-critical-text)" }} />}
+        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: positive ? "var(--silver)" : "var(--sev-critical-text)" }}>
           {positive ? "+" : ""}{item.change}%
         </span>
       </div>
@@ -33,9 +33,9 @@ function RegionRow({ item, maxCount }: { item: CyberRegionMention; maxCount: num
 export function MostMentionedRegionsPanel() {
   const maxCount = useMemo(() => Math.max(...cyberRegionMentions.map(r => r.count)), []);
   return (
-    <div className="h-full flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+    <div className="h-full flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
       <div className="flex items-center gap-2 flex-shrink-0 px-3 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <Globe size={11} style={{ color: "var(--accent-green-dim)" }} />
+        <Globe size={11} style={{ color: "var(--silver-dim)" }} />
         <span style={{ fontSize: "var(--fs-xs)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Most Mentioned Regions</span>
       </div>
       <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-1 cyber-scrollbar">

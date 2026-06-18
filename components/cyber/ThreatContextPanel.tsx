@@ -1,12 +1,12 @@
 import { Shield, MapPin, Crosshair, Users, Target, FileText, Flag, Building, Server } from "lucide-react";
 import { cyberNewsItems } from "@/data/cyberMockData";
 
-const G = { accent: "var(--accent-green-dot)", dim: "var(--accent-green-dim)", text: "var(--accent-green)" };
+const G = { accent: "var(--silver)", dim: "var(--silver-dim)", text: "var(--silver)" };
 
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex items-center gap-2 mb-1">
-      <Icon size={11} style={{ color: "var(--accent-green-dim)", flexShrink: 0 }} />
+      <Icon size={11} style={{ color: "var(--silver-dim)", flexShrink: 0 }} />
       <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>{label}</span>
     </div>
   );
@@ -46,7 +46,7 @@ export function ThreatContextPanel({ selectedNewsId }: { selectedNewsId?: string
   const ctx = selectedNews.context;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
       {/* Header */}
       <div className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-dim)" }}>
         <Shield size={12} style={{ color: G.dim }} />
@@ -86,7 +86,7 @@ export function ThreatContextPanel({ selectedNewsId }: { selectedNewsId?: string
         <div className="mt-auto" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
           <MetaRow label="First Seen" value={ctx.firstSeen} />
           <MetaRow label="Last Update" value={ctx.lastUpdate} />
-          <StatusBar label="Confidence" level={ctx.confidenceLevel} color={ctx.confidenceLevel >= 4 ? "var(--accent-green)" : "rgba(218,175,22,0.85)"} />
+          <StatusBar label="Confidence" level={ctx.confidenceLevel} color="var(--silver)" />
           <div className="flex items-center justify-between py-2">
             <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Impact</span>
             <div className="flex items-center gap-2.5">

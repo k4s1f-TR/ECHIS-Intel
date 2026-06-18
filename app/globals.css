@@ -20,7 +20,7 @@
   --border-dim: rgba(255, 255, 255, 0.045);
   --border-subtle: rgba(255, 255, 255, 0.03);
   --border-hover: rgba(255, 255, 255, 0.09);
-  --border-accent: rgba(80, 140, 220, 0.4);
+  --border-accent: rgba(240, 64, 76, 0.4);
   --border-divider: rgba(255, 255, 255, 0.04);
 
   /* ── Text layers ───────────────────────────────────────── */
@@ -35,15 +35,21 @@
   /* ── Icon layers ───────────────────────────────────────── */
   --icon-default: rgba(70, 76, 86, 0.7);
   --icon-hover: rgba(175, 182, 192, 0.88);
-  --icon-active: rgba(120, 165, 225, 0.88);
+  --icon-active: rgba(250, 90, 100, 0.92);
 
   /* ── Accent: blue ──────────────────────────────────────── */
-  --accent-blue: #4088e0;
-  --accent-blue-text: rgba(100, 162, 240, 0.88);
-  --accent-blue-bg: rgba(55, 120, 210, 0.07);
-  --accent-blue-bg-strong: rgba(55, 120, 210, 0.11);
-  --accent-blue-border: rgba(55, 120, 210, 0.2);
-  --accent-blue-glow: rgba(55, 120, 210, 0.08);
+  --accent-blue: #ec2f3b;
+  --accent-blue-text: rgba(250, 86, 96, 0.95);
+  --accent-blue-bg: rgba(225, 40, 52, 0.10);
+  --accent-blue-bg-strong: rgba(225, 40, 52, 0.16);
+  --accent-blue-border: rgba(240, 64, 76, 0.32);
+  --accent-blue-glow: rgba(236, 47, 59, 0.28);
+
+  /* ── Silver: supporting metal (new) ────────────────────── */
+  --silver: rgba(190, 196, 206, 0.92);
+  --silver-dim: rgba(150, 158, 170, 0.74);
+  --silver-bg: rgba(184, 190, 202, 0.055);
+  --silver-border: rgba(184, 190, 202, 0.18);
 
   /* ── Accent: green ─────────────────────────────────────── */
   --accent-green: rgba(56, 198, 105, 0.85);

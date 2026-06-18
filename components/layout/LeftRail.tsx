@@ -113,7 +113,7 @@ export function LeftRail({
           onClick={onHome}
           className="w-8 h-8 rounded-[9px] flex items-center justify-center"
           style={{
-            background: "linear-gradient(145deg, #0f2545 0%, #091830 100%)",
+            background: "linear-gradient(145deg, #4a1418 0%, #1c0b0e 100%)",
             border: "1px solid var(--accent-blue-border)",
             boxShadow: "0 0 14px var(--accent-blue-glow)",
           }}

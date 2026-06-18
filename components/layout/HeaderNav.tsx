@@ -139,8 +139,8 @@ export function HeaderNav({
           style={{
             fontSize: "var(--fs-sm)",
             fontWeight: 700,
-            color: "rgba(186,230,253,0.9)",
-            background: "linear-gradient(145deg, #0f2545 0%, #1d4ed8 100%)",
+            color: "rgba(255,205,208,0.95)",
+            background: "linear-gradient(145deg, #4a1418 0%, #e02834 100%)",
             border: "1px solid var(--accent-blue-border)",
           }}
         >
