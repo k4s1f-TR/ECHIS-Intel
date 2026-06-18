@@ -110,6 +110,12 @@ export function createTaipanOsmGlobeStyle({
           "line-color": OSM_ADMIN_BOUNDARY,
           "line-width": ["interpolate", ["linear"], ["zoom"], 3.2, 0.3, 5.5, 0.5, 8, 0.7],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.2, 0, 4.2, 0.48, 7, 0.72],
+          // Sub-national borders use a dashed pattern (vs. the solid national
+          // border) — the standard political-map convention.  This also makes
+          // any segment crossing a lake (e.g. provinces meeting inside Van
+          // Gölü / Tuz Gölü) read as an administrative line rather than a
+          // coastline, so water and border no longer visually merge.
+          "line-dasharray": [2.6, 1.8],
         },
       },
       {
@@ -126,6 +132,9 @@ export function createTaipanOsmGlobeStyle({
           "line-color": OSM_ADMIN_BOUNDARY,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5.4, 0.28, 8, 0.55, 11, 0.75],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5.4, 0, 6.4, 0.34, 10, 0.58],
+          // Dashed to match the regional admin line and the national-solid /
+          // internal-dashed convention (see boundary_regional_admin).
+          "line-dasharray": [2.2, 1.8],
         },
       },
       {
