@@ -6,78 +6,151 @@ import { CyberNewsPanel } from "./CyberNewsPanel";
 import { ThreatContextPanel } from "./ThreatContextPanel";
 import { MostMentionedRegionsPanel } from "./MostMentionedRegionsPanel";
 import { AffectedSectorsPanel } from "./AffectedSectorsPanel";
-import { cyberNewsItems } from "@/data/cyberMockData";
+import { cyberNewsItems, cyberHotspots, cyberAttackIndicators } from "@/data/cyberMockData";
 
-/* ─── Map Info Strip (bottom of map panel) ───────────────────── */
-function MapInfoStrip() {
+/* Severity → heat-ramp dot color (matches map markers/comets) */
+const SEV_DOT: Record<string, { col: string; glow: string }> = {
+  critical: { col: "#ff3b42", glow: "rgba(255,59,66,0.9)" },
+  high: { col: "#ff7a2f", glow: "rgba(255,122,47,0.8)" },
+  medium: { col: "#f1c24f", glow: "rgba(241,194,79,0.7)" },
+  low: { col: "#9aa3b2", glow: "rgba(154,163,178,0.5)" },
+};
+
+/* ─── Header threat meter (THREAT LVL equalizer) ─────────── */
+const THREAT_BARS = [6, 9, 13, 8, 11];
+function ThreatMeter() {
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
-      style={{ borderTop: "1px solid var(--border-dim)", background: "var(--bg-info-strip)" }}
+      className="flex items-center flex-shrink-0"
+      style={{ gap: 9, padding: "0 12px", height: "100%", borderLeft: "1px solid var(--c-border-2)" }}
     >
-      {/* Session IP */}
-      <div className="flex items-center gap-1.5">
-        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent-green-dot)", flexShrink: 0 }} />
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.06em" }}>Session IP</span>
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 500, color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>185.234.219.102</span>
-      </div>
-      {/* Location */}
-      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>Istanbul, Türkiye</span>
-      {/* ISP badge */}
-      <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "var(--fs-2xs)", fontWeight: 600, color: "var(--accent-green)", background: "var(--accent-green-bg)", border: "1px solid var(--accent-green-border)" }}>ISP</span>
-      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-secondary)" }}>Türk Telekom</span>
+      <span style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--c-accent-text)" }}>
+        Threat Lvl
+      </span>
+      <span className="flex items-end" style={{ gap: 2, height: 13 }}>
+        {THREAT_BARS.map((h, i) => (
+          <i key={i} style={{ width: 3, height: h, borderRadius: 1, background: "var(--c-accent)", opacity: 0.55 + (h / 13) * 0.45, display: "block" }} />
+        ))}
+      </span>
     </div>
   );
 }
 
+/* ─── Ticker ─────────────────────────────────────────────── */
+function Ticker() {
+  // Duplicate the list so translateX(-50%) loops seamlessly.
+  const items = [...cyberNewsItems, ...cyberNewsItems];
+  return (
+    <div className="cyber-ticker">
+      <div className="cyber-ticker-tag">
+        <span className="dot" />
+        Live Feed
+      </div>
+      <div className="cyber-ticker-viewport">
+        <div className="cyber-ticker-track">
+          {items.map((n, i) => {
+            const sev = SEV_DOT[n.severityLevel] ?? SEV_DOT.low;
+            return (
+              <span key={`${n.id}-${i}`} className="inline-flex items-center gap-2" style={{ fontSize: "var(--c-fs-sm)", color: "var(--c-t4)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: sev.col, boxShadow: `0 0 6px ${sev.glow}`, flexShrink: 0 }} />
+                <b style={{ color: "var(--c-t2)", fontWeight: 600 }}>{n.source}</b>
+                <span>{n.summary}</span>
+                <span className="c-mono" style={{ color: "var(--c-t6)", fontSize: "var(--c-fs-2xs)" }}>{n.timeAgo}</span>
+                <span style={{ color: "var(--c-t6)", marginLeft: 4 }}>•</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      <ThreatMeter />
+    </div>
+  );
+}
 
-/* ─── Main Export ─────────────────────────────────────────────── */
+/* ─── Map info strip (bottom of map panel) ───────────────── */
+function MapInfoStrip() {
+  return (
+    <div
+      className="flex items-center gap-[10px] flex-shrink-0 flex-wrap"
+      style={{ padding: "9px 15px", borderTop: "1px solid var(--c-border-2)", background: "rgba(4,3,5,0.65)" }}
+    >
+      <div className="flex items-center gap-[6px]">
+        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--c-accent)", boxShadow: "0 0 7px var(--c-accent-glow)" }} />
+        <span style={{ fontSize: "var(--c-fs-xs)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-t5)" }}>Session IP</span>
+        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: "var(--c-t3)" }}>185.234.219.102</span>
+      </div>
+      <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>Istanbul, Türkiye</span>
+      <span
+        className="c-disp"
+        style={{ padding: "2.5px 7px", borderRadius: "var(--c-radius-xs)", fontSize: "var(--c-fs-2xs)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-elev)", background: "var(--c-elev-bg)", border: "1px solid var(--c-elev-border)" }}
+      >
+        ISP
+      </span>
+      <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>Türk Telekom</span>
+      <div className="flex-1" />
+      <div className="flex items-center gap-[6px]">
+        <span style={{ fontSize: "var(--c-fs-xs)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-t5)" }}>Active Arcs</span>
+        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: "var(--c-accent-text)" }}>{cyberAttackIndicators.length}</span>
+      </div>
+      <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>·</span>
+      <div className="flex items-center gap-[6px]">
+        <span style={{ fontSize: "var(--c-fs-xs)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-t5)" }}>Hotspots</span>
+        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: "var(--c-t3)" }}>{cyberHotspots.length}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main export ────────────────────────────────────────── */
 export function CyberSecPanel() {
   const [selectedNewsId, setSelectedNewsId] = useState(cyberNewsItems[0].id);
 
   return (
-    <main className="flex flex-1 min-h-0 overflow-hidden gap-2.5 p-2.5" style={{ background: "var(--bg-base)" }}>
-      {/* ── LEFT COLUMN ─────────────────────────── */}
-      <div className="flex flex-col gap-2.5" style={{ flex: "2 1 0%" }}>
-        {/* CYBER THREAT MAP */}
-        <div className="flex-1 min-h-0 flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
-          {/* Map header */}
-          <div className="flex items-center justify-between flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-            <div className="flex items-center gap-2">
-              <Shield size={12} style={{ color: "var(--silver-dim)" }} />
-              <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cyber Threat Map</span>
+    <div className="cyber-premium flex flex-1 min-h-0 flex-col overflow-hidden">
+      <Ticker />
+
+      <main className="flex flex-1 min-h-0 overflow-hidden" style={{ gap: 10, padding: 10 }}>
+        {/* ── LEFT COLUMN ── */}
+        <div className="flex flex-col min-h-0 min-w-0" style={{ flex: "2 1 0%", gap: 10 }}>
+          {/* Global Threat Map */}
+          <div className="cyber-panel flex-1">
+            <div className="cyber-panel-head">
+              <div className="flex items-center gap-[9px]">
+                <Shield size={15} style={{ color: "var(--c-silver-dim)" }} />
+                <span className="cyber-panel-title">Global Threat Map</span>
+              </div>
+              <div className="cyber-live-pill">
+                <span className="dot" />
+                Live
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              <CyberMap focusNewsId={selectedNewsId} />
+            </div>
+            <MapInfoStrip />
+          </div>
+
+          {/* Bottom row: Regions (fixed) + Sectors (flex) */}
+          <div className="flex flex-shrink-0 min-w-0" style={{ height: 264, gap: 10 }}>
+            <div className="min-w-0" style={{ flex: "0 0 304px" }}>
+              <MostMentionedRegionsPanel />
+            </div>
+            <div className="flex-1 min-w-0">
+              <AffectedSectorsPanel />
             </div>
           </div>
-          {/* Map canvas */}
-          <div className="flex-1 min-h-0">
-            <CyberMap />
-          </div>
-          {/* Info strip */}
-          <MapInfoStrip />
         </div>
 
-        {/* BOTTOM ROW: most mentioned regions (left) + empty panel (right) */}
-        <div className="flex gap-2.5 flex-shrink-0" style={{ height: "220px" }}>
-          {/* Most mentioned regions – narrower */}
-          <div className="min-w-0" style={{ flex: "0 0 280px" }}>
-            <MostMentionedRegionsPanel />
-          </div>
-          {/* Affected Sectors / Exposure panel – wider */}
-          <div className="flex-1 min-w-0">
-            <AffectedSectorsPanel />
-          </div>
+        {/* ── CENTER COLUMN ── */}
+        <div className="min-h-0 min-w-0" style={{ flex: "1.15 1 0%" }}>
+          <CyberNewsPanel selectedNewsId={selectedNewsId} onSelectNews={setSelectedNewsId} />
         </div>
-      </div>
 
-      {/* ── CENTER COLUMN ───────────────────────── */}
-      <div style={{ flex: "1.1 1 0%" }} className="min-h-0">
-        <CyberNewsPanel selectedNewsId={selectedNewsId} onSelectNews={setSelectedNewsId} />
-      </div>
-
-      {/* ── RIGHT COLUMN ────────────────────────── */}
-      <div style={{ flex: "1 1 0%" }} className="min-h-0">
-        <ThreatContextPanel selectedNewsId={selectedNewsId} />
-      </div>
-    </main>
+        {/* ── RIGHT COLUMN ── */}
+        <div className="min-h-0 min-w-0" style={{ flex: "1 1 0%" }}>
+          <ThreatContextPanel selectedNewsId={selectedNewsId} />
+        </div>
+      </main>
+    </div>
   );
 }

@@ -186,47 +186,120 @@ const countryPaths = renderedFeatures
   }))
   .filter(({ path }) => path.length > 0);
 
+/**
+ * Optional, backward-compatible theming. When `theme` is omitted the map renders
+ * bit-for-bit identically to the original light palette, so other consumers
+ * (Intel Watch, Defense Industry) are unaffected. Cyber News opts into a dark
+ * land + crimson coastline look.
+ */
+export type SharedWorldMap2DTheme = {
+  land?: string;
+  border?: string;
+  graticule?: string;
+  background?: string;
+};
+
+/* Static crimson graticule (drawn under land, so only the ocean grid shows).
+   Built once; only rendered when a theme supplies a graticule color. */
+const GRATICULE_LAT_MIN = -56;
+const GRATICULE_LAT_MAX = 83;
+const graticulePath = (() => {
+  const line = (points: Position[]) =>
+    points
+      .map(([longitude, latitude], index) => {
+        const [x, y] = projectPoint(naturalEarthRaw(longitude, latitude));
+        return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(" ");
+
+  const segments: string[] = [];
+  for (let longitude = -180; longitude <= 180; longitude += 20) {
+    const points: Position[] = [];
+    for (let latitude = GRATICULE_LAT_MIN; latitude <= GRATICULE_LAT_MAX; latitude += 5) {
+      points.push([longitude, latitude]);
+    }
+    segments.push(line(points));
+  }
+  for (let latitude = -40; latitude <= 80; latitude += 20) {
+    const points: Position[] = [];
+    for (let longitude = -180; longitude <= 180; longitude += 5) {
+      points.push([longitude, latitude]);
+    }
+    segments.push(line(points));
+  }
+  return segments.join(" ");
+})();
+
 export function SharedWorldMap2D({
   ariaLabel,
   markerLayer,
+  theme,
 }: {
   ariaLabel: string;
   markerLayer?: (project: ProjectMarker) => ReactNode;
+  theme?: SharedWorldMap2DTheme;
 }) {
+  const themed = Boolean(theme);
+  const land = theme?.land ?? "rgba(210, 216, 222, 0.82)";
+  const countryStroke = theme?.border ?? "rgba(24, 30, 38, 0.72)";
+  const outlineStroke = theme?.border ?? "rgba(245, 250, 255, 0.16)";
+  const background = theme?.background ?? "#000000";
+
+  const cssVars = {
+    "--swm-land": land,
+    "--swm-land-stroke": countryStroke,
+    "--swm-land-hover": themed ? land : "rgba(226, 235, 242, 0.96)",
+    "--swm-land-hover-stroke": themed ? countryStroke : "rgba(245, 250, 255, 0.72)",
+  } as React.CSSProperties;
+
   return (
-    <div className="relative h-full w-full overflow-hidden" style={{ background: "#000000" }}>
+    <div className="relative h-full w-full overflow-hidden" style={{ background }}>
       <svg
         aria-label={ariaLabel}
-        className="block h-full w-full"
+        className={`block h-full w-full${themed ? " swm--themed" : ""}`}
         preserveAspectRatio="xMidYMid meet"
         role="img"
-        style={{ overflow: "hidden" }}
+        style={{ overflow: "hidden", ...cssVars }}
         viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
       >
         <style>
           {`
             .shared-world-country {
-              fill: rgba(210, 216, 222, 0.82);
-              stroke: rgba(24, 30, 38, 0.72);
+              fill: var(--swm-land);
+              stroke: var(--swm-land-stroke);
               stroke-width: 0.28;
               stroke-linejoin: round;
               stroke-linecap: round;
               vector-effect: non-scaling-stroke;
               shape-rendering: geometricPrecision;
-              transition: fill 150ms ease, stroke 150ms ease, stroke-opacity 150ms ease;
+              transition: fill 150ms ease, stroke 150ms ease, stroke-opacity 150ms ease, filter 150ms ease;
             }
 
             .shared-world-country:hover {
-              fill: rgba(226, 235, 242, 0.96);
-              stroke: rgba(245, 250, 255, 0.72);
+              fill: var(--swm-land-hover);
+              stroke: var(--swm-land-hover-stroke);
               stroke-opacity: 1;
+            }
+
+            .swm--themed .shared-world-country:hover {
+              filter: brightness(1.28);
             }
           `}
         </style>
-        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="#000000" />
+        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill={themed ? "transparent" : "#000000"} />
+        {themed && theme?.graticule ? (
+          <path
+            d={graticulePath}
+            fill="none"
+            stroke={theme.graticule}
+            strokeWidth="0.5"
+            vectorEffect="non-scaling-stroke"
+            style={{ shapeRendering: "geometricPrecision" }}
+          />
+        ) : null}
         <g
           fill="none"
-          stroke="rgba(245, 250, 255, 0.16)"
+          stroke={outlineStroke}
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="0.22"

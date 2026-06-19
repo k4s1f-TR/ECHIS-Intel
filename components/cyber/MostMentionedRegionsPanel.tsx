@@ -1,29 +1,63 @@
 "use client";
-import { useMemo } from "react";
-import { Globe, TrendingUp, TrendingDown } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+import { Globe } from "lucide-react";
 import { cyberRegionMentions, type CyberRegionMention } from "@/data/cyberMockData";
 
-function RegionRow({ item, maxCount }: { item: CyberRegionMention; maxCount: number }) {
+function RegionRow({ item, index, maxCount }: { item: CyberRegionMention; index: number; maxCount: number }) {
+  const valueRef = useRef<HTMLSpanElement>(null);
   const pct = (item.count / maxCount) * 100;
   const positive = item.change >= 0;
+
+  // Count-up on load (~1s ease-out cubic). Base render already holds the final
+  // value (SSR-correct); the effect only animates when motion is allowed.
+  useEffect(() => {
+    const node = valueRef.current;
+    if (!node) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let raf = 0;
+    const target = item.count;
+    const dur = 1000;
+    const delay = 120 + index * 70;
+    const fmt = (v: number) => Math.round(v).toLocaleString("en-US");
+    const startTimer = window.setTimeout(() => {
+      const start = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / dur);
+        const e = 1 - Math.pow(1 - t, 3);
+        node.textContent = fmt(target * e);
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, delay);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      cancelAnimationFrame(raf);
+      node.textContent = fmt(target);
+    };
+  }, [item.count, index]);
+
   return (
-    <div className="flex items-center gap-2 py-[5px]" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-      <span className="flex-shrink-0" style={{ width: 14, fontSize: "var(--fs-xs)", color: "var(--text-dim)", fontWeight: 600, textAlign: "right" }}>
+    <div
+      className="grid items-center"
+      style={{ gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "4.5px 9px", borderRadius: "var(--c-radius-sm)" }}
+    >
+      <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 600, color: "var(--c-t6)", textAlign: "center" }}>
         {item.rank}
       </span>
-      <span className="flex-shrink-0" style={{ width: 90, fontSize: "var(--fs-sm)", color: "var(--text-body)", fontWeight: 500 }}>
-        {item.region}
-      </span>
-      <div className="flex-1 h-[4px] rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, rgba(150,158,170,0.35), var(--silver))", transition: "width 300ms ease" }} />
+      <div className="min-w-0">
+        <div style={{ fontSize: "var(--c-fs-base)", fontWeight: 500, color: "var(--c-t2)", marginBottom: 3 }}>{item.region}</div>
+        <div style={{ height: 3, borderRadius: 999, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct.toFixed(1)}%`, borderRadius: 999, background: "linear-gradient(90deg, var(--c-accent-2), var(--c-accent))" }} />
+        </div>
       </div>
-      <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text-body)", fontVariantNumeric: "tabular-nums", width: 36, textAlign: "right" }}>
-        {item.count.toLocaleString()}
-      </span>
-      <div className="flex items-center gap-0.5 flex-shrink-0" style={{ width: 50 }}>
-        {positive ? <TrendingUp size={9} style={{ color: "var(--silver)" }} /> : <TrendingDown size={9} style={{ color: "var(--sev-critical-text)" }} />}
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: positive ? "var(--silver)" : "var(--sev-critical-text)" }}>
-          {positive ? "+" : ""}{item.change}%
+      <div className="flex items-center gap-[9px]">
+        <span ref={valueRef} className="c-mono" style={{ fontSize: "var(--c-fs-base)", fontWeight: 600, color: "var(--c-t2)" }}>
+          {item.count.toLocaleString("en-US")}
+        </span>
+        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: positive ? "var(--c-accent-text)" : "var(--c-silver-dim)" }}>
+          {positive ? "+" : "−"}{Math.abs(item.change)}%
         </span>
       </div>
     </div>
@@ -31,15 +65,19 @@ function RegionRow({ item, maxCount }: { item: CyberRegionMention; maxCount: num
 }
 
 export function MostMentionedRegionsPanel() {
-  const maxCount = useMemo(() => Math.max(...cyberRegionMentions.map(r => r.count)), []);
+  const maxCount = useMemo(() => Math.max(...cyberRegionMentions.map((r) => r.count)), []);
   return (
-    <div className="h-full flex flex-col" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
-      <div className="flex items-center gap-2 flex-shrink-0 px-3 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <Globe size={11} style={{ color: "var(--silver-dim)" }} />
-        <span style={{ fontSize: "var(--fs-xs)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Most Mentioned Regions</span>
+    <div className="cyber-panel h-full">
+      <div className="cyber-panel-head">
+        <div className="flex items-center gap-[9px]">
+          <Globe size={15} style={{ color: "var(--c-silver-dim)" }} />
+          <span className="cyber-panel-title">Most Mentioned Regions</span>
+        </div>
       </div>
-      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-1 cyber-scrollbar">
-        {cyberRegionMentions.map(r => <RegionRow key={r.region} item={r} maxCount={maxCount} />)}
+      <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col" style={{ padding: "7px 6px" }}>
+        {cyberRegionMentions.map((r, i) => (
+          <RegionRow key={r.region} item={r} index={i} maxCount={maxCount} />
+        ))}
       </div>
     </div>
   );

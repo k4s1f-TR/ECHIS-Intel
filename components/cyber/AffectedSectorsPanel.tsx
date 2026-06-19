@@ -1,37 +1,52 @@
 "use client";
-import { Target } from "lucide-react";
+import { Activity } from "lucide-react";
+
+type Sector = { label: string; pct: number; tag: string; cls: "crit" | "high" | "elev" };
+
+const SECTORS: Sector[] = [
+  { label: "Energy", pct: 92, tag: "Critical", cls: "crit" },
+  { label: "Telecommunications", pct: 84, tag: "High", cls: "high" },
+  { label: "Finance", pct: 76, tag: "High", cls: "high" },
+  { label: "Government", pct: 63, tag: "Elevated", cls: "elev" },
+  { label: "Manufacturing", pct: 58, tag: "Elevated", cls: "elev" },
+];
+
+const FILL: Record<Sector["cls"], string> = {
+  crit: "linear-gradient(90deg, var(--c-accent-2), var(--c-crit))",
+  high: "linear-gradient(90deg, var(--c-accent-2), var(--c-high))",
+  elev: "linear-gradient(90deg, rgba(150,160,172,0.3), var(--c-elev))",
+};
+
+const TAG_COLOR: Record<Sector["cls"], string> = {
+  crit: "var(--c-crit)",
+  high: "var(--c-high)",
+  elev: "var(--c-elev)",
+};
 
 export function AffectedSectorsPanel() {
-  const sectors = [
-    { name: "Energy", score: 92, status: "Critical", color: "rgba(239,68,68,0.85)", track: "rgba(239,68,68,0.15)" },
-    { name: "Telecommunications", score: 84, status: "High", color: "rgba(249,115,22,0.85)", track: "rgba(249,115,22,0.15)" },
-    { name: "Finance", score: 76, status: "High", color: "rgba(249,115,22,0.85)", track: "rgba(249,115,22,0.15)" },
-    { name: "Government", score: 63, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
-    { name: "Manufacturing", score: 58, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
-    { name: "Healthcare", score: 41, status: "Elevated", color: "rgba(190,196,206,0.85)", track: "rgba(190,196,206,0.12)" },
-  ];
-
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
-      {/* Header */}
-      <div className="flex items-center gap-2 flex-shrink-0 px-3.5 py-2" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <Target size={12} style={{ color: "var(--silver-dim)" }} />
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Affected Sectors / Exposure</span>
+    <div className="cyber-panel h-full">
+      <div className="cyber-panel-head">
+        <div className="flex items-center gap-[9px]">
+          <Activity size={15} style={{ color: "var(--c-silver-dim)" }} />
+          <span className="cyber-panel-title">Affected Sectors</span>
+        </div>
       </div>
-      
-      {/* Content */}
-      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 cyber-scrollbar">
-        {sectors.map((sec, i) => (
-          <div key={i} className="flex flex-col gap-1.5">
-            <div className="flex items-end justify-between">
-              <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--text-body)" }}>{sec.name}</span>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: "var(--fs-2xs)", fontWeight: 600, color: sec.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{sec.status}</span>
-                <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", minWidth: "24px", textAlign: "right" }}>{sec.score}%</span>
+
+      <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col gap-[13px]" style={{ padding: "13px 16px" }}>
+        {SECTORS.map((s) => (
+          <div key={s.label} className="flex flex-col">
+            <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+              <span style={{ fontSize: "var(--c-fs-base)", fontWeight: 500, color: "var(--c-t3)" }}>{s.label}</span>
+              <div className="flex items-center gap-[9px]">
+                <span className="c-disp" style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: TAG_COLOR[s.cls] }}>
+                  {s.tag}
+                </span>
+                <span className="c-mono" style={{ fontSize: "var(--c-fs-md)", fontWeight: 600, color: "var(--c-t2)" }}>{s.pct}%</span>
               </div>
             </div>
-            <div className="w-full rounded-full overflow-hidden" style={{ height: "3px", background: sec.track }}>
-              <div className="h-full rounded-full" style={{ width: `${sec.score}%`, background: sec.color }} />
+            <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.045)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${s.pct}%`, borderRadius: 999, background: FILL[s.cls] }} />
             </div>
           </div>
         ))}

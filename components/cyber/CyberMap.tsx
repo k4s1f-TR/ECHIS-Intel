@@ -1,194 +1,185 @@
 "use client";
 
 import { SharedWorldMap2D } from "@/components/map/SharedWorldMap2D";
-import { cyberHotspots } from "@/data/cyberMockData";
+import { cyberHotspots, cyberAttackIndicators } from "@/data/cyberMockData";
 
-const cyberAttackRoutes = [
-  { id: "route-china-singapore", from: { lng: 116.4, lat: 39.9 }, to: { lng: 103.82, lat: 1.35 } },
-  { id: "route-russia-germany", from: { lng: 37.62, lat: 55.75 }, to: { lng: 13.4, lat: 52.52 } },
-  { id: "route-iran-turkiye", from: { lng: 51.39, lat: 35.68 }, to: { lng: 32.85, lat: 39.92 } },
-  { id: "route-us-japan", from: { lng: -74.01, lat: 40.71 }, to: { lng: 139.69, lat: 35.68 } },
-  { id: "route-china-india", from: { lng: 116.4, lat: 39.9 }, to: { lng: 77.21, lat: 28.61 } },
-];
+type Severity = "critical" | "high" | "medium" | "low";
 
-function markerRadius(size: "small" | "medium" | "large") {
-  if (size === "large") return 3.2;
-  if (size === "medium") return 2.6;
-  return 2.1;
-}
+/* ── Heat ramp: clearly-stepped red → orange → gold → silver ───── */
+const SEV: Record<Severity, { col: string; core: string; glow: string; glowSoft: string }> = {
+  critical: { col: "#ff3b42", core: "#ffd2d4", glow: "rgba(255,59,66,0.9)", glowSoft: "rgba(255,59,66,0.10)" },
+  high: { col: "#ff7a2f", core: "#ffd9b8", glow: "rgba(255,122,47,0.8)", glowSoft: "rgba(255,122,47,0.10)" },
+  medium: { col: "#f1c24f", core: "#fff0c2", glow: "rgba(241,194,79,0.7)", glowSoft: "rgba(241,194,79,0.10)" },
+  low: { col: "#9aa3b2", core: "#e6e9ee", glow: "rgba(154,163,178,0.5)", glowSoft: "rgba(154,163,178,0.10)" },
+};
 
-export function CyberMap() {
+/* ── Marker spec: radius + hue + ping both step with severity ───── */
+const MK: Record<Severity, { r: number; ping: boolean; spec: boolean }> = {
+  critical: { r: 3.0, ping: true, spec: true },
+  high: { r: 2.5, ping: true, spec: true },
+  medium: { r: 2.1, ping: false, spec: true },
+  low: { r: 1.8, ping: false, spec: false },
+};
+
+const SIZE_NUM: Record<string, number> = { small: 3, medium: 4, large: 5 };
+
+/* News → map focus coordinates [lng, lat] (kept local; no data-schema change) */
+const NEWS_FOCUS: Record<string, [number, number]> = {
+  "cn-1": [-97, 38],
+  "cn-2": [10, 51],
+  "cn-3": [110, 5],
+  "cn-4": [8, 25],
+  "cn-5": [-100, 40],
+};
+
+const SEVERITIES: Severity[] = ["critical", "high", "medium", "low"];
+
+/* Dark continents + crimson coastlines, applied only to this map instance.
+   SharedWorldMap2D renders identically for every other consumer (no theme). */
+const CYBER_MAP_THEME = {
+  land: "#221a1e",
+  border: "rgba(255,72,84,0.40)",
+  graticule: "rgba(255,72,84,0.04)",
+  background: "radial-gradient(120% 100% at 50% 36%, #0c0a0d 0%, #070507 58%, #040305 100%)",
+};
+
+export function CyberMap({ focusNewsId }: { focusNewsId?: string }) {
   return (
     <SharedWorldMap2D
       ariaLabel="Cyber Threat world map"
-      markerLayer={(project) => (
-        <>
-          <style>
-            {`
-              .cyber-map-marker-pulse {
-                animation: cyberMapMarkerPulse 2800ms ease-out infinite;
-                fill: none;
-                stroke: rgba(24, 255, 138, 0.5);
-                stroke-width: 1.15;
-                transform-box: fill-box;
-                transform-origin: center;
-              }
+      theme={CYBER_MAP_THEME}
+      markerLayer={(project) => {
+        const focus = focusNewsId ? NEWS_FOCUS[focusNewsId] : undefined;
+        const focusXY = focus ? project(focus[0], focus[1]) : null;
 
-              .cyber-map-marker-halo {
-                fill: rgba(24, 255, 138, 0.18);
-                filter: drop-shadow(0 0 5px rgba(24, 255, 138, 0.28));
-              }
+        return (
+          <>
+            <defs>
+              {SEVERITIES.map((s) => {
+                const c = SEV[s];
+                return (
+                  <g key={s}>
+                    {/* gem core — lit from top-left */}
+                    <radialGradient id={`cyber-core-${s}`} cx="0.35" cy="0.35" r="0.75">
+                      <stop offset="0" stopColor={c.core} />
+                      <stop offset="1" stopColor={c.col} />
+                    </radialGradient>
+                    {/* soft glow halo */}
+                    <radialGradient id={`cyber-halo-${s}`} cx="0.5" cy="0.5" r="0.5">
+                      <stop offset="0" stopColor={c.glow} />
+                      <stop offset="0.6" stopColor={c.glowSoft} />
+                      <stop offset="1" stopColor="rgba(0,0,0,0)" />
+                    </radialGradient>
+                  </g>
+                );
+              })}
+            </defs>
 
-              .cyber-map-marker-core {
-                animation: cyberMapMarkerBreath 3000ms ease-in-out infinite;
-                fill: rgba(24, 255, 138, 0.98);
-                stroke: rgba(210, 255, 232, 0.58);
-                stroke-width: 0.45;
-                vector-effect: non-scaling-stroke;
-              }
-
-              .cyber-attack-route-base {
-                fill: none;
-                opacity: 0;
-                stroke: transparent;
-                stroke-linecap: round;
-                stroke-width: 1;
-                vector-effect: non-scaling-stroke;
-              }
-
-              .cyber-attack-route-trail,
-              .cyber-attack-route-head {
-                animation: cyberAttackRouteSignal 2600ms linear infinite;
-                fill: none;
-                stroke-linecap: round;
-                vector-effect: non-scaling-stroke;
-              }
-
-              .cyber-attack-route-trail {
-                opacity: 0.34;
-                stroke: rgba(24, 255, 138, 0.46);
-                stroke-dasharray: 16 84;
-                stroke-dashoffset: 106;
-                stroke-width: 1.2;
-                filter: drop-shadow(0 0 2px rgba(24, 255, 138, 0.18));
-              }
-
-              .cyber-attack-route-head {
-                opacity: 0.78;
-                stroke: rgba(139, 255, 197, 0.76);
-                stroke-dasharray: 4 96;
-                stroke-dashoffset: 100;
-                stroke-width: 1.05;
-                filter: drop-shadow(0 0 2.5px rgba(24, 255, 138, 0.28));
-              }
-
-              @keyframes cyberMapMarkerPulse {
-                0% {
-                  transform: scale(0.74);
-                  opacity: 0.38;
+            {/* ── Attack comets (screen-space quadratic béziers, no base track) ── */}
+            <g aria-hidden="true">
+              {cyberAttackIndicators.map((a, index) => {
+                const from = project(a.fromLng, a.fromLat);
+                const to = project(a.toLng, a.toLat);
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const len = Math.hypot(dx, dy) || 1;
+                // perpendicular, biased upward → graceful overhead arc
+                let nx = -dy / len;
+                let ny = dx / len;
+                if (ny > 0) {
+                  nx = -nx;
+                  ny = -ny;
                 }
+                const lift = Math.min(len * 0.32, 130);
+                const cx = (from.x + to.x) / 2 + nx * lift;
+                const cy = (from.y + to.y) / 2 + ny * lift;
+                const d = `M${from.x.toFixed(2)} ${from.y.toFixed(2)} Q${cx.toFixed(2)} ${cy.toFixed(2)} ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
+                const sev = SEV[a.severity];
+                // de-sync phases (negative delay starts mid-flight → never blank)
+                const delay = `-${(index * 0.19).toFixed(2)}s`;
+                const dur = `${2400 + (index % 4) * 250}ms`;
 
-                70% {
-                  transform: scale(1.7);
-                  opacity: 0.08;
-                }
+                return (
+                  <g key={a.id}>
+                    <path
+                      className="cyber-comet-trail"
+                      d={d}
+                      pathLength={100}
+                      stroke={sev.col}
+                      strokeWidth={1.3}
+                      style={{ opacity: 0.42, animationDelay: delay, animationDuration: dur, filter: `drop-shadow(0 0 2px ${sev.glow})` }}
+                    />
+                    <path
+                      className="cyber-comet-head"
+                      d={d}
+                      pathLength={100}
+                      stroke={sev.core}
+                      strokeWidth={1.1}
+                      style={{ opacity: 0.9, animationDelay: delay, animationDuration: dur, filter: `drop-shadow(0 0 3px ${sev.glow})` }}
+                    />
+                  </g>
+                );
+              })}
+            </g>
 
-                100% {
-                  transform: scale(1.9);
-                  opacity: 0;
-                }
-              }
-
-              @keyframes cyberMapMarkerBreath {
-                0%,
-                100% {
-                  opacity: 0.88;
-                }
-
-                50% {
-                  opacity: 1;
-                }
-              }
-
-              @keyframes cyberAttackRouteSignal {
-                to {
-                  stroke-dashoffset: 0;
-                }
-              }
-
-              @media (prefers-reduced-motion: reduce) {
-                .cyber-attack-route-trail,
-                .cyber-attack-route-head {
-                  animation: none;
-                  opacity: 0.22;
-                }
-              }
-            `}
-          </style>
-          <g aria-hidden="true" className="cyber-attack-route-layer">
-            {cyberAttackRoutes.map((route, index) => {
-              const from = project(route.from.lng, route.from.lat);
-              const to = project(route.to.lng, route.to.lat);
-              const x1 = from.x.toFixed(2);
-              const y1 = from.y.toFixed(2);
-              const x2 = to.x.toFixed(2);
-              const y2 = to.y.toFixed(2);
-              const delay = `${(index * 0.34).toFixed(2)}s`;
+            {/* ── Gem markers ── */}
+            {cyberHotspots.map((h) => {
+              const { x, y } = project(h.lng, h.lat);
+              const sev = h.severity as Severity;
+              const c = SEV[sev];
+              const mk = MK[sev] ?? MK.low;
+              const r = mk.r + ((SIZE_NUM[h.size] ?? 3) - 3) * 0.18;
+              const seed = ((h.lng * 0.013 + h.lat * 0.019 + 10) % 1 + 1) % 1;
 
               return (
-                <g key={route.id}>
-                  <line
-                    className="cyber-attack-route-base"
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
+                <g key={h.id} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}>
+                  {/* radar ping — crit/high only, staggered */}
+                  {mk.ping && [0, 1].map((k) => (
+                    <circle
+                      key={k}
+                      className="cyber-map-ping"
+                      r={r + 1}
+                      stroke={c.col}
+                      vectorEffect="non-scaling-stroke"
+                      style={{ animationDelay: `-${Math.round(seed * 2800 + k * 1400)}ms` }}
+                    />
+                  ))}
+
+                  {/* soft glow halo */}
+                  <circle r={r * 3.4} fill={`url(#cyber-halo-${sev})`} opacity={0.55} />
+
+                  {/* gem core (breathing) */}
+                  <circle
+                    className="cyber-map-core"
+                    r={r}
+                    fill={`url(#cyber-core-${sev})`}
+                    style={{ animationDelay: `-${Math.round(seed * 3000)}ms` }}
                   />
-                  <line
-                    className="cyber-attack-route-trail"
-                    pathLength="100"
-                    style={{ animationDelay: delay }}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                  />
-                  <line
-                    className="cyber-attack-route-head"
-                    pathLength="100"
-                    style={{ animationDelay: delay }}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                  />
+
+                  {/* crisp bezel ring */}
+                  <circle r={r + 0.6} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+
+                  {/* specular highlight */}
+                  {mk.spec && <circle cx={-r * 0.34} cy={-r * 0.34} r={r * 0.26} fill="rgba(255,255,255,0.55)" />}
                 </g>
               );
             })}
-          </g>
-          {cyberHotspots.map((hotspot, index) => {
-            const { x, y } = project(hotspot.lng, hotspot.lat);
-            const radius = markerRadius(hotspot.size);
-            const delay = `${(index * 0.14).toFixed(2)}s`;
 
-            return (
-              <g key={hotspot.id} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}>
-                <circle
-                  className="cyber-map-marker-pulse"
-                  r={radius + 2.2}
-                  style={{ animationDelay: delay }}
-                />
-                <circle className="cyber-map-marker-halo" r={radius + 1.1} />
-                <circle
-                  className="cyber-map-marker-core"
-                  r={radius}
-                  style={{ animationDelay: delay }}
+            {/* ── Focus marker (selected news → map focus), replays per selection ── */}
+            {focusXY && (
+              <g key={focusNewsId} aria-hidden="true" transform={`translate(${focusXY.x.toFixed(2)} ${focusXY.y.toFixed(2)})`}>
+                <circle className="cyber-focus-ring" r={6} vectorEffect="non-scaling-stroke" />
+                <path
+                  className="cyber-focus-cross"
+                  d="M-11 0 L11 0 M0 -11 L0 11"
+                  fill="none"
+                  vectorEffect="non-scaling-stroke"
                 />
               </g>
-            );
-          })}
-        </>
-      )}
+            )}
+          </>
+        );
+      }}
     />
   );
 }

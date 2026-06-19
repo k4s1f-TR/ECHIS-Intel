@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en" data-accent="crimson" data-surface="carbon" data-density="regular" data-glow="on">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaipanMonitor — Cyber News</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ── Base shell ─────────────────────────────── */
+    --bg-base: #060305;
+    --bg-deep: #030203;
+    --bg-rail: #080507;
+
+    /* Text ladder — cool silver */
+    --t-1: rgba(238,240,244,0.98);   /* heading */
+    --t-2: rgba(214,219,226,0.92);   /* primary */
+    --t-3: rgba(176,184,196,0.82);   /* body */
+    --t-4: rgba(132,142,156,0.72);   /* secondary */
+    --t-5: rgba(96,105,119,0.64);    /* tertiary */
+    --t-6: rgba(70,78,90,0.6);       /* muted */
+
+    /* Silver metal */
+    --silver: rgba(196,202,212,0.94);
+    --silver-dim: rgba(150,158,170,0.74);
+    --silver-bg: rgba(184,192,206,0.055);
+    --silver-border: rgba(184,192,206,0.16);
+
+    /* Radius */
+    --radius: 12px; --radius-sm: 8px; --radius-xs: 5px;
+
+    /* Type scale */
+    --fs-2xs: 8.5px; --fs-xs: 9.5px; --fs-sm: 10.5px; --fs-base: 11.5px;
+    --fs-md: 12.5px; --fs-lg: 14px; --fs-xl: 17px;
+
+    /* Layout rhythm (density overrides) */
+    --gap: 10px; --pad: 12px; --panel-pad: 13px 15px;
+
+    /* Severity — red-dominant family */
+    --crit: rgba(255,72,82,0.98);  --crit-bg: rgba(255,56,68,0.13);  --crit-border: rgba(255,72,82,0.40);
+    --high: rgba(226,42,54,0.95);  --high-bg: rgba(214,32,44,0.11);  --high-border: rgba(226,52,62,0.34);
+    --med:  rgba(168,38,46,0.95);  --med-bg: rgba(150,28,36,0.12);   --med-border: rgba(176,48,56,0.32);
+    --elev: rgba(176,184,196,0.82);--elev-bg: rgba(176,184,196,0.07); --elev-border: rgba(176,184,196,0.20);
+  }
+
+  /* ── Accent directions ──────────────────────── */
+  [data-accent="crimson"] {
+    --accent: #ff2b3d; --accent-2: #b3121f;
+    --accent-text: rgba(255,86,96,1);
+    --accent-bg: rgba(255,43,61,0.13); --accent-bg-soft: rgba(255,43,61,0.06);
+    --accent-border: rgba(255,72,84,0.42); --accent-glow: rgba(255,43,61,0.42);
+  }
+  [data-accent="blood"] {
+    --accent: #d10f1c; --accent-2: #6e0a12;
+    --accent-text: rgba(232,52,60,1);
+    --accent-bg: rgba(209,15,28,0.14); --accent-bg-soft: rgba(209,15,28,0.06);
+    --accent-border: rgba(214,40,50,0.42); --accent-glow: rgba(209,15,28,0.40);
+  }
+  [data-accent="signal"] {
+    --accent: #ff3a2e; --accent-2: #aa1c12;
+    --accent-text: rgba(255,96,80,1);
+    --accent-bg: rgba(255,58,46,0.13); --accent-bg-soft: rgba(255,58,46,0.06);
+    --accent-border: rgba(255,86,72,0.44); --accent-glow: rgba(255,58,46,0.44);
+  }
+  [data-glow="off"] { --accent-glow: rgba(0,0,0,0); }
+
+  /* ── Surface directions ─────────────────────── */
+  [data-surface="matte"] {
+    --panel-bg: #0a070a;
+    --panel-grad: none;
+    --panel-blur: 0px;
+    --card-bg: rgba(255,255,255,0.014); --card-bg-hover: rgba(255,255,255,0.03);
+    --border-1: rgba(255,255,255,0.065); --border-2: rgba(255,255,255,0.042); --border-3: rgba(255,255,255,0.026);
+  }
+  [data-surface="carbon"] {
+    --panel-bg: #0a070a;
+    --panel-grad: linear-gradient(180deg, rgba(36,26,29,0.42) 0%, rgba(12,9,11,0.5) 46%),
+                  repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 7px);
+    --panel-blur: 0px;
+    --card-bg: rgba(255,255,255,0.016); --card-bg-hover: rgba(255,255,255,0.034);
+    --border-1: rgba(255,255,255,0.07); --border-2: rgba(255,255,255,0.045); --border-3: rgba(255,255,255,0.028);
+  }
+  [data-surface="glass"] {
+    --panel-bg: rgba(16,11,14,0.55);
+    --panel-grad: linear-gradient(180deg, rgba(48,34,38,0.34) 0%, rgba(14,10,12,0.30) 50%);
+    --panel-blur: 16px;
+    --card-bg: rgba(255,255,255,0.03); --card-bg-hover: rgba(255,255,255,0.055);
+    --border-1: rgba(255,255,255,0.10); --border-2: rgba(255,255,255,0.06); --border-3: rgba(255,255,255,0.038);
+  }
+
+  /* ── Density directions ─────────────────────── */
+  [data-density="compact"]  { --gap: 8px;  --pad: 9px;  --panel-pad: 10px 12px; }
+  [data-density="regular"]  { --gap: 10px; --pad: 12px; --panel-pad: 13px 15px; }
+  [data-density="comfy"]    { --gap: 13px; --pad: 15px; --panel-pad: 15px 18px; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  body {
+    background: var(--bg-base);
+    color: var(--t-2);
+    font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .disp { font-family: "Space Grotesk", sans-serif; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-border); }
+
+  .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; background: var(--bg-base); position: relative; }
+  /* faint vignette + top crimson wash for depth */
+  .app::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(120% 80% at 50% -8%, rgba(255,43,61,0.05), transparent 55%),
+      radial-gradient(140% 120% at 50% 120%, rgba(0,0,0,0.6), transparent 60%);
+  }
+  .app > * { position: relative; z-index: 1; }
+
+  /* ─────────────── TOP NAV ─────────────── */
+  .topnav {
+    display: flex; align-items: center; height: 56px; flex-shrink: 0; padding-right: 18px;
+    background: linear-gradient(180deg, #0d0a0d 0%, #070406 100%);
+    border-bottom: 1px solid var(--border-1);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; width: 232px; padding-left: 20px; flex-shrink: 0; }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--accent-2) 0%, #1a0708 100%);
+    border: 1px solid var(--accent-border); box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .brand-mark svg { width: 15px; height: 15px; stroke: var(--accent-text); }
+  .brand-name { font-family: "Space Grotesk"; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--t-1); }
+  .brand-name b { color: var(--accent-text); font-weight: 700; }
+
+  .topnav-tabs { display: flex; align-items: center; gap: 1px; flex: 1; min-width: 0; }
+  .tab {
+    position: relative; height: 56px; display: flex; align-items: center; padding: 0 15px;
+    font-size: var(--fs-md); font-weight: 500; color: var(--t-5); letter-spacing: 0.01em;
+    cursor: pointer; transition: color 140ms ease;
+  }
+  .tab:hover { color: var(--t-3); }
+  .tab.active { color: var(--t-1); }
+  .tab.active::after {
+    content: ""; position: absolute; left: 13px; right: 13px; bottom: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent) 28%, var(--accent) 72%, transparent);
+    border-radius: 2px 2px 0 0; box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  .topnav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .threat-meter {
+    display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 11px; border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, var(--accent-bg), transparent); border: 1px solid var(--accent-border);
+  }
+  .tm-label { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+  .tm-bars { display: flex; gap: 2px; align-items: flex-end; height: 13px; }
+  .tm-bars i { width: 3px; border-radius: 1px; background: var(--accent); display: block; }
+  .clock {
+    display: flex; align-items: center; padding: 7px 12px; border-radius: var(--radius-sm);
+    background: var(--card-bg); border: 1px solid var(--border-2);
+    font-size: var(--fs-md); font-weight: 500; color: var(--t-3);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.08em;
+  }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: var(--radius-sm); border: none; cursor: pointer; display: grid; place-items: center;
+    background: transparent; color: var(--t-5); transition: all 140ms ease;
+  }
+  .icon-btn:hover { color: var(--t-3); background: var(--card-bg-hover); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+    font-family: "Space Grotesk"; font-size: var(--fs-sm); font-weight: 700; color: rgba(255,210,212,0.96);
+    background: linear-gradient(145deg, #4a0f13 0%, var(--accent) 130%);
+    border: 1px solid var(--accent-border); cursor: pointer;
+  }
+
+  /* ─────────────── TICKER ─────────────── */
+  .ticker {
+    display: flex; align-items: center; height: 30px; flex-shrink: 0; overflow: hidden;
+    background: var(--bg-deep); border-bottom: 1px solid var(--border-2);
+  }
+  .ticker-tag {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 100%; padding: 0 13px;
+    background: linear-gradient(90deg, var(--accent-bg), transparent);
+    font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text);
+    border-right: 1px solid var(--accent-border);
+  }
+  .ticker-tag .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent-glow); animation: pulse 1.6s infinite; }
+  .ticker-viewport { flex: 1; min-width: 0; overflow: hidden; position: relative; height: 100%; }
+  .ticker-track { display: flex; align-items: center; gap: 30px; height: 100%; white-space: nowrap; width: max-content;
+    animation: ticker-scroll 60s linear infinite; will-change: transform; }
+  .ticker:hover .ticker-track { animation-play-state: paused; }
+  @keyframes ticker-scroll { to { transform: translateX(-50%); } }
+  .ticker-item { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-4); }
+  .ticker-item b { color: var(--t-2); font-weight: 600; }
+  .ticker-item .tk-sev { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .ticker-item .tk-time { color: var(--t-6); font-family: "JetBrains Mono"; font-size: var(--fs-2xs); }
+
+  /* ─────────────── BODY ─────────────── */
+  .body { display: flex; flex: 1; min-height: 0; }
+  .rail {
+    width: 62px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 3px;
+    background: linear-gradient(180deg, #0b080b 0%, #060406 100%); border-right: 1px solid var(--border-1);
+  }
+  .rail-logo {
+    width: 36px; height: 36px; border-radius: 11px; margin-bottom: 14px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--accent-2) 0%, #1a0708 100%);
+    border: 1px solid var(--accent-border); box-shadow: 0 0 18px var(--accent-glow);
+  }
+  .rail-logo svg { width: 17px; height: 17px; stroke: var(--accent-text); }
+  .rail-icon {
+    position: relative; width: 42px; height: 40px; border-radius: 10px; border: none; cursor: pointer; display: grid; place-items: center;
+    background: transparent; color: var(--t-6); transition: all 160ms ease;
+  }
+  .rail-icon svg { width: 18px; height: 18px; }
+  .rail-icon:hover { color: var(--t-3); background: var(--card-bg-hover); }
+  .rail-icon.active { color: var(--accent-text); background: var(--accent-bg); }
+  .rail-icon.active::before {
+    content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 2.5px; height: 17px; border-radius: 0 3px 3px 0; background: var(--accent); box-shadow: 0 0 9px var(--accent-glow);
+  }
+  .rail-spacer { flex: 1; }
+  .rail-divider { width: 28px; height: 1px; background: var(--border-2); margin: 8px 0; }
+
+  /* ─────────────── MAIN GRID ─────────────── */
+  .main { flex: 1; min-width: 0; min-height: 0; display: flex; gap: var(--gap); padding: var(--gap); }
+  .col { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; min-width: 0; }
+  .col-left { flex: 2 1 0; }
+  .col-center { flex: 1.15 1 0; }
+  .col-right { flex: 1 1 0; }
+
+  /* ─────────────── PANEL ─────────────── */
+  .panel {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--panel-bg); background-image: var(--panel-grad);
+    backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur));
+    border: 1px solid var(--border-1); border-radius: var(--radius);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 14px 40px rgba(0,0,0,0.4); overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    padding: var(--panel-pad); border-bottom: 1px solid var(--border-2);
+  }
+  .panel-head-l { display: flex; align-items: center; gap: 9px; }
+  .panel-head-l .ph-icon { width: 15px; height: 15px; color: var(--silver-dim); }
+  .panel-title { font-family: "Space Grotesk"; font-size: var(--fs-sm); font-weight: 600; color: var(--t-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .panel-body { flex: 1; min-height: 0; overflow-y: auto; }
+
+  .live-pill { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+  .live-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent-glow); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  /* ─────────────── THREAT MAP (globe) ─────────────── */
+  .map-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden;
+    background: radial-gradient(120% 100% at 50% 36%, #0c0a0d 0%, #070507 58%, #040305 100%); }
+  #globe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .map-stat {
+    position: absolute; top: 12px; left: 14px; display: flex; flex-direction: column; gap: 9px; pointer-events: none;
+  }
+  .ms-card {
+    display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; border-radius: var(--radius-sm);
+    background: rgba(6,4,6,0.6); border: 1px solid var(--border-2); backdrop-filter: blur(4px); min-width: 96px;
+  }
+  .ms-k { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-5); }
+  .ms-v { font-family: "JetBrains Mono"; font-size: var(--fs-lg); font-weight: 600; color: var(--t-1); font-variant-numeric: tabular-nums; }
+  .ms-v.acc { color: var(--accent-text); }
+  .map-info {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 9px 15px; flex-wrap: wrap;
+    border-top: 1px solid var(--border-2); background: rgba(4,3,5,0.65);
+  }
+  .map-info .k { display: flex; align-items: center; gap: 6px; }
+  .map-info .lbl { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t-5); }
+  .map-info .val { font-family: "JetBrains Mono"; font-size: var(--fs-xs); font-weight: 500; color: var(--t-3); }
+  .map-info .val.acc { color: var(--accent-text); }
+  .map-info .sep { font-size: var(--fs-xs); color: var(--t-4); }
+
+  .badge {
+    display: inline-flex; align-items: center; padding: 2.5px 7px; border-radius: var(--radius-xs);
+    font-family: "Space Grotesk"; font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .b-crit { color: var(--crit); background: var(--crit-bg); border-color: var(--crit-border); }
+  .b-high { color: var(--high); background: var(--high-bg); border-color: var(--high-border); }
+  .b-med  { color: var(--med);  background: var(--med-bg);  border-color: var(--med-border); }
+  .b-elev,.b-vuln,.b-apt,.b-malw,.b-ransom { color: var(--elev); background: var(--elev-bg); border-color: var(--elev-border); }
+
+  /* ─────────────── RANKED LIST ─────────────── */
+  .ranklist { padding: 7px 6px; display: flex; flex-direction: column; }
+  .rankrow { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; padding: 6.5px 9px; border-radius: var(--radius-sm); transition: background 120ms ease; }
+  .rankrow:hover { background: var(--card-bg-hover); }
+  .rank-n { font-family: "JetBrains Mono"; font-size: var(--fs-xs); font-weight: 600; color: var(--t-6); text-align: center; }
+  .rank-mid { min-width: 0; }
+  .rank-label { font-size: var(--fs-base); font-weight: 500; color: var(--t-2); margin-bottom: 4px; }
+  .rank-track { height: 3px; border-radius: 999px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .rank-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+  .rank-right { display: flex; align-items: center; gap: 9px; }
+  .rank-val { font-family: "JetBrains Mono"; font-size: var(--fs-base); font-weight: 600; color: var(--t-2); }
+  .rank-delta { font-family: "JetBrains Mono"; font-size: var(--fs-xs); font-weight: 500; }
+  .delta-up { color: var(--accent-text); } .delta-down { color: var(--silver-dim); }
+
+  /* ─────────────── SECTOR BARS ─────────────── */
+  .sectors { padding: 13px 16px; display: flex; flex-direction: column; gap: 13px; }
+  .sector .sec-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .sec-label { font-size: var(--fs-base); font-weight: 500; color: var(--t-3); }
+  .sec-right { display: flex; align-items: center; gap: 9px; }
+  .sec-pct { font-family: "JetBrains Mono"; font-size: var(--fs-md); font-weight: 600; color: var(--t-2); }
+  .sec-track { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.045); overflow: hidden; }
+  .sec-fill { height: 100%; border-radius: 999px; width: 0; transition: width 900ms cubic-bezier(.2,.7,.2,1); }
+  .fill-crit { background: linear-gradient(90deg, var(--accent-2), var(--crit)); }
+  .fill-high { background: linear-gradient(90deg, var(--accent-2), var(--high)); }
+  .fill-elev { background: linear-gradient(90deg, rgba(150,160,172,0.3), var(--elev)); }
+  .sec-tag { font-family: "Space Grotesk"; font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
+  .tag-crit { color: var(--crit); } .tag-high { color: var(--high); } .tag-elev { color: var(--elev); }
+
+  /* ─────────────── NEWS FEED ─────────────── */
+  .feed { padding: 9px; display: flex; flex-direction: column; gap: 8px; }
+  .newscard {
+    position: relative; padding: 13px 15px; border-radius: var(--radius-sm);
+    background: var(--card-bg); border: 1px solid var(--border-3); cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  }
+  .newscard:hover { background: var(--card-bg-hover); border-color: var(--border-1); transform: translateX(2px); }
+  .newscard.sel {
+    background: linear-gradient(180deg, var(--accent-bg), var(--accent-bg-soft));
+    border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35);
+  }
+  .newscard.sel::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2.5px; background: var(--accent); border-radius: 0 3px 3px 0; box-shadow: 0 0 9px var(--accent-glow); }
+  .nc-title { font-family: "Space Grotesk"; font-size: var(--fs-md); font-weight: 500; line-height: 1.36; color: var(--t-1); margin-bottom: 7px; text-wrap: pretty; }
+  .nc-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+  .nc-src { font-size: var(--fs-xs); font-weight: 600; color: var(--silver); }
+  .nc-dot { width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--t-6); }
+  .nc-time { font-family: "JetBrains Mono"; font-size: var(--fs-xs); color: var(--t-5); }
+  .nc-sum { font-size: var(--fs-base); line-height: 1.5; color: var(--t-4); margin-bottom: 10px; text-wrap: pretty; }
+  .nc-badges { display: flex; align-items: center; gap: 6px; }
+
+  /* ─────────────── CONTEXT ─────────────── */
+  .context { padding: 2px 0; }
+  .ctx-row { padding: 11px 16px; border-bottom: 1px solid var(--border-3); }
+  .ctx-row:last-child { border-bottom: none; }
+  .ctx-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-5); margin-bottom: 5px; }
+  .ctx-label svg { width: 11px; height: 11px; opacity: 0.75; }
+  .ctx-val { font-size: var(--fs-md); font-weight: 600; color: var(--t-2); line-height: 1.4; }
+  .ctx-val.body { font-size: var(--fs-base); font-weight: 400; color: var(--t-3); line-height: 1.56; }
+  .ctx-foot { padding: 12px 16px; display: flex; flex-direction: column; gap: 11px; border-top: 1px solid var(--border-2); }
+  .ctx-pair { display: flex; align-items: center; justify-content: space-between; }
+  .ctx-k { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--t-5); }
+  .ctx-v { font-family: "JetBrains Mono"; font-size: var(--fs-base); font-weight: 500; color: var(--t-3); }
+  .pips { display: flex; align-items: center; gap: 8px; }
+  .pip-row { display: flex; gap: 3px; }
+  .pip { width: 13px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); }
+  .pip.on-crit { background: var(--crit); } .pip.on-high { background: var(--high); } .pip.on-silver { background: var(--silver); }
+  .pip-lbl { font-family: "Space Grotesk"; font-size: var(--fs-xs); font-weight: 600; }
+
+  .grow { flex: 1; }
+  .ctx-fade { animation: ctx-fade 380ms ease; }
+  @keyframes ctx-fade { from { opacity: 0.25; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP NAV -->
+  <header class="topnav">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <span class="brand-name">Taipan<b>Monitor</b></span>
+    </div>
+    <nav class="topnav-tabs">
+      <div class="tab">Monitor</div>
+      <div class="tab">Intel Watch</div>
+      <div class="tab active">Cyber News</div>
+      <div class="tab">Defense Industry</div>
+      <div class="tab">Policy</div>
+      <div class="tab">Sources</div>
+    </nav>
+    <div class="topnav-right">
+      <div class="threat-meter">
+        <span class="tm-label">Threat Lvl</span>
+        <span class="tm-bars" id="threatBars"></span>
+      </div>
+      <div class="clock mono" id="clock">00:00:00</div>
+      <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+      <div class="avatar disp">AB</div>
+    </div>
+  </header>
+
+  <!-- TICKER -->
+  <div class="ticker">
+    <div class="ticker-tag"><span class="dot"></span>Live Feed</div>
+    <div class="ticker-viewport"><div class="ticker-track" id="tickerTrack"></div></div>
+  </div>
+
+  <div class="body">
+    <!-- LEFT RAIL -->
+    <aside class="rail">
+      <div class="rail-logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+      <button class="rail-icon active" title="Global View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></button>
+      <button class="rail-icon" title="SOCMINT"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+      <button class="rail-icon" title="Air Track"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.5.5 0 0 0-.5.8L9 11l-2 4-2.5.5a.5.5 0 0 0-.3.8L7 19l2 2.8a.5.5 0 0 0 .8-.3L10 19l4-2 3.2 4.7a.5.5 0 0 0 .8-.3Z"/></svg></button>
+      <button class="rail-icon" title="Ship Track"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14l1.5 5h15L21 14M12 3v11M5 14V9h14v5M8 9V6h8v3"/></svg></button>
+      <button class="rail-icon" title="Bookmarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+      <button class="rail-icon" title="Analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M8 17V9M13 17V5M18 17v-6"/></svg></button>
+      <div class="rail-spacer"></div>
+      <div class="rail-divider"></div>
+      <button class="rail-icon" title="Exit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <!-- LEFT COLUMN -->
+      <div class="col col-left">
+        <div class="panel grow" style="animation-delay:0ms">
+          <div class="panel-head">
+            <div class="panel-head-l">
+              <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+              <span class="panel-title">Global Threat Map</span>
+            </div>
+            <div class="live-pill"><span class="dot"></span>Live</div>
+          </div>
+          <div class="map-wrap">
+            <canvas id="globe"></canvas>
+          </div>
+          <div class="map-info">
+            <div class="k"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--accent-glow);"></span><span class="lbl">Session IP</span><span class="val">185.234.219.102</span></div>
+            <span class="sep">Istanbul, Türkiye</span>
+            <span class="badge b-elev">ISP</span>
+            <span class="sep">Türk Telekom</span>
+            <div class="grow"></div>
+            <div class="k"><span class="lbl">Active Arcs</span><span class="val acc mono" id="statArcs">0</span></div>
+            <span class="sep">·</span>
+            <div class="k"><span class="lbl">Hotspots</span><span class="val mono" id="statHot">0</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:var(--gap);flex-shrink:0;height:264px;">
+          <div class="panel" style="flex:0 0 304px;animation-delay:80ms">
+            <div class="panel-head">
+              <div class="panel-head-l">
+                <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+                <span class="panel-title">Most Mentioned Regions</span>
+              </div>
+            </div>
+            <div class="panel-body ranklist" id="regionList"></div>
+          </div>
+
+          <div class="panel" style="flex:1;animation-delay:120ms">
+            <div class="panel-head">
+              <div class="panel-head-l">
+                <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                <span class="panel-title">Affected Sectors</span>
+              </div>
+            </div>
+            <div class="panel-body sectors" id="sectorList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER COLUMN -->
+      <div class="col col-center">
+        <div class="panel grow" style="animation-delay:60ms">
+          <div class="panel-head">
+            <div class="panel-head-l">
+              <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h10l4 4v16M4 22h16M8 7h6M8 11h8M8 15h8"/></svg>
+              <span class="panel-title">Cyber Security News</span>
+            </div>
+            <div class="live-pill"><span class="dot"></span>Live</div>
+          </div>
+          <div class="panel-body feed" id="feed"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="col col-right">
+        <div class="panel grow" style="animation-delay:100ms">
+          <div class="panel-head">
+            <div class="panel-head-l">
+              <svg class="ph-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span class="panel-title">Threat Context</span>
+            </div>
+            <div class="live-pill" id="ctxSrc" style="color:var(--silver-dim)">—</div>
+          </div>
+          <div class="panel-body context" id="context"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3-array@3.2.4/dist/d3-array.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-geo@3.1.1/dist/d3-geo.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="cyber-app.js"></script>
+
+<!-- Tweaks -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks-app.jsx"></script>
+</body>
+</html>

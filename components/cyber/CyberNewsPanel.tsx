@@ -1,57 +1,118 @@
 "use client";
 import { useState } from "react";
-import { Shield } from "lucide-react";
+import { Newspaper } from "lucide-react";
 import { cyberNewsItems, type CyberNewsItem } from "@/data/cyberMockData";
 
-const SEV: Record<string, { text: string; bg: string; border: string }> = {
-  critical: { text: "var(--sev-critical-text)", bg: "var(--sev-critical-bg)", border: "var(--sev-critical-border)" },
-  high: { text: "var(--sev-high-text)", bg: "var(--sev-high-bg)", border: "var(--sev-high-border)" },
-  medium: { text: "var(--sev-medium-text)", bg: "var(--sev-medium-bg)", border: "var(--sev-medium-border)" },
-  low: { text: "var(--sev-low-text)", bg: "var(--sev-low-bg)", border: "var(--sev-low-border)" },
+/* Severity → UI badge token map (red-dominant family; low folds into Elevated/silver) */
+const SEV_BADGE: Record<string, { text: string; bg: string; border: string }> = {
+  critical: { text: "var(--c-crit)", bg: "var(--c-crit-bg)", border: "var(--c-crit-border)" },
+  high: { text: "var(--c-high)", bg: "var(--c-high-bg)", border: "var(--c-high-border)" },
+  medium: { text: "var(--c-med)", bg: "var(--c-med-bg)", border: "var(--c-med-border)" },
+  low: { text: "var(--c-elev)", bg: "var(--c-elev-bg)", border: "var(--c-elev-border)" },
 };
 
 function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelected: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
-  const sev = SEV[item.severityLevel] ?? SEV.low;
+  const sev = SEV_BADGE[item.severityLevel] ?? SEV_BADGE.low;
+
   return (
     <div
       onClick={onClick}
-      className="relative cursor-pointer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      className="relative cursor-pointer"
       style={{
-        background: isSelected ? "linear-gradient(180deg, rgba(225,40,52,0.08), rgba(225,40,52,0.02))" : hovered ? "var(--bg-surface-hover)" : "var(--bg-surface)",
-        border: isSelected ? "1px solid var(--accent-blue-border)" : hovered ? "1px solid var(--border-hover)" : "1px solid var(--border-subtle)",
-        borderRadius: "var(--radius-md)",
-        padding: "10px 12px 10px 14px",
-        marginBottom: "6px",
-        transition: "all 120ms ease",
+        background: isSelected
+          ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
+          : hovered
+            ? "var(--c-card-bg-hover)"
+            : "var(--c-card-bg)",
+        border: isSelected
+          ? "1px solid var(--c-accent-border)"
+          : hovered
+            ? "1px solid var(--c-border-1)"
+            : "1px solid var(--c-border-3)",
+        borderRadius: "var(--c-radius-sm)",
+        padding: "13px 15px",
+        boxShadow: isSelected ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)" : "none",
+        transform: hovered && !isSelected ? "translateX(2px)" : "translateX(0)",
+        transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
       }}
     >
-      {/* Active Selection Indicator */}
+      {/* Selected accent bar */}
       {isSelected && (
-        <div className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: "var(--accent-blue-text)", borderRadius: "var(--radius-md) 0 0 var(--radius-md)" }} />
+        <span
+          className="absolute"
+          style={{
+            left: 0,
+            top: 12,
+            bottom: 12,
+            width: "2.5px",
+            background: "var(--c-accent)",
+            borderRadius: "0 3px 3px 0",
+            boxShadow: "0 0 9px var(--c-accent-glow)",
+          }}
+        />
       )}
-      {/* Headline */}
-      <p className="line-clamp-2 leading-snug mb-1.5" style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: hovered ? "var(--text-heading)" : "var(--text-body)" }}>
+
+      {/* Title */}
+      <p
+        className="c-disp"
+        style={{ fontSize: "var(--c-fs-md)", fontWeight: 500, lineHeight: 1.36, color: "var(--c-t1)", marginBottom: 7 }}
+      >
         {item.headline}
       </p>
-      {/* Source / time */}
-      <div className="flex items-center gap-1.5 mb-2">
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)", fontWeight: 500 }}>{item.source}</span>
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>{item.timeAgo}</span>
+
+      {/* Meta */}
+      <div className="flex items-center gap-[7px]" style={{ marginBottom: 8 }}>
+        <span style={{ fontSize: "var(--c-fs-xs)", fontWeight: 600, color: "var(--c-silver)" }}>{item.source}</span>
+        <span style={{ width: 2.5, height: 2.5, borderRadius: "50%", background: "var(--c-t6)" }} />
+        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t5)" }}>{item.timeAgo}</span>
       </div>
+
       {/* Summary */}
-      <p className="mb-2.5 leading-relaxed" style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+      <p style={{ fontSize: "var(--c-fs-base)", lineHeight: 1.5, color: "var(--c-t4)", marginBottom: 10 }}>
         {item.summary}
       </p>
-      {/* Tags */}
-      <div className="flex items-center gap-1.5">
-        <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "var(--fs-2xs)", fontWeight: 600, color: "var(--silver)", background: "var(--silver-bg)", border: "1px solid var(--silver-border)" }}>
+
+      {/* Badges */}
+      <div className="flex items-center gap-[6px]">
+        <span
+          className="c-disp"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "2.5px 7px",
+            borderRadius: "var(--c-radius-xs)",
+            fontSize: "var(--c-fs-2xs)",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--c-elev)",
+            background: "var(--c-elev-bg)",
+            border: "1px solid var(--c-elev-border)",
+            whiteSpace: "nowrap",
+          }}
+        >
           {item.categoryTag}
         </span>
-        <span className="px-1.5 py-0.5 rounded uppercase" style={{ fontSize: "var(--fs-2xs)", fontWeight: 700, background: sev.bg, color: sev.text, border: `1px solid ${sev.border}` }}>
+        <span
+          className="c-disp"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "2.5px 7px",
+            borderRadius: "var(--c-radius-xs)",
+            fontSize: "var(--c-fs-2xs)",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: sev.text,
+            background: sev.bg,
+            border: `1px solid ${sev.border}`,
+            whiteSpace: "nowrap",
+          }}
+        >
           {item.severityTag}
         </span>
       </div>
@@ -61,30 +122,30 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
 
 export function CyberNewsPanel({ selectedNewsId, onSelectNews }: { selectedNewsId: string; onSelectNews: (id: string) => void }) {
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
+    <div className="cyber-panel h-full">
       {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0 px-3.5 py-2.5" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <div className="flex items-center gap-2">
-          <Shield size={12} style={{ color: "var(--silver-dim)" }} />
-          <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cyber Security News</span>
+      <div className="cyber-panel-head">
+        <div className="flex items-center gap-[9px]">
+          <Newspaper size={15} style={{ color: "var(--c-silver-dim)" }} />
+          <span className="cyber-panel-title">Cyber Security News</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--sev-critical-text)", animation: "pulse 2s infinite" }} />
-          <span style={{ fontSize: "var(--fs-xs)", color: "var(--sev-critical-text)", fontWeight: 600 }}>LIVE</span>
+        <div className="cyber-live-pill">
+          <span className="dot" />
+          Live
         </div>
       </div>
+
       {/* Feed */}
-      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-2 cyber-scrollbar">
-        {cyberNewsItems.map(item => (
-          <NewsCard 
-            key={item.id} 
-            item={item} 
+      <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col gap-2" style={{ padding: 9 }}>
+        {cyberNewsItems.map((item) => (
+          <NewsCard
+            key={item.id}
+            item={item}
             isSelected={item.id === selectedNewsId}
             onClick={() => onSelectNews(item.id)}
           />
         ))}
       </div>
-
     </div>
   );
 }

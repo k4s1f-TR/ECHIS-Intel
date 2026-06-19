@@ -1,42 +1,54 @@
-import { Shield, MapPin, Crosshair, Users, Target, FileText, Flag, Building, Server } from "lucide-react";
+"use client";
+import { Crosshair, Landmark, Building2, ShieldAlert, Zap, Users, Target, Building, FileText } from "lucide-react";
 import { cyberNewsItems } from "@/data/cyberMockData";
 
-const G = { accent: "var(--silver)", dim: "var(--silver-dim)", text: "var(--silver)" };
-
-function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+function CtxRow({ icon: Icon, label, value, body }: { icon: React.ElementType; label: string; value: string; body?: boolean }) {
   return (
-    <div className="flex items-center gap-2 mb-1">
-      <Icon size={11} style={{ color: "var(--silver-dim)", flexShrink: 0 }} />
-      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>{label}</span>
-    </div>
-  );
-}
-
-function SectionValue({ children }: { children: React.ReactNode }) {
-  return <p style={{ fontSize: "var(--fs-md)", fontWeight: 500, color: "var(--text-body)", marginBottom: "12px", paddingLeft: "19px" }}>{children}</p>;
-}
-
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>{label}</span>
-      <span style={{ fontSize: "var(--fs-sm)", fontWeight: 500, color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>{value}</span>
-    </div>
-  );
-}
-
-function StatusBar({ label, level, color }: { label: string; level: number; color: string }) {
-  return (
-    <div className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-      <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>{label}</span>
-      <div className="flex items-center gap-2.5">
-        <div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} style={{ width: 14, height: 4, borderRadius: 1, background: i <= level ? color : "var(--border-dim)" }} />
-          ))}
-        </div>
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color, minWidth: 28 }}>{level >= 4 ? "High" : level === 3 ? "Med" : "Low"}</span>
+    <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--c-border-3)" }}>
+      <div
+        className="flex items-center gap-[6px]"
+        style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--c-t5)", marginBottom: 5 }}
+      >
+        <Icon size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
+        {label}
       </div>
+      <div
+        style={{
+          fontSize: body ? "var(--c-fs-base)" : "var(--c-fs-md)",
+          fontWeight: body ? 400 : 600,
+          color: body ? "var(--c-t3)" : "var(--c-t2)",
+          lineHeight: body ? 1.56 : 1.4,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Pips({ level, kind }: { level: number; kind: "silver" | "crit" }) {
+  const on = kind === "crit" ? "var(--c-crit)" : "var(--c-silver)";
+  return (
+    <div className="flex gap-[3px]">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          style={{ width: 13, height: 4, borderRadius: 2, background: i < level ? on : "rgba(255,255,255,0.08)" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CtxPair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-t5)" }}>
+        {label}
+      </span>
+      <span className="c-mono" style={{ fontSize: "var(--c-fs-base)", fontWeight: 500, color: "var(--c-t3)" }}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -46,61 +58,52 @@ export function ThreatContextPanel({ selectedNewsId }: { selectedNewsId?: string
   const ctx = selectedNews.context;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35)" }}>
+    <div className="cyber-panel h-full">
       {/* Header */}
-      <div className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-dim)" }}>
-        <Shield size={12} style={{ color: G.dim }} />
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Threat Context</span>
+      <div className="cyber-panel-head">
+        <div className="flex items-center gap-[9px]">
+          <Crosshair size={15} style={{ color: "var(--c-silver-dim)" }} />
+          <span className="cyber-panel-title">Threat Context</span>
+        </div>
+        <span className="cyber-live-pill" style={{ color: "var(--c-silver-dim)" }}>
+          {selectedNews.source}
+        </span>
       </div>
 
-      {/* Content */}
-      <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col cyber-scrollbar">
-        <SectionLabel icon={Flag} label="Country" />
-        <div className="flex items-center gap-2 mb-3" style={{ paddingLeft: 19 }}>
-          <span style={{ fontSize: "var(--fs-md)", fontWeight: 500, color: "var(--text-body)" }}>{ctx.country}</span>
-        </div>
+      {/* Content (re-keyed → 380ms fade on selection change) */}
+      <div key={selectedNews.id} className="cyber-ctx-fade tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <CtxRow icon={Landmark} label="Country / Region" value={ctx.country} />
+        <CtxRow icon={Building2} label="Affected Entity / Organization" value={ctx.affectedEntity} />
+        <CtxRow icon={ShieldAlert} label="Hack Incident" value={ctx.hackIncident} />
+        <CtxRow icon={Zap} label="Attack Type / Vector" value={ctx.attackTypeVector} />
+        <CtxRow icon={Users} label="Threat Actor / Group" value={ctx.threatActorGroup} />
+        <CtxRow icon={Target} label="Target / Asset" value={ctx.targetAsset} />
+        <CtxRow icon={Building} label="Target Sector" value={ctx.targetSector} />
+        <CtxRow icon={FileText} label="Summary" value={ctx.contextSummary} body />
 
-        <SectionLabel icon={Building} label="Affected Entity / Organization" />
-        <SectionValue>{ctx.affectedEntity}</SectionValue>
-
-        <SectionLabel icon={Crosshair} label="Hack Incident" />
-        <SectionValue>{ctx.hackIncident}</SectionValue>
-
-        <SectionLabel icon={Target} label="Attack Type / Vector" />
-        <SectionValue>{ctx.attackTypeVector}</SectionValue>
-
-        <SectionLabel icon={Users} label="Threat Actor / Group" />
-        <SectionValue>{ctx.threatActorGroup}</SectionValue>
-
-        <SectionLabel icon={Server} label="Target / Asset" />
-        <SectionValue>{ctx.targetAsset}</SectionValue>
-
-        <SectionLabel icon={MapPin} label="Target Sector" />
-        <SectionValue>{ctx.targetSector}</SectionValue>
-
-        <SectionLabel icon={FileText} label="Summary" />
-        <p style={{ fontSize: "var(--fs-base)", fontWeight: 400, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 16, paddingLeft: 19 }}>
-          {ctx.contextSummary}
-        </p>
-
-        <div className="mt-auto" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
-          <MetaRow label="First Seen" value={ctx.firstSeen} />
-          <MetaRow label="Last Update" value={ctx.lastUpdate} />
-          <StatusBar label="Confidence" level={ctx.confidenceLevel} color="var(--silver)" />
-          <div className="flex items-center justify-between py-2">
-            <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Impact</span>
-            <div className="flex items-center gap-2.5">
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} style={{ width: 14, height: 4, borderRadius: 1, background: i <= ctx.impactLevel ? "var(--sev-critical-text)" : "var(--border-dim)" }} />
-                ))}
-              </div>
-              <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--sev-critical-text)", minWidth: 28 }}>{ctx.impact}</span>
+        {/* Footer */}
+        <div className="mt-auto flex flex-col gap-[11px]" style={{ padding: "12px 16px", borderTop: "1px solid var(--c-border-2)" }}>
+          <CtxPair label="First Seen" value={ctx.firstSeen} />
+          <CtxPair label="Last Update" value={ctx.lastUpdate} />
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-t5)" }}>
+              Confidence
+            </span>
+            <div className="flex items-center gap-2">
+              <Pips level={ctx.confidenceLevel} kind="silver" />
+              <span className="c-disp" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 600, color: "var(--c-silver)" }}>{ctx.confidence}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-t5)" }}>
+              Impact
+            </span>
+            <div className="flex items-center gap-2">
+              <Pips level={ctx.impactLevel} kind="crit" />
+              <span className="c-disp" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 600, color: "var(--c-crit)" }}>{ctx.impact}</span>
             </div>
           </div>
         </div>
-
-
       </div>
     </div>
   );
