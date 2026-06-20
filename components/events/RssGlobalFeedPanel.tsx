@@ -128,7 +128,7 @@ function SectionLabel({
     <div
       className="uppercase"
       style={{
-        color: accent ? "rgba(205,225,255,0.9)" : "rgba(148,163,184,0.72)",
+        color: accent ? "var(--accent-blue-text)" : "rgba(148,163,184,0.72)",
         fontSize: 10,
         fontWeight: 850,
         letterSpacing: "0.12em",
@@ -220,16 +220,16 @@ function RssItemDetailModal({
           transition: `opacity ${MODAL_ANIMATION_MS}ms ease, transform ${MODAL_ANIMATION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
           overflow: "hidden",
           borderRadius: 18,
-          background: "#070b0f",
+          background: "var(--bg-panel)",
           border: "1px solid rgba(255,255,255,0.12)",
-          boxShadow: "0 32px 90px rgba(0,0,0,0.55)",
+          boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0,0,0,0.55)",
           color: "rgba(232,238,244,0.94)",
           pointerEvents: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div style={{ height: 3, background: "#60a5fa", opacity: 0.95 }} />
+        <div style={{ height: 3, background: "var(--accent-blue-text)", opacity: 0.95 }} />
         <div
           style={{
             height: "calc(100% - 3px)",
@@ -247,8 +247,8 @@ function RssItemDetailModal({
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    background: "#60a5fa",
-                    boxShadow: "0 0 10px rgba(96,165,250,0.42)",
+                    background: "var(--accent-blue-text)",
+                    boxShadow: "0 0 10px var(--accent-blue-glow)",
                     flex: "0 0 auto",
                   }}
                 />
@@ -281,9 +281,9 @@ function RssItemDetailModal({
                 className="uppercase"
                 style={{
                   borderRadius: 4,
-                  border: "1px solid rgba(96,165,250,0.34)",
-                  background: "rgba(96,165,250,0.1)",
-                  color: "rgba(205,225,255,0.95)",
+                  border: "1px solid var(--accent-blue-border)",
+                  background: "var(--accent-blue-bg)",
+                  color: "var(--accent-blue-text)",
                   padding: "5px 7px",
                   fontSize: 10,
                   fontWeight: 800,
@@ -386,14 +386,14 @@ function RssItemDetailModal({
                 style={{
                   fontSize: 12,
                   fontWeight: 500,
-                  color: "rgba(96,165,250,0.8)",
+                  color: "var(--accent-blue-text)",
                   textDecoration: "none",
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = "rgba(147,197,253,0.95)";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(255,86,96,1)";
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = "rgba(96,165,250,0.8)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)";
                 }}
               >
                 <ExternalLink size={12} />
@@ -440,14 +440,14 @@ function RssFeedCard({
   }
 
   const activeBorder = isSelected
-    ? "rgba(96,165,250,0.38)"
+    ? "var(--accent-blue-border)"
     : isOpen
-      ? "rgba(96,165,250,0.22)"
+      ? "rgba(240,64,76,0.22)"
       : "rgba(255,255,255,0.055)";
   const activeBg = isSelected
-    ? "rgba(59,130,246,0.08)"
+    ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
     : isOpen
-      ? "rgba(59,130,246,0.04)"
+      ? "rgba(236,47,59,0.04)"
       : "rgba(255,255,255,0.018)";
 
   return (
@@ -488,7 +488,7 @@ function RssFeedCard({
             fontSize: "9px",
             fontWeight: 700,
             background: "rgba(255,255,255,0.07)",
-            color: "rgba(120,140,170,0.9)",
+            color: "var(--c-t5)",
           }}
         >
           {index}
@@ -497,7 +497,7 @@ function RssFeedCard({
           className="flex-1 leading-snug font-medium pr-1 line-clamp-2"
           style={{
             fontSize: "12.5px",
-            color: "rgba(190,208,230,0.85)",
+            color: "var(--c-t3)",
           }}
         >
           {item.title}
@@ -511,24 +511,24 @@ function RssFeedCard({
             marginTop: 2,
             width: 18,
             height: 18,
-            color: isOpen ? "rgba(96,165,250,0.9)" : "rgba(70,90,120,0.65)",
-            background: isOpen ? "rgba(59,130,246,0.15)" : "transparent",
-            border: isOpen ? "1px solid rgba(96,165,250,0.25)" : "1px solid transparent",
+            color: isOpen ? "var(--accent-blue-text)" : "var(--c-t6)",
+            background: isOpen ? "var(--accent-blue-bg-strong)" : "transparent",
+            border: isOpen ? "1px solid var(--accent-blue-border)" : "1px solid transparent",
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.color = isOpen
-              ? "rgba(147,197,253,0.95)"
-              : "rgba(147,197,253,0.9)";
+              ? "var(--accent-blue-text)"
+              : "rgba(255,86,96,0.9)";
             (e.currentTarget as HTMLElement).style.background = isOpen
-              ? "rgba(59,130,246,0.22)"
-              : "rgba(59,130,246,0.08)";
+              ? "var(--accent-blue-bg-strong)"
+              : "var(--accent-blue-bg)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.color = isOpen
-              ? "rgba(96,165,250,0.9)"
-              : "rgba(70,90,120,0.65)";
+              ? "var(--accent-blue-text)"
+              : "var(--c-t6)";
             (e.currentTarget as HTMLElement).style.background = isOpen
-              ? "rgba(59,130,246,0.15)"
+              ? "var(--accent-blue-bg-strong)"
               : "transparent";
           }}
         >
@@ -543,15 +543,15 @@ function RssFeedCard({
             marginTop: 2,
             width: 18,
             height: 18,
-            color: "rgba(70,90,120,0.65)",
+            color: "var(--c-t6)",
             background: "transparent",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "rgba(147,197,253,0.9)";
-            (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.08)";
+            (e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)";
+            (e.currentTarget as HTMLElement).style.background = "var(--accent-blue-bg)";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "rgba(70,90,120,0.65)";
+            (e.currentTarget as HTMLElement).style.color = "var(--c-t6)";
             (e.currentTarget as HTMLElement).style.background = "transparent";
           }}
         >
@@ -560,7 +560,7 @@ function RssFeedCard({
       </div>
 
       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap" style={{ fontSize: "10.5px" }}>
-        <span style={{ color: "rgba(130,150,170,0.8)", fontWeight: 500 }}>
+        <span style={{ color: "var(--c-silver-dim)", fontWeight: 500 }}>
           {item.sourceName}
         </span>
         {item.publishedAt && (
@@ -574,7 +574,7 @@ function RssFeedCard({
       {item.summary && (
         <p
           className="leading-relaxed line-clamp-2"
-          style={{ fontSize: "11.5px", color: "rgba(105,105,105,0.9)" }}
+          style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
         >
           {item.summary}
         </p>
@@ -616,7 +616,7 @@ function LoadingSkeleton() {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            background: "rgba(59,130,246,0.35)",
+            background: "rgba(236,47,59,0.35)",
             display: "inline-block",
             animation: "pulse 1.6s ease-in-out infinite",
           }}
@@ -660,8 +660,9 @@ export function RssGlobalFeedPanel({
         className="flex h-full max-h-full min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
         style={{
           width: "100%",
-          background: "rgba(12,12,12,0.97)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
+          boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
         }}
       >
         <div
@@ -669,7 +670,7 @@ export function RssGlobalFeedPanel({
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
         >
           <div className="flex items-center gap-2">
-            <Rss size={10} style={{ color: "rgba(96,165,250,0.45)" }} />
+            <Rss size={10} style={{ color: "rgba(250,86,96,0.45)" }} />
             <span
               className="font-semibold tracking-widest uppercase"
               style={{ fontSize: "10px", color: "rgba(170,170,170,0.8)" }}
@@ -696,9 +697,9 @@ export function RssGlobalFeedPanel({
                 fontSize: "7.5px",
                 fontWeight: 700,
                 letterSpacing: "0.07em",
-                color: "rgba(96,165,250,0.65)",
-                background: "rgba(59,130,246,0.07)",
-                border: "1px solid rgba(59,130,246,0.14)",
+                color: "rgba(250,86,96,0.65)",
+                background: "rgba(236,47,59,0.07)",
+                border: "1px solid rgba(236,47,59,0.14)",
               }}
             >
               Live Sources
@@ -729,7 +730,7 @@ export function RssGlobalFeedPanel({
               flexDirection: "column",
               gap: "6px",
               scrollbarWidth: "thin",
-              scrollbarColor: "rgba(59,130,246,0.18) transparent",
+              scrollbarColor: "rgba(236,47,59,0.18) transparent",
             }}
           >
             {items.length === 0 ? (

@@ -51,20 +51,30 @@ export function HeaderNav({
       className="flex items-center flex-shrink-0 px-5"
       style={{
         height: "52px",
-        background: "#000000",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+        background: "linear-gradient(180deg, #09090b 0%, #050506 100%)",
+        borderBottom: "1px solid var(--c-border-2)",
+        boxShadow: "0 1px 0 rgba(255,255,255,0.035) inset",
       }}
     >
       {/* Brand */}
-      <div className="flex flex-col justify-center mr-10" style={{ minWidth: "190px" }}>
+      <div className="flex flex-col justify-center mr-10" style={{ minWidth: "208px" }}>
         <span
-          className="leading-tight font-bold tracking-tight"
+          className="leading-none font-bold uppercase"
           style={{
-            fontSize: "15px",
-            color: "var(--text-primary)",
+            fontFamily: "var(--font-display), 'Space Grotesk', sans-serif",
+            fontSize: "20px",
+            fontWeight: 700,
+            letterSpacing: "0.18em",
+            background: "linear-gradient(180deg, #ff5d6a 0%, #ff3548 52%, #d4172a 100%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            WebkitTextStroke: "0.8px #ff3548",
+            color: "#ff3548",
+            filter: "drop-shadow(0 1px 6px rgba(255,43,61,0.26))",
           }}
         >
-          TaipanMonitor
+          E C H I S
         </span>
       </div>
 

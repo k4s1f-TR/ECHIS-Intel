@@ -37,9 +37,9 @@ const PRIORITY_STYLE: Record<
     border: "rgba(250, 204, 21, 0.2)",
   },
   LOW: {
-    color: "rgba(148, 163, 184, 0.8)",
-    bg: "rgba(255, 255, 255, 0.05)",
-    border: "rgba(255, 255, 255, 0.1)",
+    color: "var(--c-elev)",
+    bg: "var(--c-elev-bg)",
+    border: "var(--c-elev-border)",
   },
 };
 
@@ -65,14 +65,14 @@ function FilterPill({
         padding: "3px 8px",
         borderRadius: 4,
         border: active
-          ? "1px solid rgba(96, 165, 250, 0.35)"
+          ? "1px solid var(--accent-blue-border)"
           : "1px solid rgba(255, 255, 255, 0.08)",
         background: active
-          ? "rgba(96, 165, 250, 0.12)"
+          ? "var(--accent-blue-bg)"
           : "rgba(255, 255, 255, 0.04)",
         color: active
-          ? "rgba(180, 205, 235, 0.92)"
-          : "rgba(110, 125, 145, 0.8)",
+          ? "var(--accent-blue-text)"
+          : "var(--c-t5)",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -154,7 +154,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
             margin: "-16px -20px 0",
             padding: "14px 20px 12px",
             background: "var(--bg-panel)",
-            borderBottom: "1px solid rgba(51, 65, 85, 0.25)",
+            borderBottom: "1px solid var(--c-border-2)",
           }}
         >
           <input
@@ -169,7 +169,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
               borderRadius: 4,
               padding: "6px 10px",
               fontSize: 11,
-              color: "rgba(195, 208, 225, 0.9)",
+              color: "var(--c-t2)",
               outline: "none",
             }}
           />
@@ -261,7 +261,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                         whiteSpace: "nowrap",
                         fontSize: 11,
                         fontWeight: 500,
-                        color: "rgba(195, 208, 225, 0.9)",
+                        color: "var(--c-t2)",
                       }}
                     >
                       {entry.region}
@@ -323,7 +323,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                           width: `${entry.confidence}%`,
                           height: "100%",
                           borderRadius: 1,
-                          background: "rgba(96, 165, 250, 0.5)",
+                          background: "rgba(236, 47, 59, 0.5)",
                         }}
                       />
                     </div>

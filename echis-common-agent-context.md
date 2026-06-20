@@ -1,4 +1,4 @@
-# TaipanMonitor — Ortak Agent Bağlamı
+# ECHIS — Ortak Agent Bağlamı
 
 Bu dosyayı Claude / Codex gibi kod agent’larına **kalıcı proje bağlamı** olarak ver.
 
@@ -6,7 +6,7 @@ Bundan sonraki görev promptlarında bu dosyayı tekrar yazma.
 Görev promptu sadece şu bilgileri içersin:
 
 ```text
-Use the shared TaipanMonitor agent context.
+Use the shared ECHIS agent context.
 
 Task:
 ...
@@ -31,11 +31,11 @@ tasarım dili, validasyon ve genel davranış kurallarını ortaklaştırır.
 
 ## 1. Proje Kimliği
 
-Proje: **TaipanMonitor**
+Proje: **ECHIS**
 
-Görünür ürün/UI markası **TaipanMonitor** olmalı.
+Görünür ürün/UI markası **ECHIS** olmalı.
 
-TaipanMonitor; frontend-only, dark premium, OSINT / situational awareness /
+ECHIS; frontend-only, dark premium, OSINT / situational awareness /
 intelligence monitoring dashboard prototipidir.
 
 UI hissi:
@@ -798,7 +798,7 @@ Agent final raporu kompakt olmalı.
 Bundan sonraki promptlar bu dosyayı referans alsın:
 
 ```text
-Use the shared TaipanMonitor agent context.
+Use the shared ECHIS agent context.
 
 Task:
 ...

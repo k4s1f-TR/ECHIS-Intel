@@ -30,10 +30,10 @@ const LABEL_STYLE = {
 } as const;
 
 const DROPDOWN_STYLE = {
-  background: "rgba(12,12,12,0.98)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--bg-panel)",
+  border: "1px solid var(--c-border-1)",
   backdropFilter: "blur(14px)",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+  boxShadow: "var(--shadow-inset-highlight), 0 8px 24px rgba(0,0,0,0.6)",
 } as const;
 
 function itemStyle(active: boolean) {
@@ -43,8 +43,8 @@ function itemStyle(active: boolean) {
     textAlign: "left" as const,
     padding: "7px 12px",
     fontSize: "12px",
-    color: active ? "rgba(147,197,253,0.9)" : "rgba(170,170,170,0.8)",
-    background: active ? "rgba(59,130,246,0.08)" : "transparent",
+    color: active ? "var(--accent-blue-text)" : "rgba(170,170,170,0.8)",
+    background: active ? "var(--accent-blue-bg)" : "transparent",
     cursor: "pointer",
   };
 }
@@ -99,8 +99,8 @@ export function FloatingMonitoringCard({
         }}
         style={{
           padding: "10px 12px",
-          background: "rgba(12,12,12,0.9)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
           backdropFilter: "blur(14px)",
           boxShadow:
             "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
@@ -124,8 +124,8 @@ export function FloatingMonitoringCard({
       className="absolute top-4 left-4 rounded-xl z-30"
       style={{
         padding: "14px 16px",
-        background: "rgba(12,12,12,0.88)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
         backdropFilter: "blur(14px)",
         minWidth: "206px",
         boxShadow:
@@ -334,7 +334,7 @@ export function FloatingMonitoringCard({
           <div className="flex flex-col pb-0.5">
             <span
               className="font-semibold leading-tight"
-              style={{ fontSize: "11px", color: "rgba(74,222,128,0.85)" }}
+              style={{ fontSize: "11px", color: "var(--c-elev)" }}
             >
               ↑ 12%
             </span>

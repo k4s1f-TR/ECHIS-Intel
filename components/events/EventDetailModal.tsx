@@ -83,9 +83,9 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
           transition: `opacity ${MODAL_ANIMATION_MS}ms ease, transform ${MODAL_ANIMATION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
           overflow: "hidden",
           borderRadius: 18,
-          background: "#070b0f",
+          background: "var(--bg-panel)",
           border: "1px solid rgba(255, 255, 255, 0.12)",
-          boxShadow: "0 32px 90px rgba(0, 0, 0, 0.55)",
+          boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0, 0, 0, 0.55)",
           color: "rgba(232, 238, 244, 0.94)",
           pointerEvents: "auto",
         }}
@@ -95,7 +95,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
         <div
           style={{
             height: 3,
-            background: "#3b82f6",
+            background: "var(--accent-blue-text)",
             opacity: 0.95,
           }}
         />
@@ -115,8 +115,8 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    background: "#3b82f6",
-                    boxShadow: "0 0 10px rgba(59, 130, 246, 0.42)",
+                    background: "var(--accent-blue-text)",
+                    boxShadow: "0 0 10px var(--accent-blue-glow)",
                     flex: "0 0 auto",
                   }}
                 />
@@ -160,9 +160,9 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                 className="uppercase"
                 style={{
                   borderRadius: 4,
-                  border: "1px solid rgba(59, 130, 246, 0.34)",
-                  background: "rgba(59, 130, 246, 0.1)",
-                  color: "rgba(205, 225, 255, 0.95)",
+                  border: "1px solid var(--accent-blue-border)",
+                  background: "var(--accent-blue-bg)",
+                  color: "var(--accent-blue-text)",
                   padding: "5px 7px",
                   fontSize: 10,
                   fontWeight: 800,
@@ -225,7 +225,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                 rel="noreferrer"
                 className="break-all"
                 style={{
-                  color: "rgba(125, 170, 230, 0.94)",
+                  color: "var(--accent-blue-text)",
                   fontSize: 12,
                   fontWeight: 600,
                   lineHeight: 1.5,
@@ -325,7 +325,7 @@ function SectionLabel({
     <div
       className="uppercase"
       style={{
-        color: tone === "accent" ? "rgba(205, 225, 255, 0.9)" : "rgba(148, 163, 184, 0.72)",
+        color: tone === "accent" ? "var(--accent-blue-text)" : "rgba(148, 163, 184, 0.72)",
         fontSize: 10,
         fontWeight: 850,
         letterSpacing: "0.12em",

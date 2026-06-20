@@ -29,7 +29,7 @@ const SEV: Record<EventSeverity, { text: string; border: string; bg: string; acc
 };
 
 const PILL_ACTIVE: Record<SeverityFilter, { text: string; border: string; bg: string }> = {
-  all:      { text: "rgba(147,197,253,0.95)", border: "rgba(96,165,250,0.45)", bg: "rgba(96,165,250,0.1)" },
+  all:      { text: "var(--accent-blue-text)", border: "var(--accent-blue-border)", bg: "var(--accent-blue-bg)" },
   critical: { text: "var(--sev-critical-text)", border: "rgba(239,68,68,0.5)", bg: "rgba(239,68,68,0.12)" },
   high:     { text: "var(--sev-high-text)", border: "rgba(249,115,22,0.5)", bg: "rgba(249,115,22,0.12)" },
   medium:   { text: "var(--sev-medium-text)", border: "rgba(234,179,8,0.5)", bg: "rgba(234,179,8,0.12)" },
@@ -139,13 +139,13 @@ function SourceFilterDropdown({
         aria-expanded={open}
         onClick={toggleMenu}
         onKeyDown={handleTriggerKeyDown}
-        className="flex h-[32px] w-full items-center justify-between rounded-md px-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-blue-400/45"
+        className="flex h-[32px] w-full items-center justify-between rounded-md px-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-[#ec2f3b]/45"
         style={{
           fontSize: "var(--fs-sm)",
           color: "var(--text-secondary)",
           background: open ? "var(--border-dim)" : "var(--border-subtle)",
           border: open ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-primary)",
-          boxShadow: open ? "0 0 0 1px rgba(59,130,246,0.04)" : "none",
+          boxShadow: open ? "0 0 0 1px rgba(236,47,59,0.04)" : "none",
         }}
       >
         <span className="truncate">{selectedLabel}</span>
@@ -161,7 +161,7 @@ function SourceFilterDropdown({
           role="listbox"
           className="tm-scrollbar politics-feed-scrollbar absolute right-0 top-[36px] z-50 max-h-[186px] w-[220px] overflow-y-auto rounded-md py-1"
           style={{
-            background: "rgba(12,12,12,0.99)",
+            background: "var(--bg-panel)",
             border: "1px solid var(--border-hover)",
             boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
           }}
@@ -180,11 +180,11 @@ function SourceFilterDropdown({
                 className="flex w-full items-center px-2.5 py-2 text-left transition-colors duration-150"
                 style={{
                   background: selected
-                    ? "rgba(59,130,246,0.16)"
+                    ? "var(--accent-blue-bg-strong)"
                     : highlighted
                       ? "var(--bg-surface-active)"
                       : "transparent",
-                  color: selected ? "rgba(205,225,255,0.97)" : "var(--text-secondary)",
+                  color: selected ? "var(--accent-blue-text)" : "var(--text-secondary)",
                   fontSize: "var(--fs-sm)",
                   fontWeight: selected ? 600 : 500,
                 }}
@@ -423,10 +423,10 @@ function matchesPoliticalMonitor(event: OsintEvent, monitor: string) {
 /* ─── Side panel sub-components ────────────────────────────────── */
 function SignalRow({ label, value, change, up, detail }: SignalRowData) {
   const changeColor =
-    up === true  ? "rgba(74,222,128,0.85)"
+    up === true  ? "var(--c-med)"
     : up === false ? "rgba(239,68,68,0.85)"
     : "var(--text-muted)";
-  const detailUpColor = "rgba(74,222,128,0.85)";
+  const detailUpColor = "var(--c-med)";
   const detailDownColor = "rgba(239,68,68,0.85)";
   return (
     <div
@@ -564,9 +564,9 @@ function PoliticsSidePanel({
               style={{
                 background: active ? "var(--accent-blue-bg)" : "transparent",
                 border: active
-                  ? "1px solid rgba(59,130,246,0.18)"
+                  ? "1px solid var(--accent-blue-border)"
                   : "1px solid transparent",
-                color: active ? "rgba(180,210,250,0.94)" : "var(--text-muted)",
+                color: active ? "var(--accent-blue-text)" : "var(--text-muted)",
                 fontSize: "var(--fs-sm)",
                 fontWeight: active ? 600 : 500,
                 textAlign: "left",
@@ -627,8 +627,8 @@ function ListCard({
       onClick={onSelect}
       className="relative cursor-pointer"
       style={{
-        background: selected ? "rgba(59,130,246,0.06)" : "var(--bg-surface)",
-        border: selected ? "1px solid rgba(59,130,246,0.4)" : "1px solid var(--border-dim)",
+        background: selected ? "var(--accent-blue-bg)" : "var(--bg-surface)",
+        border: selected ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-dim)",
         borderRadius: "var(--radius-md)",
         padding: "10px 12px 10px 16px",
         marginBottom: "5px",
@@ -860,7 +860,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
           <button
             className="flex items-center gap-1 transition-colors duration-150"
             style={{ fontSize: "var(--fs-sm)", color: "var(--accent-blue-text)" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(147,197,253,0.9)")}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(255,86,96,1)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)")}
           >
             View all <ArrowRight size={10} />

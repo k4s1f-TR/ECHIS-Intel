@@ -56,9 +56,9 @@ const STATUS_STYLES: Record<
   { color: string; background: string; border: string }
 > = {
   active: {
-    color: "rgba(74,222,128,0.92)",
-    background: "rgba(22,101,52,0.14)",
-    border: "rgba(74,222,128,0.22)",
+    color: "var(--c-elev)",
+    background: "var(--c-elev-bg)",
+    border: "var(--c-elev-border)",
   },
   test: {
     color: "rgba(251,191,36,0.94)",
@@ -66,14 +66,14 @@ const STATUS_STYLES: Record<
     border: "rgba(251,191,36,0.22)",
   },
   candidate: {
-    color: "rgba(147,197,253,0.88)",
-    background: "rgba(30,64,175,0.12)",
-    border: "rgba(96,165,250,0.18)",
+    color: "rgba(150,170,196,0.88)",
+    background: "rgba(184,190,202,0.07)",
+    border: "rgba(184,190,202,0.18)",
   },
   disabled: {
-    color: "rgba(148,163,184,0.72)",
-    background: "rgba(51,65,85,0.14)",
-    border: "rgba(148,163,184,0.14)",
+    color: "var(--c-t5)",
+    background: "rgba(255,255,255,0.035)",
+    border: "var(--c-border-1)",
   },
 };
 
@@ -156,14 +156,14 @@ function Pill({
       border: "var(--border-primary)",
     },
     blue: {
-      color: "rgba(147,197,253,0.86)",
+      color: "var(--accent-blue-text)",
       background: "var(--accent-blue-bg)",
-      border: "rgba(96,165,250,0.18)",
+      border: "var(--accent-blue-border)",
     },
     green: {
-      color: "rgba(74,222,128,0.88)",
+      color: "var(--c-elev)",
       background: "var(--accent-green-bg)",
-      border: "rgba(74,222,128,0.19)",
+      border: "var(--accent-green-border)",
     },
     amber: {
       color: "rgba(251,191,36,0.9)",
@@ -217,14 +217,14 @@ function RuntimeStatePill({
 }) {
   const styles = {
     blue: {
-      color: "rgba(147,197,253,0.88)",
+      color: "var(--accent-blue-text)",
       background: "var(--accent-blue-bg)",
-      border: "rgba(96,165,250,0.2)",
+      border: "var(--accent-blue-border)",
     },
     green: {
-      color: "rgba(74,222,128,0.88)",
+      color: "var(--c-elev)",
       background: "var(--accent-green-bg)",
-      border: "rgba(74,222,128,0.2)",
+      border: "var(--accent-green-border)",
     },
     amber: {
       color: "rgba(251,191,36,0.9)",
@@ -275,8 +275,9 @@ function MetricTile({
     <div
       className="min-w-0 rounded-md px-3 py-2.5"
       style={{
-        background: "rgba(13,13,13,0.86)",
-        border: "1px solid var(--border-primary)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--c-border-1)",
+        boxShadow: "var(--shadow-inset-highlight)",
       }}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -586,7 +587,7 @@ function SourceRow({
               background:
                 !canLoad || isLoading
                   ? "var(--bg-surface)"
-                  : "rgba(59,130,246,0.12)",
+                  : "var(--accent-blue-bg)",
               border:
                 !canLoad || isLoading
                   ? "1px solid rgba(255,255,255,0.06)"
@@ -611,7 +612,7 @@ function SourceRow({
         <Field label="Markers">{markerCount}</Field>
         <Field label="Location">
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            <MapPin size={11} style={{ color: "rgba(96,165,250,0.68)", flexShrink: 0 }} />
+            <MapPin size={11} style={{ color: "rgba(250,86,96,0.68)", flexShrink: 0 }} />
             <span className="truncate">{locationLabel}</span>
           </span>
         </Field>
@@ -636,7 +637,7 @@ function SourceRow({
               <Pill tone="amber">Below Threshold</Pill>
             </span>
           ) : isLoading ? (
-            <span style={{ color: "rgba(147,197,253,0.78)" }}>Loading...</span>
+            <span style={{ color: "rgba(250,86,96,0.78)" }}>Loading...</span>
           ) : readableError ? (
             <span style={{ color: "rgba(252,165,165,0.84)" }}>Source error</span>
           ) : itemCount > 0 ? (
@@ -871,13 +872,13 @@ export function SourcesScreen() {
   return (
     <main
       className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
-      style={{ background: "#080808" }}
+      style={{ background: "var(--c-bg-base)" }}
     >
       <div className="tm-scrollbar sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-3 pt-3">
         <section className="flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2">
-              <Database size={13} style={{ color: "rgba(147,197,253,0.86)" }} />
+              <Database size={13} style={{ color: "var(--accent-blue-text)" }} />
               <span
                 className="font-semibold uppercase"
                 style={{
@@ -911,19 +912,19 @@ export function SourcesScreen() {
             icon={<Database size={12} />}
             label="Runtime Sources"
             value={sources.length}
-            tone="rgba(147,197,253,0.9)"
+            tone="var(--accent-blue-text)"
           />
           <MetricTile
             icon={<Radio size={12} />}
             label="Loaded Items"
             value={combinedItems.length}
-            tone="rgba(96,165,250,0.9)"
+            tone="var(--accent-blue-text)"
           />
           <MetricTile
             icon={<Activity size={12} />}
             label="Accepted Events"
             value={eventCandidates.length}
-            tone="rgba(74,222,128,0.9)"
+            tone="var(--c-elev)"
           />
           <MetricTile
             icon={<MapPin size={12} />}
@@ -935,7 +936,7 @@ export function SourcesScreen() {
             icon={<ShieldCheck size={12} />}
             label="Marker Ready"
             value={markerReadyEvents}
-            tone="rgba(45,212,191,0.9)"
+            tone="var(--accent-green)"
           />
           <MetricTile
             icon={<AlertTriangle size={12} />}
@@ -959,7 +960,7 @@ export function SourcesScreen() {
             style={{ borderBottom: "1px solid var(--border-dim)" }}
           >
             <div className="flex min-w-0 items-center gap-2">
-              <Radio size={12} style={{ color: "rgba(96,165,250,0.72)" }} />
+              <Radio size={12} style={{ color: "rgba(250,86,96,0.72)" }} />
               <span
                 className="truncate font-semibold uppercase"
                 style={{
@@ -1175,7 +1176,7 @@ export function SourcesScreen() {
                   }}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <Radio size={12} style={{ color: "rgba(147,197,253,0.72)", flexShrink: 0 }} />
+                    <Radio size={12} style={{ color: "rgba(250,86,96,0.72)", flexShrink: 0 }} />
                     <span
                       className="font-semibold uppercase"
                       style={{
@@ -1209,10 +1210,10 @@ export function SourcesScreen() {
                         : "rgba(226,232,240,0.94)",
                       background: isSkynewsLoading
                         ? "var(--bg-surface)"
-                        : "rgba(147,197,253,0.09)",
+                        : "var(--accent-blue-bg)",
                       border: isSkynewsLoading
                         ? "1px solid rgba(255,255,255,0.06)"
-                        : "1px solid rgba(147,197,253,0.22)",
+                        : "1px solid var(--accent-blue-border)",
                       cursor: isSkynewsLoading ? "not-allowed" : "pointer",
                       fontSize: "var(--fs-sm)",
                       letterSpacing: "0.08em",

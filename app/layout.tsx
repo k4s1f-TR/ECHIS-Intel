@@ -24,7 +24,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TaipanMonitor",
+  title: "ECHIS",
   description: "Open-source intelligence situation awareness dashboard",
 };
 

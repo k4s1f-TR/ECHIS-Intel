@@ -13,12 +13,12 @@ import { defenseFeedItems } from "@/data/defenseIndustryMockData";
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex items-center gap-2 mb-1">
-      <Icon size={11} style={{ color: "var(--icon-default)", flexShrink: 0 }} />
+      <Icon size={11} style={{ color: "var(--c-silver-dim)", flexShrink: 0 }} />
       <span
         style={{
           fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "var(--text-tertiary)",
+          color: "var(--c-t5)",
           letterSpacing: "0.1em",
           textTransform: "uppercase" as const,
         }}
@@ -35,7 +35,7 @@ function SectionValue({ children }: { children: React.ReactNode }) {
       style={{
         fontSize: "var(--fs-md)",
         fontWeight: 500,
-        color: "var(--text-primary)",
+        color: "var(--c-t2)",
         marginBottom: "12px",
         paddingLeft: "19px",
       }}
@@ -49,13 +49,13 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div
       className="flex items-center justify-between py-2"
-      style={{ borderBottom: "1px solid var(--border-subtle)" }}
+      style={{ borderBottom: "1px solid var(--c-border-3)" }}
     >
       <span
         style={{
           fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "var(--text-tertiary)",
+          color: "var(--c-t5)",
           letterSpacing: "0.06em",
           textTransform: "uppercase" as const,
         }}
@@ -66,7 +66,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
         style={{
           fontSize: "var(--fs-sm)",
           fontWeight: 500,
-          color: "var(--text-body)",
+          color: "var(--c-t3)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -90,13 +90,13 @@ function StatusBar({
   return (
     <div
       className="flex items-center justify-between py-2"
-      style={{ borderBottom: "1px solid var(--border-subtle)" }}
+      style={{ borderBottom: "1px solid var(--c-border-3)" }}
     >
       <span
         style={{
           fontSize: "var(--fs-xs)",
           fontWeight: 600,
-          color: "var(--text-tertiary)",
+          color: "var(--c-t5)",
           letterSpacing: "0.06em",
           textTransform: "uppercase" as const,
         }}
@@ -132,21 +132,22 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
       className="flex flex-col h-full"
       style={{
         background: "var(--bg-panel)",
-        border: "1px solid var(--border-primary)",
+        border: "1px solid var(--c-border-1)",
         borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5"
-        style={{ borderBottom: "1px solid var(--border-dim)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
-        <Factory size={12} style={{ color: "var(--icon-default)" }} />
+        <Factory size={12} style={{ color: "var(--c-silver-dim)" }} />
         <span
           style={{
             fontSize: "var(--fs-sm)",
             fontWeight: 700,
-            color: "var(--text-secondary)",
+            color: "var(--c-t4)",
             letterSpacing: "0.1em",
             textTransform: "uppercase" as const,
           }}
@@ -179,7 +180,7 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
           style={{
             fontSize: "var(--fs-base)",
             fontWeight: 400,
-            color: "var(--text-secondary)",
+            color: "var(--c-t4)",
             lineHeight: 1.65,
             marginBottom: 16,
             paddingLeft: 19,
@@ -188,7 +189,7 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
           {ctx.summary}
         </p>
 
-        <div className="mt-auto" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
+        <div className="mt-auto" style={{ borderTop: "1px solid var(--c-border-3)", paddingTop: 12 }}>
           <MetaRow label="Source Type" value={ctx.sourceType} />
           <MetaRow label="First Seen" value={ctx.firstSeen} />
           <MetaRow label="Last Update" value={ctx.lastUpdate} />
@@ -197,8 +198,8 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
             level={ctx.confidenceLevel}
             color={
               ctx.confidenceLevel >= 4
-                ? "rgba(160,180,200,0.85)"
-                : "rgba(218,175,22,0.85)"
+                ? "var(--c-elev)"
+                : "var(--c-med)"
             }
             caption={ctx.confidence}
           />
@@ -207,10 +208,10 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
             level={ctx.impactLevel}
             color={
               ctx.impactLevel >= 4
-                ? "rgba(239,140,90,0.85)"
+                ? "var(--c-high)"
                 : ctx.impactLevel === 3
-                ? "rgba(218,175,22,0.85)"
-                : "rgba(140,160,180,0.7)"
+                ? "var(--c-med)"
+                : "var(--c-elev)"
             }
             caption={ctx.impact}
           />

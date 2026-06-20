@@ -1,4 +1,4 @@
-/* ───────────────────────── TaipanMonitor · Cyber News ─────────────────────────
+/* ───────────────────────── ECHIS · Cyber News ─────────────────────────
    Vanilla dashboard logic: animated d3 globe threat map, live clock, ticker,
    clickable news → context + globe focus, count-up + bar animations.
 ──────────────────────────────────────────────────────────────────────────────── */

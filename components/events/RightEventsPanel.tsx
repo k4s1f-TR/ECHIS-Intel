@@ -35,22 +35,23 @@ export function RightEventsPanel({
       className="flex h-full max-h-full min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
       style={{
         width: "100%",
-        background: "rgba(12,12,12,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
       }}
     >
       {/* Panel header */}
       <div
         className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
         <span
           className="font-semibold tracking-widest uppercase"
-          style={{ fontSize: "10px", color: "rgba(170,170,170,0.8)" }}
+          style={{ fontSize: "10px", color: "var(--c-t4)" }}
         >
           Active Events
         </span>
-        <span style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.85)" }}>
+        <span style={{ fontSize: "10.5px", color: "var(--c-t5)" }}>
           {events.length} Results
         </span>
       </div>

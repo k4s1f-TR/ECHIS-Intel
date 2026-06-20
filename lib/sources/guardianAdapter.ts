@@ -180,7 +180,7 @@ export async function fetchGuardianArticles(
       method: "GET",
       headers: {
         Accept: "application/json",
-        "User-Agent": "TaipanMonitor/1.0",
+        "User-Agent": "ECHIS/1.0",
       },
       signal: controller.signal,
       cache: "no-store",

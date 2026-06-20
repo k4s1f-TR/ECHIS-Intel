@@ -187,10 +187,8 @@ const countryPaths = renderedFeatures
   .filter(({ path }) => path.length > 0);
 
 /**
- * Optional, backward-compatible theming. When `theme` is omitted the map renders
- * bit-for-bit identically to the original light palette, so other consumers
- * (Intel Watch, Defense Industry) are unaffected. Cyber News opts into a dark
- * land + crimson coastline look.
+ * Optional theming. When omitted, the shared map now uses the same deep-black,
+ * crimson coastline palette as Cyber News so map-based screens feel unified.
  */
 export type SharedWorldMap2DTheme = {
   land?: string;
@@ -239,11 +237,14 @@ export function SharedWorldMap2D({
   markerLayer?: (project: ProjectMarker) => ReactNode;
   theme?: SharedWorldMap2DTheme;
 }) {
-  const themed = Boolean(theme);
-  const land = theme?.land ?? "rgba(210, 216, 222, 0.82)";
-  const countryStroke = theme?.border ?? "rgba(24, 30, 38, 0.72)";
-  const outlineStroke = theme?.border ?? "rgba(245, 250, 255, 0.16)";
-  const background = theme?.background ?? "#000000";
+  const themed = true;
+  const land = theme?.land ?? "#221a1e";
+  const countryStroke = theme?.border ?? "rgba(255,72,84,0.34)";
+  const outlineStroke = theme?.border ?? "rgba(255,72,84,0.34)";
+  const graticule = theme?.graticule ?? "rgba(255,72,84,0.04)";
+  const background =
+    theme?.background ??
+    "radial-gradient(120% 100% at 50% 36%, #0c0a0d 0%, #070507 58%, #040305 100%)";
 
   const cssVars = {
     "--swm-land": land,
@@ -286,12 +287,12 @@ export function SharedWorldMap2D({
             }
           `}
         </style>
-        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill={themed ? "transparent" : "#000000"} />
-        {themed && theme?.graticule ? (
+        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="transparent" />
+        {graticule ? (
           <path
             d={graticulePath}
             fill="none"
-            stroke={theme.graticule}
+            stroke={graticule}
             strokeWidth="0.5"
             vectorEffect="non-scaling-stroke"
             style={{ shapeRendering: "geometricPrecision" }}

@@ -1,4 +1,4 @@
-# TaipanMonitor - Current UI State Handoff
+# ECHIS - Current UI State Handoff
 
 ## Goal
 Dark-themed, map-first OSINT situation dashboard. Full-screen desktop layout, no backend, mock data only.

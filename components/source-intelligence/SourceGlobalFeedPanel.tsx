@@ -117,7 +117,7 @@ function SectionLabel({
     <div
       className="uppercase"
       style={{
-        color: accent ? "rgba(205,225,255,0.9)" : "rgba(148,163,184,0.72)",
+        color: accent ? "var(--accent-blue-text)" : "rgba(148,163,184,0.72)",
         fontSize: 10,
         fontWeight: 850,
         letterSpacing: "0.12em",
@@ -213,16 +213,16 @@ function SourceItemDetailModal({
           transition: `opacity ${MODAL_ANIMATION_MS}ms ease, transform ${MODAL_ANIMATION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
           overflow: "hidden",
           borderRadius: 18,
-          background: "#070b0f",
+          background: "var(--bg-panel)",
           border: "1px solid rgba(255,255,255,0.12)",
-          boxShadow: "0 32px 90px rgba(0,0,0,0.55)",
+          boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0,0,0,0.55)",
           color: "rgba(232,238,244,0.94)",
           pointerEvents: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div style={{ height: 3, background: "#60a5fa", opacity: 0.95 }} />
+        <div style={{ height: 3, background: "var(--accent-blue-text)", opacity: 0.95 }} />
         <div
           style={{
             height: "calc(100% - 3px)",
@@ -240,8 +240,8 @@ function SourceItemDetailModal({
                     width: 8,
                     height: 8,
                     borderRadius: 999,
-                    background: "#60a5fa",
-                    boxShadow: "0 0 10px rgba(96,165,250,0.42)",
+                    background: "var(--accent-blue-text)",
+                    boxShadow: "0 0 10px var(--accent-blue-glow)",
                     flex: "0 0 auto",
                   }}
                 />
@@ -285,9 +285,9 @@ function SourceItemDetailModal({
                 className="uppercase"
                 style={{
                   borderRadius: 4,
-                  border: "1px solid rgba(96,165,250,0.34)",
-                  background: "rgba(96,165,250,0.1)",
-                  color: "rgba(205,225,255,0.95)",
+                  border: "1px solid var(--accent-blue-border)",
+                  background: "var(--accent-blue-bg)",
+                  color: "var(--accent-blue-text)",
                   padding: "5px 7px",
                   fontSize: 10,
                   fontWeight: 800,
@@ -384,7 +384,7 @@ function SourceItemDetailModal({
                 style={{
                   fontSize: 12,
                   fontWeight: 500,
-                  color: "rgba(96,165,250,0.8)",
+                  color: "var(--accent-blue-text)",
                   textDecoration: "none",
                 }}
               >
@@ -420,14 +420,14 @@ function SourceFeedCard({
   onCardClick: () => void;
 }) {
   const activeBorder = isSelected
-    ? "rgba(96,165,250,0.38)"
+    ? "var(--accent-blue-border)"
     : isOpen
-      ? "rgba(96,165,250,0.22)"
+      ? "rgba(240,64,76,0.22)"
       : "rgba(255,255,255,0.055)";
   const activeBg = isSelected
-    ? "rgba(59,130,246,0.08)"
+    ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
     : isOpen
-      ? "rgba(59,130,246,0.04)"
+      ? "rgba(236,47,59,0.04)"
       : "rgba(255,255,255,0.018)";
 
   return (
@@ -456,7 +456,7 @@ function SourceFeedCard({
             fontSize: "9px",
             fontWeight: 700,
             background: "rgba(255,255,255,0.07)",
-            color: "rgba(120,140,170,0.9)",
+            color: "var(--c-t5)",
           }}
         >
           {index}
@@ -465,7 +465,7 @@ function SourceFeedCard({
           className="line-clamp-2 flex-1 pr-1 font-medium leading-snug"
           style={{
             fontSize: "12.5px",
-            color: "rgba(190,208,230,0.85)",
+            color: "var(--c-t3)",
           }}
         >
           {item.title}
@@ -482,9 +482,9 @@ function SourceFeedCard({
             marginTop: 2,
             width: 18,
             height: 18,
-            color: isOpen ? "rgba(96,165,250,0.9)" : "rgba(70,90,120,0.65)",
-            background: isOpen ? "rgba(59,130,246,0.15)" : "transparent",
-            border: isOpen ? "1px solid rgba(96,165,250,0.25)" : "1px solid transparent",
+            color: isOpen ? "var(--accent-blue-text)" : "var(--c-t6)",
+            background: isOpen ? "var(--accent-blue-bg-strong)" : "transparent",
+            border: isOpen ? "1px solid var(--accent-blue-border)" : "1px solid transparent",
           }}
         >
           <FileText size={10} />
@@ -502,7 +502,7 @@ function SourceFeedCard({
               marginTop: 2,
               width: 18,
               height: 18,
-              color: "rgba(70,90,120,0.65)",
+              color: "var(--c-t6)",
               background: "transparent",
             }}
           >
@@ -512,7 +512,7 @@ function SourceFeedCard({
       </div>
 
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5" style={{ fontSize: "10.5px" }}>
-        <span style={{ color: "rgba(130,150,170,0.8)", fontWeight: 500 }}>
+        <span style={{ color: "var(--c-silver-dim)", fontWeight: 500 }}>
           {item.sourceName}
         </span>
         {item.publishedAt && (
@@ -526,7 +526,7 @@ function SourceFeedCard({
       {item.summary && (
         <p
           className="line-clamp-2 leading-relaxed"
-          style={{ fontSize: "11.5px", color: "rgba(105,105,105,0.9)" }}
+          style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
         >
           {item.summary}
         </p>
@@ -597,7 +597,7 @@ export function SourceFilterList({
         onClick={() => onCollapsedChange?.(false)}
         style={{
           padding: "10px 12px",
-          background: "rgba(12,12,12,0.9)",
+          background: "var(--bg-panel)",
           border: "1px solid rgba(255,255,255,0.07)",
           backdropFilter: "blur(14px)",
           boxShadow:
@@ -632,7 +632,7 @@ export function SourceFilterList({
           ? undefined
           : "1px solid rgba(255,255,255,0.045)",
         borderRadius: standalone ? 10 : undefined,
-        background: standalone ? "rgba(12,12,12,0.88)" : "rgba(255,255,255,0.012)",
+        background: standalone ? "var(--bg-panel)" : "var(--c-card-bg)",
         backdropFilter: standalone ? "blur(14px)" : undefined,
         boxShadow: standalone
           ? "0 8px 32px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.035) inset"
@@ -682,7 +682,7 @@ export function SourceFilterList({
           overflowY: "auto",
           paddingRight: 2,
           scrollbarWidth: "thin",
-          scrollbarColor: "rgba(59,130,246,0.16) transparent",
+          scrollbarColor: "rgba(236,47,59,0.16) transparent",
         }}
       >
         <button
@@ -690,9 +690,9 @@ export function SourceFilterList({
           onClick={() => onSelectSource(ALL_SOURCES_FILTER)}
           className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left transition-colors duration-150"
           style={{
-            background: allSelected ? "rgba(59,130,246,0.13)" : "rgba(255,255,255,0.026)",
-            border: `1px solid ${allSelected ? "rgba(96,165,250,0.24)" : "rgba(255,255,255,0.055)"}`,
-            color: allSelected ? "rgba(205,225,255,0.94)" : "rgba(150,164,182,0.86)",
+            background: allSelected ? "var(--accent-blue-bg)" : "rgba(255,255,255,0.026)",
+            border: `1px solid ${allSelected ? "var(--accent-blue-border)" : "rgba(255,255,255,0.055)"}`,
+            color: allSelected ? "var(--accent-blue-text)" : "var(--c-silver-dim)",
           }}
         >
           <span
@@ -707,7 +707,7 @@ export function SourceFilterList({
               borderRadius: 4,
               padding: "2px 5px",
               background: "rgba(255,255,255,0.045)",
-              color: "rgba(160,175,195,0.82)",
+              color: "var(--c-t4)",
               fontSize: 9,
               fontWeight: 750,
               fontVariantNumeric: "tabular-nums",
@@ -726,9 +726,9 @@ export function SourceFilterList({
               onClick={() => onSelectSource(source.id)}
               className="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150"
               style={{
-                background: selected ? "rgba(59,130,246,0.11)" : "transparent",
-                border: `1px solid ${selected ? "rgba(96,165,250,0.22)" : "rgba(255,255,255,0.035)"}`,
-                color: selected ? "rgba(205,225,255,0.93)" : "rgba(132,146,166,0.82)",
+                background: selected ? "var(--accent-blue-bg)" : "transparent",
+                border: `1px solid ${selected ? "var(--accent-blue-border)" : "rgba(255,255,255,0.035)"}`,
+                color: selected ? "var(--accent-blue-text)" : "var(--c-t4)",
               }}
             >
               <span
@@ -745,8 +745,8 @@ export function SourceFilterList({
                   borderRadius: 4,
                   padding: "2px 5px",
                   textAlign: "center",
-                  background: selected ? "rgba(96,165,250,0.13)" : "rgba(255,255,255,0.035)",
-                  color: selected ? "rgba(190,215,245,0.9)" : "rgba(112,128,150,0.82)",
+                  background: selected ? "var(--accent-blue-bg)" : "rgba(255,255,255,0.035)",
+                  color: selected ? "var(--accent-blue-text)" : "var(--c-t5)",
                   fontSize: 9,
                   fontWeight: 760,
                   fontVariantNumeric: "tabular-nums",
@@ -827,8 +827,8 @@ function LoadingSkeleton() {
                   height: 18,
                   width: chip === 0 ? 54 : chip === 1 ? 70 : 46,
                   borderRadius: 4,
-                  background: "rgba(59,130,246,0.055)",
-                  border: "1px solid rgba(59,130,246,0.08)",
+                  background: "rgba(236,47,59,0.055)",
+                  border: "1px solid rgba(236,47,59,0.08)",
                 }}
               >
                 {shimmerSpan}
@@ -875,6 +875,10 @@ export function SourceGlobalFeedPanel({
         : items.filter((item) => item.sourceId === effectiveSelectedSourceId),
     [items, effectiveSelectedSourceId],
   );
+  const visibleSelectedItem =
+    selectedItem && visibleItems.some((item) => item.id === selectedItem.id)
+      ? selectedItem
+      : null;
 
   useEffect(() => {
     if (!selectedItemId || !scrollRef.current) return;
@@ -894,8 +898,9 @@ export function SourceGlobalFeedPanel({
         className="flex h-full max-h-full min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
         style={{
           width: "100%",
-          background: "rgba(12,12,12,0.97)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
+          boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
         }}
       >
         <div
@@ -903,7 +908,7 @@ export function SourceGlobalFeedPanel({
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
         >
           <div className="flex items-center gap-2">
-            <Radio size={10} style={{ color: "rgba(96,165,250,0.45)" }} />
+            <Radio size={10} style={{ color: "rgba(250,86,96,0.45)" }} />
             <span
               className="font-semibold uppercase tracking-widest"
               style={{ fontSize: "10px", color: "rgba(170,170,170,0.8)" }}
@@ -930,9 +935,9 @@ export function SourceGlobalFeedPanel({
                 fontSize: "7.5px",
                 fontWeight: 700,
                 letterSpacing: "0.07em",
-                color: "rgba(96,165,250,0.65)",
-                background: "rgba(59,130,246,0.07)",
-                border: "1px solid rgba(59,130,246,0.14)",
+                color: "rgba(250,86,96,0.65)",
+                background: "rgba(236,47,59,0.07)",
+                border: "1px solid rgba(236,47,59,0.14)",
               }}
             >
               Multi-source
@@ -963,7 +968,7 @@ export function SourceGlobalFeedPanel({
               flexDirection: "column",
               gap: "6px",
               scrollbarWidth: "thin",
-              scrollbarColor: "rgba(59,130,246,0.18) transparent",
+              scrollbarColor: "rgba(236,47,59,0.18) transparent",
             }}
           >
             {visibleItems.length === 0 ? (
@@ -978,7 +983,7 @@ export function SourceGlobalFeedPanel({
                   key={item.id}
                   item={item}
                   index={i + 1}
-                  isOpen={selectedItem?.id === item.id}
+                  isOpen={visibleSelectedItem?.id === item.id}
                   isSelected={selectedItemId === item.id}
                   onToggle={() =>
                     setSelectedItem((prev) => (prev?.id === item.id ? null : item))
@@ -1013,9 +1018,9 @@ export function SourceGlobalFeedPanel({
         )}
       </div>
 
-      {selectedItem !== null && (
+      {visibleSelectedItem !== null && (
         <SourceItemDetailModal
-          item={selectedItem}
+          item={visibleSelectedItem}
           onClose={() => setSelectedItem(null)}
         />
       )}

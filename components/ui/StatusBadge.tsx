@@ -15,31 +15,31 @@ type BadgeVariant =
 // Each badge: [text color, background, border color]
 const BADGE_STYLES: Record<string, [string, string, string]> = {
   // Category
-  politics:       ["rgba(147,197,253,0.9)",  "rgba(29,78,216,0.15)",   "rgba(59,130,246,0.25)"],
-  conflict:       ["rgba(252,165,165,0.9)",  "rgba(153,27,27,0.2)",    "rgba(239,68,68,0.25)"],
-  intel:          ["rgba(196,181,253,0.9)",  "rgba(109,40,217,0.18)",  "rgba(139,92,246,0.25)"],
-  maritime:       ["rgba(103,232,249,0.9)",  "rgba(14,116,144,0.2)",   "rgba(6,182,212,0.25)"],
-  humanitarian:   ["rgba(110,231,183,0.9)",  "rgba(5,150,105,0.18)",   "rgba(16,185,129,0.25)"],
-  energy:         ["rgba(252,211,77,0.9)",   "rgba(180,83,9,0.18)",    "rgba(245,158,11,0.25)"],
-  air:            ["rgba(125,211,252,0.9)",  "rgba(3,105,161,0.18)",   "rgba(56,189,248,0.25)"],
+  politics:       ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  conflict:       ["var(--c-crit)",          "var(--c-crit-bg)",        "var(--c-crit-border)"],
+  intel:          ["var(--c-high)",          "var(--c-high-bg)",        "var(--c-high-border)"],
+  maritime:       ["var(--c-silver-dim)",    "var(--c-silver-bg)",      "var(--c-silver-border)"],
+  humanitarian:   ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  energy:         ["var(--c-med)",           "var(--c-med-bg)",         "var(--c-med-border)"],
+  air:            ["var(--c-silver-dim)",    "var(--c-silver-bg)",      "var(--c-silver-border)"],
   // Severity
-  low:            ["rgba(74,222,128,0.9)",   "rgba(20,83,45,0.25)",    "rgba(34,197,94,0.25)"],
-  medium:         ["rgba(252,211,77,0.9)",   "rgba(120,53,15,0.22)",   "rgba(245,158,11,0.25)"],
-  high:           ["rgba(251,146,60,0.9)",   "rgba(154,52,18,0.22)",   "rgba(249,115,22,0.25)"],
-  critical:       ["rgba(252,165,165,0.9)",  "rgba(153,27,27,0.25)",   "rgba(239,68,68,0.3)"],
+  low:            ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  medium:         ["var(--c-med)",           "var(--c-med-bg)",         "var(--c-med-border)"],
+  high:           ["var(--c-high)",          "var(--c-high-bg)",        "var(--c-high-border)"],
+  critical:       ["var(--c-crit)",          "var(--c-crit-bg)",        "var(--c-crit-border)"],
   // Source
-  official:       ["rgba(148,163,184,0.85)", "rgba(30,41,59,0.4)",     "rgba(100,116,139,0.25)"],
-  media:          ["rgba(148,163,184,0.85)", "rgba(30,41,59,0.4)",     "rgba(100,116,139,0.25)"],
-  specialist:     ["rgba(167,139,250,0.85)", "rgba(76,29,149,0.18)",   "rgba(139,92,246,0.22)"],
-  unverified:     ["rgba(202,138,4,0.85)",   "rgba(113,63,18,0.2)",    "rgba(202,138,4,0.22)"],
-  ngo:            ["rgba(110,231,183,0.85)", "rgba(6,78,59,0.2)",      "rgba(16,185,129,0.22)"],
-  maritime_source:["rgba(103,232,249,0.85)", "rgba(8,70,84,0.2)",      "rgba(6,182,212,0.22)"],
-  intel_source:   ["rgba(196,181,253,0.85)", "rgba(76,29,149,0.18)",   "rgba(139,92,246,0.22)"],
+  official:       ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  media:          ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  specialist:     ["var(--c-high)",          "var(--c-high-bg)",        "var(--c-high-border)"],
+  unverified:     ["var(--c-med)",           "var(--c-med-bg)",         "var(--c-med-border)"],
+  ngo:            ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  maritime_source:["var(--c-silver-dim)",    "var(--c-silver-bg)",      "var(--c-silver-border)"],
+  intel_source:   ["var(--c-high)",          "var(--c-high-bg)",        "var(--c-high-border)"],
   // Verification
-  confirmed:      ["rgba(74,222,128,0.9)",   "rgba(20,83,45,0.22)",    "rgba(34,197,94,0.25)"],
-  reported:       ["rgba(252,211,77,0.9)",   "rgba(120,53,15,0.2)",    "rgba(245,158,11,0.25)"],
-  single_source:  ["rgba(251,146,60,0.85)",  "rgba(154,52,18,0.18)",   "rgba(249,115,22,0.22)"],
-  disputed:       ["rgba(252,165,165,0.85)", "rgba(153,27,27,0.2)",    "rgba(239,68,68,0.25)"],
+  confirmed:      ["var(--c-elev)",          "var(--c-elev-bg)",        "var(--c-elev-border)"],
+  reported:       ["var(--c-med)",           "var(--c-med-bg)",         "var(--c-med-border)"],
+  single_source:  ["var(--c-high)",          "var(--c-high-bg)",        "var(--c-high-border)"],
+  disputed:       ["var(--c-crit)",          "var(--c-crit-bg)",        "var(--c-crit-border)"],
 };
 
 const BADGE_LABELS: Record<string, string> = {
@@ -54,9 +54,9 @@ const BADGE_LABELS: Record<string, string> = {
 };
 
 const FALLBACK: [string, string, string] = [
-  "rgba(148,163,184,0.85)",
-  "rgba(30,41,59,0.4)",
-  "rgba(100,116,139,0.25)",
+  "var(--c-elev)",
+  "var(--c-elev-bg)",
+  "var(--c-elev-border)",
 ];
 
 export function StatusBadge({ variant }: { variant: BadgeVariant }) {

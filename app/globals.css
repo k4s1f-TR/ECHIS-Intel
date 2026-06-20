@@ -2,21 +2,29 @@
 
 :root {
   /* ── Background layers ─────────────────────────────────── */
-  --bg-base: #050507;
-  --bg-shell: rgba(8, 8, 9, 0.99);
-  --bg-panel: rgba(7, 7, 9, 0.99);
-  --bg-panel-alt: rgba(8, 8, 11, 0.99);
-  --bg-card: rgba(10, 10, 12, 0.98);
-  --bg-card-alt: rgba(9, 9, 12, 0.98);
-  --bg-surface: rgba(255, 255, 255, 0.018);
-  --bg-surface-hover: rgba(255, 255, 255, 0.035);
+  --bg-base: #060305;
+  --bg-shell: #050506;
+  --bg-panel: linear-gradient(180deg, rgba(20, 16, 18, 0.28), rgba(7, 5, 7, 0.55) 50%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.01) 0 1px, transparent 1px 7px),
+    #060406;
+  --bg-panel-alt: linear-gradient(180deg, rgba(20, 16, 18, 0.24), rgba(7, 5, 7, 0.52) 50%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.01) 0 1px, transparent 1px 7px),
+    #060406;
+  --bg-card: linear-gradient(180deg, rgba(20, 16, 18, 0.2), rgba(7, 5, 7, 0.48) 50%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.009) 0 1px, transparent 1px 7px),
+    #060406;
+  --bg-card-alt: linear-gradient(180deg, rgba(20, 16, 18, 0.18), rgba(7, 5, 7, 0.46) 50%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.009) 0 1px, transparent 1px 7px),
+    #060406;
+  --bg-surface: rgba(255, 255, 255, 0.016);
+  --bg-surface-hover: rgba(255, 255, 255, 0.034);
   --bg-surface-active: rgba(255, 255, 255, 0.055);
   --bg-overlay: rgba(8, 8, 10, 0.94);
   --bg-backdrop: rgba(2, 2, 3, 0.68);
   --bg-info-strip: rgba(4, 4, 6, 0.95);
 
   /* ── Border layers ─────────────────────────────────────── */
-  --border-primary: rgba(255, 255, 255, 0.06);
+  --border-primary: rgba(255, 255, 255, 0.07);
   --border-dim: rgba(255, 255, 255, 0.045);
   --border-subtle: rgba(255, 255, 255, 0.03);
   --border-hover: rgba(255, 255, 255, 0.09);
@@ -24,12 +32,12 @@
   --border-divider: rgba(255, 255, 255, 0.04);
 
   /* ── Text layers ───────────────────────────────────────── */
-  --text-heading: rgba(240, 242, 245, 0.97);
-  --text-primary: rgba(218, 222, 228, 0.93);
-  --text-body: rgba(185, 192, 202, 0.85);
-  --text-secondary: rgba(140, 150, 168, 0.76);
-  --text-tertiary: rgba(100, 110, 125, 0.6);
-  --text-muted: rgba(75, 82, 92, 0.65);
+  --text-heading: rgba(238, 240, 244, 0.98);
+  --text-primary: rgba(214, 219, 226, 0.92);
+  --text-body: rgba(176, 184, 196, 0.82);
+  --text-secondary: rgba(132, 142, 156, 0.72);
+  --text-tertiary: rgba(96, 105, 119, 0.64);
+  --text-muted: rgba(70, 78, 90, 0.6);
   --text-dim: rgba(55, 60, 68, 0.45);
 
   /* ── Icon layers ───────────────────────────────────────── */
@@ -46,17 +54,17 @@
   --accent-blue-glow: rgba(236, 47, 59, 0.28);
 
   /* ── Silver: supporting metal (new) ────────────────────── */
-  --silver: rgba(190, 196, 206, 0.92);
+  --silver: rgba(196, 202, 212, 0.94);
   --silver-dim: rgba(150, 158, 170, 0.74);
   --silver-bg: rgba(184, 190, 202, 0.055);
   --silver-border: rgba(184, 190, 202, 0.18);
 
   /* ── Accent: green ─────────────────────────────────────── */
-  --accent-green: rgba(56, 198, 105, 0.85);
-  --accent-green-dim: rgba(56, 198, 105, 0.22);
-  --accent-green-bg: rgba(16, 72, 38, 0.18);
-  --accent-green-border: rgba(30, 178, 78, 0.2);
-  --accent-green-dot: rgba(46, 172, 82, 0.65);
+  --accent-green: rgba(176, 184, 196, 0.88);
+  --accent-green-dim: rgba(176, 184, 196, 0.2);
+  --accent-green-bg: rgba(176, 184, 196, 0.065);
+  --accent-green-border: rgba(176, 184, 196, 0.2);
+  --accent-green-dot: rgba(255, 86, 96, 0.72);
 
   /* ── Severity: critical ────────────────────────────────── */
   --sev-critical-text: rgba(235, 72, 72, 0.92);
@@ -90,7 +98,7 @@
   /* ── Shadow ────────────────────────────────────────────── */
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.5);
-  --shadow-inset-highlight: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-inset-highlight: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
 
   /* ── Typography scale ──────────────────────────────────── */
   --fs-2xs: 8px;
@@ -231,9 +239,9 @@ body {
   /* ── Surfaces ──────────────────────────────────────────── */
   --c-bg-base: #060305;
   --c-bg-deep: #030203;
-  --c-panel-bg: #0a070a;
-  --c-panel-grad: linear-gradient(180deg, rgba(36, 26, 29, 0.42) 0%, rgba(12, 9, 11, 0.5) 46%),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 7px);
+  --c-panel-bg: #060406;
+  --c-panel-grad: linear-gradient(180deg, rgba(20, 16, 18, 0.28), rgba(7, 5, 7, 0.55) 50%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.01) 0 1px, transparent 1px 7px);
   --c-card-bg: rgba(255, 255, 255, 0.016);
   --c-card-bg-hover: rgba(255, 255, 255, 0.034);
   --c-border-1: rgba(255, 255, 255, 0.07);
@@ -265,12 +273,12 @@ body {
   --c-crit: rgba(255, 72, 82, 0.98);
   --c-crit-bg: rgba(255, 56, 68, 0.13);
   --c-crit-border: rgba(255, 72, 82, 0.4);
-  --c-high: rgba(226, 42, 54, 0.95);
-  --c-high-bg: rgba(214, 32, 44, 0.11);
-  --c-high-border: rgba(226, 52, 62, 0.34);
-  --c-med: rgba(168, 38, 46, 0.95);
-  --c-med-bg: rgba(150, 28, 36, 0.12);
-  --c-med-border: rgba(176, 48, 56, 0.32);
+  --c-high: rgba(255, 122, 47, 0.95);
+  --c-high-bg: rgba(255, 122, 47, 0.11);
+  --c-high-border: rgba(255, 122, 47, 0.34);
+  --c-med: rgba(241, 194, 79, 0.95);
+  --c-med-bg: rgba(241, 194, 79, 0.12);
+  --c-med-border: rgba(241, 194, 79, 0.32);
   --c-elev: rgba(176, 184, 196, 0.82);
   --c-elev-bg: rgba(176, 184, 196, 0.07);
   --c-elev-border: rgba(176, 184, 196, 0.2);
@@ -301,7 +309,7 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(120% 80% at 50% -8%, rgba(255, 43, 61, 0.05), transparent 55%),
+    radial-gradient(120% 80% at 50% -8%, rgba(255, 43, 61, 0.03), transparent 55%),
     radial-gradient(140% 120% at 50% 120%, rgba(0, 0, 0, 0.6), transparent 60%);
 }
 .cyber-premium > * {
@@ -370,63 +378,6 @@ body {
   50% { opacity: 0.25; }
 }
 
-/* ── Ticker ──────────────────────────────────────────────── */
-.cyber-ticker {
-  display: flex;
-  align-items: center;
-  height: 30px;
-  flex-shrink: 0;
-  overflow: hidden;
-  background: var(--c-bg-deep);
-  border-bottom: 1px solid var(--c-border-2);
-}
-.cyber-ticker-tag {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  height: 100%;
-  padding: 0 13px;
-  background: linear-gradient(90deg, var(--c-accent-bg), transparent);
-  font-size: var(--c-fs-2xs);
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--c-accent-text);
-  border-right: 1px solid var(--c-accent-border);
-}
-.cyber-ticker-tag .dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-accent);
-  box-shadow: 0 0 7px var(--c-accent-glow);
-  animation: cyber-pulse 1.6s infinite;
-}
-.cyber-ticker-viewport {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-  height: 100%;
-}
-.cyber-ticker-track {
-  display: flex;
-  align-items: center;
-  gap: 30px;
-  height: 100%;
-  white-space: nowrap;
-  width: max-content;
-  animation: cyber-ticker-scroll 60s linear infinite;
-  will-change: transform;
-}
-.cyber-ticker:hover .cyber-ticker-track {
-  animation-play-state: paused;
-}
-@keyframes cyber-ticker-scroll {
-  to { transform: translateX(-50%); }
-}
-
 /* ── Context fade ────────────────────────────────────────── */
 .cyber-ctx-fade {
   animation: cyber-ctx-fade-kf 380ms ease;
@@ -440,6 +391,5 @@ body {
    attack comet, focus marker) were removed — that system is being redesigned. */
 
 @media (prefers-reduced-motion: reduce) {
-  .cyber-ticker-track { animation: none; }
   .cyber-ctx-fade { animation: none; }
 }

@@ -1,12 +1,12 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 // Accepted OSM-derived basemap is the default. CARTO remains available via
-// NEXT_PUBLIC_TAIPAN_USE_CARTO_BASEMAP=1 for fallback testing.
-const USE_TAIPAN_CARTO_BASEMAP =
-  process.env.NEXT_PUBLIC_TAIPAN_USE_CARTO_BASEMAP === "1" ||
-  process.env.NEXT_PUBLIC_TAIPAN_USE_CARTO_BASEMAP === "true";
-export const USE_TAIPAN_OSM_BASEMAP =
-  !USE_TAIPAN_CARTO_BASEMAP;
+// NEXT_PUBLIC_ECHIS_USE_CARTO_BASEMAP=1 for fallback testing.
+const USE_ECHIS_CARTO_BASEMAP =
+  process.env.NEXT_PUBLIC_ECHIS_USE_CARTO_BASEMAP === "1" ||
+  process.env.NEXT_PUBLIC_ECHIS_USE_CARTO_BASEMAP === "true";
+export const USE_ECHIS_OSM_BASEMAP =
+  !USE_ECHIS_CARTO_BASEMAP;
 
 export const OSM_VECTOR_SOURCE_ID = "openfreemap-osm";
 
@@ -18,9 +18,9 @@ const OSM_ATTRIBUTION =
 // Sub-national (state / province / district) lines sit *below* national
 // borders in the visual hierarchy, so their grey is kept dimmer than the
 // country border colour passed in via `borderCountry`.
-const OSM_ADMIN_BOUNDARY = "rgba(142, 154, 150, 0.55)";
+const OSM_ADMIN_BOUNDARY = "rgba(176, 184, 196, 0.30)";
 
-export type TaipanOsmGlobeStylePalette = {
+export type EchisOsmGlobeStylePalette = {
   landFill: string;
   landOverlay: string;
   waterFill: string;
@@ -29,14 +29,14 @@ export type TaipanOsmGlobeStylePalette = {
   labelHalo: string;
 };
 
-export function createTaipanOsmGlobeStyle({
+export function createEchisOsmGlobeStyle({
   landFill,
   landOverlay,
   waterFill,
   waterwayFill,
   borderCountry,
   labelHalo,
-}: TaipanOsmGlobeStylePalette): StyleSpecification {
+}: EchisOsmGlobeStylePalette): StyleSpecification {
   const sourceLayer = (name: string) => ({
     source: OSM_VECTOR_SOURCE_ID,
     "source-layer": name,
@@ -44,7 +44,7 @@ export function createTaipanOsmGlobeStyle({
 
   return {
     version: 8,
-    name: "TaipanMonitor OSM Dark",
+    name: "ECHIS OSM Dark",
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
     sources: {
       [OSM_VECTOR_SOURCE_ID]: {
@@ -169,7 +169,7 @@ export function createTaipanOsmGlobeStyle({
           false,
         ],
         paint: {
-          "line-color": "rgba(96, 104, 102, 0.20)",
+          "line-color": "rgba(122, 122, 130, 0.16)",
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.25, 13, 0.8],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 9, 0.2, 13, 0.36],
         },
@@ -187,7 +187,7 @@ export function createTaipanOsmGlobeStyle({
           false,
         ],
         paint: {
-          "line-color": "rgba(118, 126, 122, 0.23)",
+          "line-color": "rgba(132, 132, 140, 0.18)",
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 13, 1.1],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 0.28, 13, 0.42],
         },
@@ -211,7 +211,7 @@ export function createTaipanOsmGlobeStyle({
           "text-padding": 6,
         },
         paint: {
-          "text-color": "rgba(122, 136, 140, 0.50)",
+          "text-color": "rgba(140, 150, 166, 0.50)",
           "text-halo-color": labelHalo,
           "text-halo-width": 0.8,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 2, 0.35, 6, 0.48],
@@ -239,7 +239,7 @@ export function createTaipanOsmGlobeStyle({
           "text-padding": 8,
         },
         paint: {
-          "text-color": "rgba(196, 202, 198, 0.82)",
+          "text-color": "rgba(208, 212, 220, 0.84)",
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.82, 6, 0.88],
@@ -267,7 +267,7 @@ export function createTaipanOsmGlobeStyle({
           "text-padding": 10,
         },
         paint: {
-          "text-color": "rgba(174, 184, 180, 0.64)",
+          "text-color": "rgba(184, 190, 202, 0.64)",
           "text-halo-color": labelHalo,
           "text-halo-width": 0.95,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4.6, 0, 5.3, 0.54, 8, 0.66],
@@ -297,7 +297,7 @@ export function createTaipanOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(190, 200, 195, 0.82)",
+          "text-color": "rgba(198, 204, 212, 0.82)",
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0, 3.6, 0.7, 7, 0.82],
@@ -328,7 +328,7 @@ export function createTaipanOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(182, 192, 187, 0.76)",
+          "text-color": "rgba(190, 196, 206, 0.76)",
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 3.9, 0, 4.6, 0.62, 8, 0.76],
@@ -369,7 +369,7 @@ export function createTaipanOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(172, 182, 178, 0.70)",
+          "text-color": "rgba(180, 186, 198, 0.70)",
           "text-halo-color": labelHalo,
           "text-halo-width": 0.9,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4.9, 0, 5.7, 0.54, 9, 0.70],
@@ -399,7 +399,7 @@ export function createTaipanOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(164, 174, 170, 0.62)",
+          "text-color": "rgba(172, 178, 190, 0.62)",
           "text-halo-color": labelHalo,
           "text-halo-width": 0.85,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6.6, 0, 7.4, 0.46, 10, 0.62],
@@ -434,7 +434,7 @@ export function createTaipanOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(156, 166, 162, 0.54)",
+          "text-color": "rgba(164, 170, 182, 0.54)",
           "text-halo-color": labelHalo,
           "text-halo-width": 0.8,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8.2, 0, 9, 0.34, 11, 0.54],

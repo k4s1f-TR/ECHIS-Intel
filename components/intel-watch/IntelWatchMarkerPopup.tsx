@@ -62,11 +62,11 @@ export function IntelWatchMarkerPopup({
       className="flex flex-col"
       style={{
         width: 232,
-        background: "rgba(10,14,22,0.92)",
+        background: "var(--bg-panel)",
         backdropFilter: "blur(6px)",
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: "1px solid var(--c-border-1)",
         borderRadius: "7px",
-        boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+        boxShadow: "var(--shadow-inset-highlight), 0 6px 18px rgba(0,0,0,0.45)",
         zIndex,
         pointerEvents: "auto",
       }}

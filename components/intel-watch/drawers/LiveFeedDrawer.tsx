@@ -18,8 +18,8 @@ const CATEGORY_STYLE: Record<
 > = {
   diplomatic: {
     label: "Diplomatic",
-    color: "rgba(96, 165, 250, 0.9)",
-    bg: "rgba(29, 78, 216, 0.12)",
+    color: "var(--c-elev)",
+    bg: "var(--c-elev-bg)",
   },
   border: {
     label: "Border",
@@ -33,8 +33,8 @@ const CATEGORY_STYLE: Record<
   },
   influence: {
     label: "Influence",
-    color: "rgba(167, 139, 250, 0.9)",
-    bg: "rgba(76, 29, 149, 0.15)",
+    color: "var(--c-med)",
+    bg: "var(--c-med-bg)",
   },
   security: {
     label: "Security",
@@ -43,18 +43,18 @@ const CATEGORY_STYLE: Record<
   },
   policy: {
     label: "Policy",
-    color: "rgba(148, 163, 184, 0.85)",
-    bg: "rgba(255, 255, 255, 0.06)",
+    color: "var(--c-elev)",
+    bg: "var(--c-elev-bg)",
   },
   intelligence: {
     label: "Intelligence",
-    color: "rgba(52, 211, 153, 0.86)",
-    bg: "rgba(5, 150, 105, 0.11)",
+    color: "rgba(217, 119, 6, 0.86)",
+    bg: "rgba(217, 119, 6, 0.12)",
   },
   maritime: {
     label: "Maritime",
-    color: "rgba(45, 212, 191, 0.82)",
-    bg: "rgba(15, 118, 110, 0.12)",
+    color: "var(--c-silver-dim)",
+    bg: "var(--c-silver-bg)",
   },
 };
 
@@ -84,7 +84,7 @@ function FilterPill({
   label,
   active,
   onClick,
-  activeColor = "rgba(96, 165, 250, 0.9)",
+  activeColor = "var(--accent-blue-text)",
 }: {
   label: string;
   active: boolean;
@@ -105,9 +105,9 @@ function FilterPill({
           ? `1px solid ${activeColor.replace("0.9", "0.35").replace("0.86", "0.35").replace("0.82", "0.35")}`
           : "1px solid rgba(255, 255, 255, 0.08)",
         background: active
-          ? "rgba(96, 165, 250, 0.12)"
+          ? "var(--accent-blue-bg)"
           : "rgba(255, 255, 255, 0.04)",
-        color: active ? activeColor : "rgba(110, 125, 145, 0.8)",
+        color: active ? activeColor : "var(--c-t5)",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -177,7 +177,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
             margin: "-16px -20px 0",
             padding: "14px 20px 12px",
             background: "var(--bg-panel)",
-            borderBottom: "1px solid rgba(51, 65, 85, 0.25)",
+            borderBottom: "1px solid var(--c-border-2)",
           }}
         >
           <input
@@ -192,7 +192,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
               borderRadius: 4,
               padding: "6px 10px",
               fontSize: 11,
-              color: "rgba(195, 208, 225, 0.9)",
+              color: "var(--c-t2)",
               outline: "none",
             }}
           />

@@ -13,28 +13,28 @@ import {
 
 const TYPE_COLORS: Record<SocmintReportType, { badge: string; text: string }> = {
   "local-report": {
-    badge: "rgba(96,165,250,0.12)",
-    text: "rgba(96,165,250,0.9)",
+    badge: "rgba(184,190,202,0.07)",
+    text: "rgba(150,170,196,0.9)",
   },
   "social-claim": {
     badge: "rgba(251,191,36,0.1)",
     text: "rgba(251,191,36,0.9)",
   },
   "osint-account": {
-    badge: "rgba(74,222,128,0.1)",
-    text: "rgba(74,222,128,0.9)",
+    badge: "var(--c-elev-bg)",
+    text: "var(--c-elev)",
   },
   "local-media": {
-    badge: "rgba(168,85,247,0.11)",
-    text: "rgba(196,181,253,0.9)",
+    badge: "var(--c-high-bg)",
+    text: "var(--c-high)",
   },
 };
 
 const STATUS_COLORS: Record<SocmintStatus, string> = {
   unverified: "rgba(248,113,113,0.9)",
   reported: "rgba(251,191,36,0.9)",
-  corroborated: "rgba(74,222,128,0.9)",
-  "needs-review": "rgba(147,197,253,0.9)",
+  corroborated: "var(--c-elev)",
+  "needs-review": "rgba(150,170,196,0.9)",
 };
 
 export function SignalsPanel({
@@ -74,31 +74,32 @@ export function SignalsPanel({
       className="flex h-full max-h-full min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[10px]"
       style={{
         width: "100%",
-        background: "rgba(12,12,12,0.97)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
       }}
     >
       <div
         className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
         <div className="flex items-center gap-2">
-          <Radio size={11} style={{ color: "rgba(96,165,250,0.7)" }} />
+          <Radio size={11} style={{ color: "rgba(250,86,96,0.7)" }} />
           <span
             className="font-semibold tracking-widest uppercase"
-            style={{ fontSize: "10px", color: "rgba(170,170,170,0.8)" }}
+            style={{ fontSize: "10px", color: "var(--c-t4)" }}
           >
             SOCMINT Feed
           </span>
         </div>
-        <span style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.85)" }}>
+        <span style={{ fontSize: "10.5px", color: "var(--c-t5)" }}>
           {displayed.length} Reports
         </span>
       </div>
 
       <div
         className="flex items-center gap-1 px-3 py-2 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+        style={{ borderBottom: "1px solid var(--c-border-3)" }}
       >
         {SOCMINT_TYPE_OPTIONS.map((opt) => {
           const active = opt.key === activeType;
@@ -113,11 +114,11 @@ export function SignalsPanel({
                 padding: "3px 8px",
                 borderRadius: "5px",
                 color: active
-                  ? "rgba(147,197,253,0.95)"
+                  ? "var(--accent-blue-text)"
                   : "rgba(100,100,100,0.85)",
-                background: active ? "rgba(59,130,246,0.12)" : "transparent",
+                background: active ? "var(--accent-blue-bg)" : "transparent",
                 border: active
-                  ? "1px solid rgba(59,130,246,0.2)"
+                  ? "1px solid var(--accent-blue-border)"
                   : "1px solid transparent",
                 transition: "all 150ms",
               }}
@@ -147,10 +148,12 @@ export function SignalsPanel({
               data-signal-id={report.id}
               onClick={() => onSelect(report.id)}
               style={{
-                background: isSelected ? "rgba(28,28,28,0.9)" : "rgba(18,18,18,0.7)",
+                background: isSelected
+                  ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
+                  : "var(--c-card-bg)",
                 border: isSelected
-                  ? "1px solid rgba(96,165,250,0.28)"
-                  : "1px solid rgba(255,255,255,0.05)",
+                  ? "1px solid var(--accent-blue-border)"
+                  : "1px solid var(--c-border-3)",
                 borderRadius: "8px",
                 padding: "10px 12px",
                 cursor: "pointer",
@@ -226,7 +229,7 @@ export function SignalsPanel({
                   <span
                     style={{
                       fontSize: "8.5px",
-                      color: "rgba(125,181,255,0.72)",
+                      color: "var(--accent-blue-text)",
                       letterSpacing: "0.03em",
                     }}
                   >

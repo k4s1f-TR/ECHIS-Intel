@@ -39,6 +39,7 @@ import type { EventCategory, RegionKey } from "@/types/event";
 import { socmintMatchesConfidenceFilter } from "@/types/socmint";
 import { domainTags } from "@/data/source-intelligence/filters/geopoliticalFilterRules";
 import type { SourceFilterDomain } from "@/data/source-intelligence/sourceIntelligenceTypes";
+import type { SourceMarkerFeature } from "@/data/source-intelligence/markers/sourceMarkerTypes";
 
 export type ViewMode = "situation" | "global" | "signals";
 type ActiveSection = "dashboard" | "sources" | "bookmarks";
@@ -46,6 +47,34 @@ type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
+
+function filterSourceMarkerItems(
+  marker: SourceMarkerFeature,
+  predicate: (item: SourceMarkerFeature["items"][number]) => boolean,
+): SourceMarkerFeature | null {
+  const items = marker.items.filter(predicate);
+  if (items.length === 0) return null;
+
+  const lead = items.reduce((best, item) =>
+    item.priorityScore > best.priorityScore ? item : best,
+  );
+
+  return {
+    ...marker,
+    itemCount: items.length,
+    items,
+    candidate: {
+      ...marker.candidate,
+      eventId: lead.id,
+      itemIds: items.map((item) => item.id),
+      title: lead.title,
+      summary: lead.summary,
+      sourceBasis: lead.sourceBasis,
+      tags: Array.from(new Set(items.flatMap((item) => item.tags))),
+    },
+  };
+}
+
 export function AppShell() {
   const globeMapRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -96,7 +125,7 @@ export function AppShell() {
     return [{ key: "all", label: "All Source Categories" }, ...domainOptions];
   }, [sourceItems]);
 
-  const displayedSourceItems = useMemo(
+  const sourceCategoryItems = useMemo(
     () =>
       activeSourceCategory === "all"
         ? sourceItems
@@ -104,8 +133,8 @@ export function AppShell() {
     [activeSourceCategory, sourceItems],
   );
   const sourceFilterOptions = useMemo(
-    () => buildSourceFilterOptions(displayedSourceItems),
-    [displayedSourceItems],
+    () => buildSourceFilterOptions(sourceCategoryItems),
+    [sourceCategoryItems],
   );
   const effectiveSourceFilterId = useMemo(() => {
     if (selectedSourceFilterId === ALL_SOURCES_FILTER) return ALL_SOURCES_FILTER;
@@ -113,20 +142,27 @@ export function AppShell() {
       ? selectedSourceFilterId
       : ALL_SOURCES_FILTER;
   }, [selectedSourceFilterId, sourceFilterOptions]);
+  const displayedSourceItems = useMemo(
+    () =>
+      effectiveSourceFilterId === ALL_SOURCES_FILTER
+        ? sourceCategoryItems
+        : sourceCategoryItems.filter((item) => item.sourceId === effectiveSourceFilterId),
+    [effectiveSourceFilterId, sourceCategoryItems],
+  );
 
   const displayedSourceMarkers = useMemo(
-    () =>
-      activeSourceCategory === "all"
-        ? sourceMarkers
-        : sourceMarkers
-            .map((marker) => ({
-              ...marker,
-              items: marker.items.filter(
-                (item) => item.primaryDomain === activeSourceCategory,
-              ),
-            }))
-            .filter((marker) => marker.items.length > 0),
-    [activeSourceCategory, sourceMarkers],
+    () => {
+      const predicate = (item: SourceMarkerFeature["items"][number]) =>
+        (activeSourceCategory === "all" ||
+          item.primaryDomain === activeSourceCategory) &&
+        (effectiveSourceFilterId === ALL_SOURCES_FILTER ||
+          item.sourceId === effectiveSourceFilterId);
+
+      return sourceMarkers
+        .map((marker) => filterSourceMarkerItems(marker, predicate))
+        .filter((marker): marker is SourceMarkerFeature => marker !== null);
+    },
+    [activeSourceCategory, effectiveSourceFilterId, sourceMarkers],
   );
 
   // O(1) lookup: source item id -> { markerId, itemIndex }.
@@ -286,6 +322,7 @@ export function AppShell() {
     setActiveView(view);
     setActiveCategory("all");
     setActiveSourceCategory("all");
+    setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
@@ -311,6 +348,7 @@ export function AppShell() {
     setActiveRegion("middle-east");
     setActiveCategory("all");
     setActiveSourceCategory("all");
+    setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
@@ -335,6 +373,7 @@ export function AppShell() {
     setActiveRailMode("global");
     setActiveRegion(region);
     setActiveView("situation");
+    setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
     setEventDetailOpen(false);
     setMarkerPopup(null);
@@ -344,6 +383,15 @@ export function AppShell() {
     setActiveSourceCategory(
       category === "all" ? "all" : (category as SourceFilterDomain),
     );
+    setSelectedSourceFilterId(ALL_SOURCES_FILTER);
+    setSelectedId(null);
+    setSelectedSourceItemId(null);
+    setEventDetailOpen(false);
+    setMarkerPopup(null);
+  }
+
+  function handleSourceFilterChange(sourceId: string) {
+    setSelectedSourceFilterId(sourceId);
     setSelectedId(null);
     setSelectedSourceItemId(null);
     setEventDetailOpen(false);
@@ -355,6 +403,7 @@ export function AppShell() {
       setActiveSection("sources");
       setActiveTopTab("sources");
       setActiveRailMode(null);
+      setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
       setEventDetailOpen(false);
       setMarkerPopup(null);
@@ -370,6 +419,7 @@ export function AppShell() {
       setActiveView("global");
       setActiveRegion("middle-east");
       setActiveCategory("politics");
+      setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
       setEventDetailOpen(false);
       setMarkerPopup(null);
@@ -384,6 +434,7 @@ export function AppShell() {
       setActiveRailMode(null);
       setActiveCategory("all");
       setActiveSourceCategory("all");
+      setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
       setEventDetailOpen(false);
       setMarkerPopup(null);
@@ -479,8 +530,8 @@ export function AppShell() {
 
   return (
     <div
-      className="flex h-screen w-screen flex-col overflow-hidden"
-      style={{ background: "#0a0a0a" }}
+      className="cyber-premium flex h-screen w-screen flex-col overflow-hidden"
+      style={{ background: "var(--c-bg-base)" }}
     >
       <HeaderNav
         activeTab={activeTopTab}
@@ -578,9 +629,9 @@ export function AppShell() {
                     collapsed={sourceFilterCollapsed}
                     onCollapsedChange={setSourceFilterCollapsed}
                     options={sourceFilterOptions}
-                    totalCount={displayedSourceItems.length}
+                    totalCount={sourceCategoryItems.length}
                     selectedSourceId={effectiveSourceFilterId}
-                    onSelectSource={setSelectedSourceFilterId}
+                    onSelectSource={handleSourceFilterChange}
                   />
                 </div>
               )}
@@ -658,7 +709,7 @@ export function AppShell() {
                 summary={markerPopupEvent.summary}
                 source={markerPopupEvent.sourceId}
                 time={markerPopupEvent.time}
-                accent="#3b82f6"
+                accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
               />
@@ -670,7 +721,7 @@ export function AppShell() {
                 summary={markerPopupSourceItem.summary ?? ""}
                 source={markerPopupSourceItem.sourceName}
                 time={markerPopupSourceItem.publishedAt}
-                accent="#60a5fa"
+                accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
                 itemIndex={markerPopupSourceItemIndex}
@@ -723,7 +774,7 @@ export function AppShell() {
                 summary={markerPopupSignal.summary}
                 source={markerPopupSignal.sourceName}
                 time={markerPopupSignal.timestamp}
-                accent="#60a5fa"
+                accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
               />

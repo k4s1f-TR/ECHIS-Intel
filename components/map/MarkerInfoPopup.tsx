@@ -25,7 +25,7 @@ export function MarkerInfoPopup({
   summary,
   source,
   time,
-  accent = "#3b82f6",
+  accent = "var(--accent-blue-text)",
   getPosition,
   onClose,
   itemIndex,
@@ -67,10 +67,10 @@ export function MarkerInfoPopup({
     >
       <div
         style={{
-          background: "#070b0f",
+          background: "var(--bg-panel)",
           border: "1px solid rgba(255,255,255,0.11)",
           borderRadius: 10,
-          boxShadow: "0 18px 44px rgba(0,0,0,0.5)",
+          boxShadow: "var(--shadow-inset-highlight), 0 18px 44px rgba(0,0,0,0.5)",
           overflow: "hidden",
         }}
       >
@@ -164,7 +164,7 @@ export function MarkerInfoPopup({
               }}
             >
               Report{" "}
-              <span style={{ color: "rgba(205,220,240,0.78)" }}>
+              <span style={{ color: "var(--accent-blue-text)" }}>
                 {String(currentDisplay).padStart(2, "0")}
               </span>
               {" / "}
@@ -221,7 +221,7 @@ export function MarkerInfoPopup({
           height: 10,
           margin: "-5px auto 0",
           transform: "rotate(45deg)",
-          background: "#070b0f",
+          background: "var(--c-panel-bg)",
           borderRight: "1px solid rgba(255,255,255,0.11)",
           borderBottom: "1px solid rgba(255,255,255,0.11)",
         }}

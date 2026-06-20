@@ -9,8 +9,8 @@ import { useEffect, useState } from "react";
  * ~1.5 s, then unmounts itself completely so it never blocks
  * interaction or route transitions.
  *
- * Visual language: dark near-black, restrained green accent (#34d399),
- * subtle grid + scan-line, centered TAIPANMONITOR wordmark.
+ * Visual language: dark near-black, restrained crimson accent,
+ * subtle grid + scan-line, centered E C H I S wordmark.
  */
 export function AppIntro() {
   const [phase, setPhase] = useState<"visible" | "fading" | "done">("visible");
@@ -40,7 +40,7 @@ export function AppIntro() {
       {/* ── background ─────────────────────────────────────── */}
       <div
         className="absolute inset-0"
-        style={{ background: "#060606" }}
+        style={{ background: "var(--c-bg-base)" }}
       />
 
       {/* ── subtle grid ────────────────────────────────────── */}
@@ -48,8 +48,8 @@ export function AppIntro() {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(52,211,153,0.04) 1px, transparent 1px)," +
-            "linear-gradient(90deg, rgba(52,211,153,0.04) 1px, transparent 1px)",
+            "linear-gradient(rgba(236,47,59,0.04) 1px, transparent 1px)," +
+            "linear-gradient(90deg, rgba(236,47,59,0.04) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
         }}
       />
@@ -62,21 +62,23 @@ export function AppIntro() {
           style={{
             width: "300px",
             height: "120px",
-            background: "radial-gradient(circle, rgba(52,211,153,0.15) 0%, transparent 60%)",
+            background: "radial-gradient(circle, rgba(236,47,59,0.15) 0%, transparent 60%)",
             animation: "introFade 1600ms cubic-bezier(.4,0,.2,1) both",
           }}
         />
 
         {/* wordmark */}
         <h1
-          className="relative select-none font-semibold tracking-[0.26em] uppercase"
+          className="relative select-none whitespace-nowrap font-bold uppercase"
           style={{
             fontSize: "28px",
-            color: "rgba(235,235,235,0.92)",
+            color: "#ff3548",
+            letterSpacing: "0",
+            lineHeight: 1,
             animation: "introFade 1600ms cubic-bezier(.4,0,.2,1) both",
           }}
         >
-          TaipanMonitor
+          E C H I S
         </h1>
       </div>
 

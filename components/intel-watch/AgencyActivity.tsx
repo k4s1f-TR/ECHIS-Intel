@@ -13,9 +13,9 @@ const TYPE_ABBR: Record<AgencyType, string> = {
 };
 
 const TYPE_COLOR: Record<AgencyType, { color: string; bg: string }> = {
-  Intelligence: { color: "rgba(217,119,6,0.9)", bg: "rgba(217,119,6,0.12)" },
-  Diplomatic: { color: "rgba(59,130,246,0.9)", bg: "rgba(59,130,246,0.12)" },
-  Supranational: { color: "rgba(167,139,250,0.9)", bg: "rgba(167,139,250,0.12)" },
+  Intelligence: { color: "var(--c-high)", bg: "var(--c-high-bg)" },
+  Diplomatic: { color: "var(--c-elev)", bg: "var(--c-elev-bg)" },
+  Supranational: { color: "var(--c-med)", bg: "var(--c-med-bg)" },
 };
 
 type Props = {
@@ -27,22 +27,23 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
     <div
       className="flex flex-col h-full min-h-0 overflow-hidden"
       style={{
-        background: "var(--bg-card-alt)",
-        border: "1px solid var(--border-primary)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
         borderRadius: "var(--radius-md)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-3 py-2"
-        style={{ borderBottom: "1px solid var(--border-dim)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
         <div className="flex items-center gap-1.5">
           <span
             style={{
               fontSize: "var(--fs-xs)",
               fontWeight: 700,
-              color: "var(--text-secondary)",
+              color: "var(--c-t4)",
               letterSpacing: "0.09em",
               textTransform: "uppercase",
             }}
@@ -52,7 +53,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
           <span
             style={{
               fontSize: "var(--fs-xs)",
-              color: "var(--text-tertiary)",
+              color: "var(--c-t5)",
               cursor: "default",
             }}
             title="Top agencies by mention volume in the last 7 days"
@@ -65,7 +66,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
             onClick={onOpenDrawer}
             style={{
               fontSize: "var(--fs-xs)",
-              color: "var(--accent-green)",
+              color: "var(--accent-blue-text)",
               background: "none",
               border: "none",
               cursor: "pointer",
@@ -82,7 +83,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
         <span
           style={{
             fontSize: "var(--fs-xs)",
-            color: "var(--text-dim)",
+            color: "var(--c-t6)",
             letterSpacing: "0.04em",
           }}
         >
@@ -106,7 +107,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                     style={{
                       fontSize: "var(--fs-sm)",
                       fontWeight: 500,
-                      color: "var(--text-body)",
+                      color: "var(--c-t3)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -132,7 +133,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                 <span
                   style={{
                     fontSize: "var(--fs-sm)",
-                    color: "var(--text-tertiary)",
+                    color: "var(--c-t5)",
                     fontVariantNumeric: "tabular-nums",
                     fontFamily: "ui-monospace, monospace",
                     flexShrink: 0,
@@ -145,7 +146,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                 style={{
                   height: "3px",
                   borderRadius: "2px",
-                  background: "var(--border-dim)",
+                  background: "var(--c-border-2)",
                   overflow: "hidden",
                 }}
               >
@@ -154,7 +155,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                     width: `${pct}%`,
                     height: "100%",
                     borderRadius: "2px",
-                    background: "rgba(96,165,250,0.55)",
+                    background: "rgba(236,47,59,0.55)",
                   }}
                 />
               </div>

@@ -13,8 +13,8 @@ import type { BookmarkedItem } from "./useBookmarks";
 const SOCMINT_STATUS_COLORS = {
   unverified: "rgba(248,113,113,0.9)",
   reported: "rgba(251,191,36,0.9)",
-  corroborated: "rgba(74,222,128,0.9)",
-  "needs-review": "rgba(147,197,253,0.9)",
+  corroborated: "var(--c-elev)",
+  "needs-review": "rgba(150,170,196,0.9)",
 } as const;
 
 export function BookmarksView({
@@ -33,14 +33,14 @@ export function BookmarksView({
       className="flex min-h-0 flex-1 overflow-hidden"
       style={{
         background:
-          "radial-gradient(circle at 24% 18%, rgba(59,130,246,0.055), rgba(10,10,10,0) 32%), #080808",
+          "radial-gradient(circle at 24% 18%, rgba(255,43,61,0.035), rgba(10,10,10,0) 32%), var(--c-bg-base)",
       }}
     >
       <div className="mx-auto flex h-full min-h-0 w-full max-w-[1180px] flex-col gap-3 px-6 py-4">
         <section className="flex flex-shrink-0 items-start gap-4">
           <div>
             <div className="mb-1.5 flex items-center gap-2">
-              <Bookmark size={15} style={{ color: "rgba(147,197,253,0.88)" }} />
+              <Bookmark size={15} style={{ color: "var(--accent-blue-text)" }} />
               <span
                 className="font-semibold uppercase"
                 style={{ color: "rgba(147,147,147,0.82)", fontSize: "10.5px", letterSpacing: "0.12em" }}
@@ -57,8 +57,8 @@ export function BookmarksView({
         <section
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[10px]"
           style={{
-            background: "rgba(12,12,12,0.96)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            background: "var(--bg-panel)",
+            border: "1px solid var(--c-border-1)",
             boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.035)",
           }}
         >
@@ -77,7 +77,7 @@ export function BookmarksView({
                 type="button"
                 disabled={!hasBookmarks}
                 onClick={onClearBookmarks}
-                className="rounded-md px-2.5 py-1 font-semibold uppercase outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-blue-400/45"
+                className="rounded-md px-2.5 py-1 font-semibold uppercase outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-[#ec2f3b]/45"
                 style={{
                   background: hasBookmarks ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.018)",
                   border: "1px solid rgba(255,255,255,0.065)",
@@ -141,14 +141,14 @@ export function BookmarksView({
                           fontSize: "9px",
                           fontWeight: 700,
                           background: "rgba(255,255,255,0.07)",
-                          color: "rgba(120,140,170,0.9)",
+                          color: "var(--c-t5)",
                         }}
                       >
                         {index + 1}
                       </span>
                       <p
                         className="flex-1 pr-1 font-medium leading-snug"
-                        style={{ fontSize: "12.5px", color: "rgba(190,208,230,0.85)" }}
+                        style={{ fontSize: "12.5px", color: "var(--c-t3)" }}
                       >
                         {item.report.title}
                       </p>
@@ -174,8 +174,8 @@ export function BookmarksView({
                         style={{
                           fontSize: "9px",
                           fontWeight: 700,
-                          background: "rgba(96,165,250,0.12)",
-                          color: "rgba(96,165,250,0.9)",
+                          background: "var(--accent-blue-bg)",
+                          color: "var(--accent-blue-text)",
                         }}
                       >
                         SOCMINT

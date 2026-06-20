@@ -27,29 +27,29 @@ export function EventCard({
       style={{
         padding: "10px 11px",
         border: selected
-          ? "1px solid rgba(59,130,246,0.5)"
-          : "1px solid rgba(255,255,255,0.055)",
+          ? "1px solid var(--c-accent-border)"
+          : "1px solid var(--c-border-3)",
         background: selected
-          ? "rgba(59,130,246,0.06)"
-          : "rgba(255,255,255,0.018)",
+          ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
+          : "var(--c-card-bg)",
         boxShadow: selected
-          ? "0 0 0 1px rgba(59,130,246,0.15), inset 0 0 20px rgba(59,130,246,0.04)"
+          ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)"
           : "none",
       }}
       onMouseEnter={(e) => {
         if (!selected) {
           (e.currentTarget as HTMLElement).style.background =
-            "rgba(255,255,255,0.032)";
+            "var(--c-card-bg-hover)";
           (e.currentTarget as HTMLElement).style.borderColor =
-            "rgba(255,255,255,0.09)";
+            "var(--c-border-1)";
         }
       }}
       onMouseLeave={(e) => {
         if (!selected) {
           (e.currentTarget as HTMLElement).style.background =
-            "rgba(255,255,255,0.018)";
+            "var(--c-card-bg)";
           (e.currentTarget as HTMLElement).style.borderColor =
-            "rgba(255,255,255,0.055)";
+            "var(--c-border-3)";
         }
       }}
     >
@@ -61,9 +61,9 @@ export function EventCard({
             fontSize: "9px",
             fontWeight: 700,
             background: selected
-              ? "rgba(59,130,246,0.7)"
+              ? "var(--accent-blue-text)"
               : "rgba(255,255,255,0.07)",
-            color: selected ? "#fff" : "rgba(120,140,170,0.9)",
+            color: selected ? "#fff" : "var(--c-t5)",
           }}
         >
           {index}
@@ -73,8 +73,8 @@ export function EventCard({
           style={{
             fontSize: "12.5px",
             color: selected
-              ? "rgba(220,235,255,0.97)"
-              : "rgba(190,208,230,0.85)",
+              ? "rgba(238,240,244,0.98)"
+              : "var(--c-t3)",
           }}
         >
           {event.title}

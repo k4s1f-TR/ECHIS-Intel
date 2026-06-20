@@ -4,12 +4,12 @@ import { liveFeedEvents } from "@/data/intel-watch/events";
 import type { FeedCategory } from "@/types/intel-watch";
 
 const CATEGORY_STYLE: Record<FeedCategory, { label: string; color: string; bg: string }> = {
-  diplomatic: { label: "Diplomatic", color: "rgba(96,165,250,0.9)", bg: "rgba(29,78,216,0.12)" },
+  diplomatic: { label: "Diplomatic", color: "var(--c-elev)", bg: "var(--c-elev-bg)" },
   security: { label: "Security", color: "rgba(251,146,60,0.9)", bg: "rgba(124,45,18,0.15)" },
   sanctions: { label: "Sanctions", color: "rgba(248,113,113,0.9)", bg: "rgba(127,29,29,0.15)" },
-  influence: { label: "Influence", color: "rgba(167,139,250,0.9)", bg: "rgba(76,29,149,0.15)" },
+  influence: { label: "Influence", color: "var(--c-med)", bg: "var(--c-med-bg)" },
   border: { label: "Border", color: "rgba(250,204,21,0.9)", bg: "rgba(113,63,18,0.15)" },
-  policy: { label: "Policy", color: "rgba(148,163,184,0.85)", bg: "rgba(255,255,255,0.06)" },
+  policy: { label: "Policy", color: "var(--c-elev)", bg: "var(--c-elev-bg)" },
 };
 
 type Props = {
@@ -23,22 +23,23 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
       className="flex flex-col min-h-0 overflow-hidden flex-1"
       style={{
         width: "330px",
-        background: "var(--bg-panel-alt)",
-        border: "1px solid var(--border-primary)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
         borderRadius: "var(--radius-md)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between flex-shrink-0 px-3.5 py-2.5"
-        style={{ borderBottom: "1px solid var(--border-dim)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
         <div className="flex items-center gap-2">
           <span
             style={{
               fontSize: "var(--fs-sm)",
               fontWeight: 700,
-              color: "var(--text-secondary)",
+              color: "var(--c-t4)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
@@ -79,9 +80,9 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
           style={{
             fontSize: "var(--fs-xs)",
             fontWeight: 500,
-            color: "var(--text-tertiary)",
-            background: "var(--bg-surface-hover)",
-            border: "1px solid var(--border-primary)",
+            color: "var(--c-t5)",
+            background: "var(--c-card-bg-hover)",
+            border: "1px solid var(--c-border-1)",
             borderRadius: "var(--radius-sm)",
             padding: "2px 8px",
             cursor: "pointer",
@@ -107,11 +108,11 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                 style={{
                   width: 28,
                   height: 28,
-                  background: "var(--border-dim)",
-                  border: "1px solid var(--border-hover)",
+              background: "var(--c-border-2)",
+              border: "1px solid var(--c-border-1)",
                   fontSize: "7.5px",
                   fontWeight: 700,
-                  color: "var(--text-body)",
+                  color: "var(--c-t3)",
                   letterSpacing: "0.03em",
                   marginTop: 1,
                 }}
@@ -125,7 +126,7 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                   style={{
                     fontSize: "var(--fs-base)",
                     fontWeight: 600,
-                    color: "var(--text-body)",
+                    color: "var(--c-t3)",
                     lineHeight: 1.35,
                     overflow: "hidden",
                     display: "-webkit-box",
@@ -138,7 +139,7 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                 <span
                   style={{
                     fontSize: "var(--fs-sm)",
-                    color: "var(--text-tertiary)",
+                    color: "var(--c-t5)",
                     lineHeight: 1.45,
                     overflow: "hidden",
                     display: "-webkit-box",
@@ -161,13 +162,13 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                   >
                     {cs.label}
                   </span>
-                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)" }}>
+                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--c-t5)" }}>
                     {event.source}
                   </span>
                   <span
                     style={{
                       fontSize: "var(--fs-xs)",
-                      color: "var(--text-dim)",
+                      color: "var(--c-t6)",
                       fontFamily: "ui-monospace, monospace",
                       marginLeft: "auto",
                     }}
@@ -184,13 +185,13 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
       {/* Footer */}
       <div
         className="flex-shrink-0 px-3.5 py-2"
-        style={{ borderTop: "1px solid var(--border-dim)" }}
+        style={{ borderTop: "1px solid var(--c-border-2)" }}
       >
         <button
           onClick={onOpenDrawer}
           style={{
             fontSize: "var(--fs-sm)",
-            color: "var(--accent-green)",
+            color: "var(--accent-blue-text)",
             background: "none",
             border: "none",
             cursor: "pointer",

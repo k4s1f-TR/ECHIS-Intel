@@ -9,26 +9,26 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
   return (
     <div
       className="flex items-center gap-2 py-[5px]"
-      style={{ borderBottom: "1px solid var(--border-subtle)" }}
+      style={{ borderBottom: "1px solid var(--c-border-3)" }}
     >
       <span
         className="flex-shrink-0"
-        style={{ width: 14, fontSize: "var(--fs-xs)", color: "var(--text-dim)", fontWeight: 600, textAlign: "right" }}
+        style={{ width: 14, fontSize: "var(--fs-xs)", color: "var(--c-t6)", fontWeight: 600, textAlign: "right" }}
       >
         {item.rank}
       </span>
       <span
         className="flex-shrink-0"
-        style={{ width: 110, fontSize: "var(--fs-sm)", color: "var(--text-body)", fontWeight: 500 }}
+        style={{ width: 110, fontSize: "var(--fs-sm)", color: "var(--c-t3)", fontWeight: 500 }}
       >
         {item.segment}
       </span>
-      <div className="flex-1 h-[4px] rounded-full" style={{ background: "rgba(160,180,200,0.05)" }}>
+      <div className="flex-1 h-[4px] rounded-full" style={{ background: "rgba(255,255,255,0.045)" }}>
         <div
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(90deg, rgba(160,180,200,0.28), rgba(195,210,225,0.55))",
+            background: "linear-gradient(90deg, rgba(255,43,61,0.72), rgba(255,122,47,0.62))",
             transition: "width 300ms ease",
           }}
         />
@@ -37,7 +37,7 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
         style={{
           fontSize: "var(--fs-sm)",
           fontWeight: 600,
-          color: "var(--text-body)",
+          color: "var(--c-t3)",
           fontVariantNumeric: "tabular-nums",
           width: 40,
           textAlign: "right",
@@ -47,7 +47,7 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
       </span>
       <div className="flex items-center gap-0.5 flex-shrink-0" style={{ width: 50 }}>
         {positive ? (
-          <TrendingUp size={9} style={{ color: "rgba(160,200,180,0.85)" }} />
+          <TrendingUp size={9} style={{ color: "var(--c-med)" }} />
         ) : (
           <TrendingDown size={9} style={{ color: "rgba(220,140,120,0.8)" }} />
         )}
@@ -55,7 +55,7 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
           style={{
             fontSize: "var(--fs-xs)",
             fontWeight: 600,
-            color: positive ? "rgba(160,200,180,0.85)" : "rgba(220,140,120,0.8)",
+            color: positive ? "var(--c-med)" : "var(--c-high)",
           }}
         >
           {positive ? "+" : ""}
@@ -73,21 +73,22 @@ export function KeySegmentsPanel() {
       className="h-full flex flex-col"
       style={{
         background: "var(--bg-panel)",
-        border: "1px solid var(--border-primary)",
+        border: "1px solid var(--c-border-1)",
         borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center gap-2 flex-shrink-0 px-3 py-2"
-        style={{ borderBottom: "1px solid var(--border-dim)" }}
+        style={{ borderBottom: "1px solid var(--c-border-2)" }}
       >
-        <Layers size={11} style={{ color: "var(--icon-default)" }} />
+        <Layers size={11} style={{ color: "var(--c-silver-dim)" }} />
         <span
           style={{
             fontSize: "var(--fs-xs)",
             fontWeight: 700,
-            color: "var(--text-secondary)",
+            color: "var(--c-t4)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
           }}

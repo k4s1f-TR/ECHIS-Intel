@@ -16,22 +16,22 @@ export function BookmarkToggleButton({
       type="button"
       aria-label={bookmarked ? "Remove event from bookmarks" : "Save event to bookmarks"}
       aria-pressed={bookmarked}
-      className="flex-shrink-0 rounded p-0.5 outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-blue-400/45"
+      className="flex-shrink-0 rounded p-0.5 outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-[#ec2f3b]/45"
       style={{
-        color: bookmarked ? "rgba(96,165,250,0.95)" : "rgba(85,85,85,0.8)",
-        background: bookmarked ? "rgba(59,130,246,0.08)" : "transparent",
-        boxShadow: bookmarked ? "0 0 10px rgba(59,130,246,0.12)" : "none",
+        color: bookmarked ? "var(--accent-blue-text)" : "rgba(85,85,85,0.8)",
+        background: bookmarked ? "var(--accent-blue-bg)" : "transparent",
+        boxShadow: bookmarked ? "0 0 10px var(--accent-blue-glow)" : "none",
       }}
       onClick={(event) => {
         event.stopPropagation();
         onToggle();
       }}
       onMouseEnter={(event) => {
-        event.currentTarget.style.color = "rgba(96,165,250,0.8)";
+        event.currentTarget.style.color = "var(--accent-blue-text)";
       }}
       onMouseLeave={(event) => {
         event.currentTarget.style.color = bookmarked
-          ? "rgba(96,165,250,0.95)"
+          ? "var(--accent-blue-text)"
           : "rgba(85,85,85,0.8)";
       }}
     >

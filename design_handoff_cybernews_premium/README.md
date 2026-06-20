@@ -1,7 +1,7 @@
-# Handoff: Cyber News — Premium Redesign (TaipanMonitor)
+# Handoff: Cyber News — Premium Redesign (ECHIS)
 
 ## Overview
-A full visual + interaction redesign of the **Cyber News** screen of TaipanMonitor:
+A full visual + interaction redesign of the **Cyber News** screen of ECHIS:
 a dark, luxe OSINT command-center built around **deep black + vivid crimson + sharp
 silver**. It covers the Global Threat Map (flat world map with live attack comets and
 severity-tiered markers), the Cyber Security News feed, the Threat Context panel, the

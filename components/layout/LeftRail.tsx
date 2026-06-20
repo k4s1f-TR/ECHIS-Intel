@@ -100,8 +100,9 @@ export function LeftRail({
       style={{
         width: "68px",
         minWidth: "68px",
-        background: "#000000",
-        borderRight: "1px solid rgba(255, 255, 255, 0.08)",
+        background: "linear-gradient(180deg, #09090b 0%, #050506 100%)",
+        borderRight: "1px solid var(--c-border-2)",
+        boxShadow: "1px 0 0 rgba(255,255,255,0.02) inset",
       }}
     >
       {/* Logo mark */}

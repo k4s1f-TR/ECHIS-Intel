@@ -36,9 +36,9 @@ export const regionLabels: Record<string, string> = {
 };
 
 export const regionColors: Record<string, string> = {
-  na: "rgba(59,130,246,0.85)",
-  eu: "rgba(167,139,250,0.85)",
+  na: "rgba(150,170,196,0.85)",
+  eu: "rgba(241,194,79,0.85)",
   me: "rgba(251,146,60,0.85)",
   eurasia: "rgba(248,113,113,0.85)",
-  apac: "rgba(52,211,153,0.85)",
+  apac: "rgba(166,184,202,0.85)",
 };

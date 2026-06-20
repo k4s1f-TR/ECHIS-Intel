@@ -39,10 +39,10 @@ const DROPDOWN_STYLE = {
 } as const;
 
 const TYPE_COLORS: Record<SocmintReportType, string> = {
-  "local-report": "rgba(96,165,250,0.85)",
+  "local-report": "rgba(150,170,196,0.85)",
   "social-claim": "rgba(251,191,36,0.85)",
-  "osint-account": "rgba(74,222,128,0.85)",
-  "local-media": "rgba(196,181,253,0.9)",
+  "osint-account": "var(--c-elev)",
+  "local-media": "var(--c-high)",
 };
 
 const SOCMINT_TYPES: SocmintReportType[] = [

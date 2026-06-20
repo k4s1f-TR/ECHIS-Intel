@@ -745,7 +745,7 @@ export function IntelWatchWorldMap() {
       onPointerMove={updateDrag}
       onPointerUp={endDrag}
       style={{
-        background: "#000000",
+        background: "var(--c-bg-deep)",
         cursor: zoom > MIN_ZOOM ? (isDragging ? "grabbing" : "grab") : "default",
         isolation: "isolate",
         touchAction: "none",
@@ -760,7 +760,7 @@ export function IntelWatchWorldMap() {
             height: 28px;
             border-radius: 7px;
             border: 1px solid rgba(255, 255, 255, 0.24);
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 43, 61, 0.1);
             color: rgba(248, 250, 252, 0.98);
             cursor: pointer;
             font-size: 15px;
@@ -773,8 +773,8 @@ export function IntelWatchWorldMap() {
           }
 
           .intel-map-zoom-button:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.22);
-            border-color: rgba(255, 255, 255, 0.38);
+            background: rgba(255, 43, 61, 0.16);
+            border-color: rgba(255, 72, 84, 0.42);
           }
 
           .intel-map-zoom-button:disabled {
@@ -911,7 +911,7 @@ export function IntelWatchWorldMap() {
             }
           `}
         </style>
-        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="#000000" />
+        <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="var(--c-bg-deep)" />
         <g
           className="map-zoom-layer"
           transform={`translate(${pan.x.toFixed(2)} ${pan.y.toFixed(
@@ -1000,9 +1000,9 @@ export function IntelWatchWorldMap() {
           padding: "6px 8px",
           borderRadius: 12,
           pointerEvents: "auto",
-          background: "rgba(5, 9, 19, 0.96)",
-          border: "1px solid rgba(255, 255, 255, 0.22)",
-          boxShadow: "0 12px 32px rgba(0, 0, 0, 0.58)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
+          boxShadow: "var(--shadow-inset-highlight), 0 12px 32px rgba(0, 0, 0, 0.58)",
           backdropFilter: "blur(10px)",
         }}
       >
@@ -1070,8 +1070,8 @@ export function IntelWatchWorldMap() {
             pointerEvents: "none",
             padding: "5px 8px",
             borderRadius: 6,
-            background: "rgba(8, 13, 19, 0.86)",
-            border: "1px solid rgba(220, 230, 239, 0.16)",
+            background: "var(--bg-panel)",
+            border: "1px solid var(--c-border-1)",
             color: "rgba(232, 238, 244, 0.92)",
             fontSize: 11,
             fontWeight: 600,
@@ -1093,7 +1093,7 @@ export function IntelWatchWorldMap() {
             display: "grid",
             placeItems: "center",
             padding: 24,
-            background: "rgba(2, 6, 10, 0.52)",
+            background: "rgba(3, 2, 3, 0.62)",
             backdropFilter: "blur(3px)",
             WebkitBackdropFilter: "blur(3px)",
             cursor: "default",
@@ -1112,9 +1112,9 @@ export function IntelWatchWorldMap() {
               maxHeight: "min(560px, calc(100% - 48px))",
               overflow: "hidden",
               borderRadius: 18,
-              background: "rgba(7, 11, 15, 0.97)",
+              background: "var(--bg-panel)",
               border: "1px solid rgba(255, 255, 255, 0.12)",
-              boxShadow: "0 32px 90px rgba(0, 0, 0, 0.55)",
+              boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0, 0, 0, 0.55)",
               color: "rgba(232, 238, 244, 0.94)",
             }}
             onClick={(event) => event.stopPropagation()}

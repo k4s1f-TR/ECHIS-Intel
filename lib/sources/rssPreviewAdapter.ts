@@ -231,7 +231,7 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           agent,
           insecureHTTPParser: relaxation.insecureHttpParser,
           headers: {
-            "User-Agent": "TaipanMonitor/1.0",
+            "User-Agent": "ECHIS/1.0",
             Accept:
               "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5",
           },

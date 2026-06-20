@@ -8,7 +8,7 @@ const FETCH_TIMEOUT_MS = 12_000;
 const MAX_SUMMARY_LENGTH = 300;
 
 const RELIEFWEB_API_URL =
-  "https://api.reliefweb.int/v2/reports?appname=taipanmonitor";
+  "https://api.reliefweb.int/v2/reports?appname=echis";
 
 const RELIEFWEB_REQUEST_BODY = {
   fields: {

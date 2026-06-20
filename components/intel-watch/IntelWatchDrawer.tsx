@@ -76,7 +76,9 @@ export function IntelWatchDrawer({
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          background: "var(--bg-panel-alt)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
+          boxShadow: "var(--shadow-inset-highlight), 0 24px 70px rgba(0,0,0,0.55)",
           transform: open ? "translateY(0)" : "translateY(-100%)",
           transition: open
             ? "transform 220ms ease-out"
@@ -93,7 +95,7 @@ export function IntelWatchDrawer({
             justifyContent: "space-between",
             gap: 16,
             padding: "0 20px",
-            borderBottom: "1px solid var(--border-divider)",
+            borderBottom: "1px solid var(--c-border-2)",
           }}
         >
           <div
@@ -111,7 +113,7 @@ export function IntelWatchDrawer({
                 fontWeight: 600,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--text-body)",
+                color: "var(--c-t3)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -121,7 +123,7 @@ export function IntelWatchDrawer({
               <span
                 style={{
                   fontSize: 11,
-                  color: "var(--text-tertiary)",
+                  color: "var(--c-t5)",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -147,15 +149,15 @@ export function IntelWatchDrawer({
               background: "transparent",
               border: "1px solid transparent",
               cursor: "pointer",
-              color: "var(--text-tertiary)",
+              color: "var(--c-t5)",
               transition: "color 120ms ease, border-color 120ms ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--text-body)";
-              e.currentTarget.style.borderColor = "var(--border-hover)";
+              e.currentTarget.style.color = "var(--c-t3)";
+              e.currentTarget.style.borderColor = "var(--c-border-1)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--text-tertiary)";
+              e.currentTarget.style.color = "var(--c-t5)";
               e.currentTarget.style.borderColor = "transparent";
             }}
           >

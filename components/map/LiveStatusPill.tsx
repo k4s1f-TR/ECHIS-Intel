@@ -10,8 +10,9 @@ export function LiveStatusPill({ panelOffset = 0 }: LiveStatusPillProps) {
       className="absolute bottom-3 right-4 flex items-center gap-2.5 rounded-lg z-10"
       style={{
         padding: "5px 10px",
-        background: "rgba(12,12,12,0.85)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
+        boxShadow: "var(--shadow-inset-highlight)",
         backdropFilter: "blur(10px)",
         transform: `translateX(-${panelOffset}px)`,
         transition: "transform 220ms ease",

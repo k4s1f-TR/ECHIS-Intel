@@ -44,8 +44,8 @@ export function MapControls({
           aria-label={label}
           className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150"
           style={{
-            background: "rgba(12,12,12,0.85)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            background: "var(--bg-panel)",
+            border: "1px solid var(--c-border-1)",
             backdropFilter: "blur(10px)",
             color: "rgba(100,100,100,0.8)",
           }}
@@ -53,15 +53,15 @@ export function MapControls({
             (e.currentTarget as HTMLElement).style.color =
               "rgba(190,190,190,0.9)";
             (e.currentTarget as HTMLElement).style.background =
-              "rgba(59,130,246,0.1)";
+              "var(--accent-blue-bg)";
             (e.currentTarget as HTMLElement).style.borderColor =
-              "rgba(59,130,246,0.2)";
+              "var(--accent-blue-border)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.color =
               "rgba(100,100,100,0.8)";
             (e.currentTarget as HTMLElement).style.background =
-              "rgba(12,12,12,0.85)";
+              "var(--bg-panel)";
             (e.currentTarget as HTMLElement).style.borderColor =
               "rgba(255,255,255,0.07)";
           }}

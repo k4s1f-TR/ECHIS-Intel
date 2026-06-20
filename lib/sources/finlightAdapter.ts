@@ -54,7 +54,7 @@ export async function fetchFinlightArticles(
         "X-API-KEY": apiKey,
         "Content-Type": "application/json",
         Accept: "application/json",
-        "User-Agent": "TaipanMonitor/1.0",
+        "User-Agent": "ECHIS/1.0",
       },
       body: JSON.stringify({
         query: GEOPOLITICAL_QUERY,

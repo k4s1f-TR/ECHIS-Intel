@@ -6,12 +6,12 @@ training examples. Before making framework-level changes, check the relevant
 docs under `node_modules/next/dist/docs/` and follow deprecation warnings.
 <!-- END:nextjs-agent-rules -->
 
-# TaipanMonitor Agent Instructions
+# ECHIS Agent Instructions
 
 ## Purpose of This File
 
 This file is the standing instruction set for coding agents working on
-TaipanMonitor.
+ECHIS.
 
 Task prompts should stay short and only include the current task, scope,
 do-not-touch items, acceptance criteria, and validation requirements.
@@ -41,7 +41,7 @@ Validation:
 
 ## Project
 
-TaipanMonitor is a frontend-only, dark premium OSINT / situational-awareness /
+ECHIS is a frontend-only, dark premium OSINT / situational-awareness /
 intelligence monitoring dashboard prototype.
 
 The interface should feel:
@@ -110,7 +110,7 @@ Do not reintroduce Three.js as an active globe renderer.
 Visible product/UI brand:
 
 ```text
-TaipanMonitor
+ECHIS
 ```
 
 Current top-level product direction/order:

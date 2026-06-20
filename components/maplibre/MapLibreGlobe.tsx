@@ -10,10 +10,10 @@ import {
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
-  createTaipanOsmGlobeStyle,
+  createEchisOsmGlobeStyle,
   OSM_VECTOR_SOURCE_ID,
-  USE_TAIPAN_OSM_BASEMAP,
-} from "@/components/map/styles/taipanOsmGlobeStyle";
+  USE_ECHIS_OSM_BASEMAP,
+} from "@/components/map/styles/echisOsmGlobeStyle";
 import type { RegionKey } from "@/types/event";
 
 // ---------------------------------------------------------------------------
@@ -86,33 +86,33 @@ type LayerClickEvent = maplibregl.MapMouseEvent & {
   features?: maplibregl.MapGeoJSONFeature[];
 };
 
-const MARKER_SOURCE_GLOBAL  = "taipan-markers-global";
-const MARKER_SOURCE_SIGNALS = "taipan-markers-signals";
+const MARKER_SOURCE_GLOBAL  = "echis-markers-global";
+const MARKER_SOURCE_SIGNALS = "echis-markers-signals";
 
 // Layer IDs — ordered bottom → top per kind:
 //   BLOOM   outer soft spread (large blurred circle)
 //   GLOW    inner crisp ring (small circle + bright stroke)
 //   LAYER   normal pins      (all features minus the selected one)
 //   SEL     selected pin     (the one selected feature, larger)
-const MARKER_BLOOM_GLOBAL   = "taipan-markers-global-bloom";
-const MARKER_BLOOM_SIGNALS  = "taipan-markers-signals-bloom";
-const MARKER_GLOW_GLOBAL    = "taipan-markers-global-glow";
-const MARKER_GLOW_SIGNALS   = "taipan-markers-signals-glow";
-const MARKER_LAYER_GLOBAL   = "taipan-markers-global-layer";
-const MARKER_LAYER_SIGNALS  = "taipan-markers-signals-layer";
-const MARKER_HOVER_GLOW_GLOBAL   = "taipan-markers-global-hover-glow";
-const MARKER_HOVER_GLOW_SIGNALS  = "taipan-markers-signals-hover-glow";
-const MARKER_HOVER_LAYER_GLOBAL  = "taipan-markers-global-hover-layer";
-const MARKER_HOVER_LAYER_SIGNALS = "taipan-markers-signals-hover-layer";
-const MARKER_SEL_GLOBAL     = "taipan-markers-global-selected";
-const MARKER_SEL_SIGNALS    = "taipan-markers-signals-selected";
-const MARKER_BADGE_GLOBAL   = "taipan-markers-global-count-badge";
-const MARKER_BADGE_TEXT_GLOBAL = "taipan-markers-global-count-badge-text";
+const MARKER_BLOOM_GLOBAL   = "echis-markers-global-bloom";
+const MARKER_BLOOM_SIGNALS  = "echis-markers-signals-bloom";
+const MARKER_GLOW_GLOBAL    = "echis-markers-global-glow";
+const MARKER_GLOW_SIGNALS   = "echis-markers-signals-glow";
+const MARKER_LAYER_GLOBAL   = "echis-markers-global-layer";
+const MARKER_LAYER_SIGNALS  = "echis-markers-signals-layer";
+const MARKER_HOVER_GLOW_GLOBAL   = "echis-markers-global-hover-glow";
+const MARKER_HOVER_GLOW_SIGNALS  = "echis-markers-signals-hover-glow";
+const MARKER_HOVER_LAYER_GLOBAL  = "echis-markers-global-hover-layer";
+const MARKER_HOVER_LAYER_SIGNALS = "echis-markers-signals-hover-layer";
+const MARKER_SEL_GLOBAL     = "echis-markers-global-selected";
+const MARKER_SEL_SIGNALS    = "echis-markers-signals-selected";
+const MARKER_BADGE_GLOBAL   = "echis-markers-global-count-badge";
+const MARKER_BADGE_TEXT_GLOBAL = "echis-markers-global-count-badge-text";
 
 // Filter value used to make the selected-pin layer show nothing when there
 // is no active selection — matches a feature id that can never exist.
 const FILTER_MATCH_NONE: maplibregl.ExpressionSpecification =
-  ["==", ["get", "id"], "__taipan_none__"];
+  ["==", ["get", "id"], "__echis_none__"];
 const MARKER_ITEM_COUNT_PROP = "itemCount";
 const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
   ">",
@@ -138,17 +138,17 @@ const selectedMarkerOpacityExpression = (
 // pin tip aligned with the geographic coordinate during zoom / drag /
 // auto-rotate.
 // ---------------------------------------------------------------------------
-const PIN_ICON_ID = "taipan-marker-pin";
+const PIN_ICON_ID = "echis-marker-pin";
 const PIN_ICON_PIXEL_RATIO = 2;
 const PIN_ICON_SIZE_DEFAULT = 1;
 const PIN_ICON_SIZE_SELECTED = 1.45;
 const PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
-  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="#ff1f2d"/>' +
+  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="#ff2b3d"/>' +
   '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
   "</svg>";
 
-const GLOBAL_PIN_ICON_ID = "taipan-marker-pin-premium";
+const GLOBAL_PIN_ICON_ID = "echis-marker-pin-premium";
 const GLOBAL_PIN_ICON_PIXEL_RATIO = 1;
 const GLOBAL_PIN_ICON_SIZE_DEFAULT = 0.8;
 const GLOBAL_PIN_ICON_SIZE_HOVER = 0.86;
@@ -165,7 +165,7 @@ const GLOBAL_PIN_SVG =
   '<linearGradient id="pinShade" x1="14" y1="4" x2="14" y2="31" gradientUnits="userSpaceOnUse">' +
   '<stop offset="0" stop-color="#ffffff" stop-opacity=".07"/>' +
   '<stop offset=".52" stop-color="#ffffff" stop-opacity=".01"/>' +
-  '<stop offset="1" stop-color="#000000" stop-opacity=".13"/>' +
+  '<stop offset="1" stop-color="#030203" stop-opacity=".13"/>' +
   "</linearGradient>" +
   '<filter id="softRedHalo" x="-38%" y="-28%" width="176%" height="158%" color-interpolation-filters="sRGB">' +
   '<feGaussianBlur stdDeviation="1.65"/>' +
@@ -895,10 +895,10 @@ const CENTRAL_VIEW_ANIM_MS = 1200;
 const AUTO_ROTATE_MAX_DT_S = 0.05;
 // eventData marker placed on every programmatic jumpTo so MapLibre move
 // events triggered by auto-rotate can be distinguished from real user input.
-const AUTO_ROTATE_EVENT_TAG = "taipanAutoRotate";
+const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 
 // ---------------------------------------------------------------------------
-// Dark colour palette — tuned to integrate with the TaipanMonitor panel.
+// Dark colour palette — tuned to integrate with the ECHIS panel.
 //
 // Hierarchy (darkest → lightest by perceived brightness):
 //   PANEL_BG         outer container, behind canvas
@@ -909,22 +909,22 @@ const AUTO_ROTATE_EVENT_TAG = "taipanAutoRotate";
 //
 // Borders, labels: muted gray, low opacity, no neon, no pure white.
 // ---------------------------------------------------------------------------
-const PANEL_BG = "#030506";
-const LAND_FILL = "#141817";
-const LAND_OVERLAY = "#181C1A";
-const WATER_FILL = "#070A0B";
-const WATERWAY_FILL = "#0a0e10";
+const PANEL_BG = "#050304";
+const LAND_FILL = "#1a1517";
+const LAND_OVERLAY = "#211a1c";
+const WATER_FILL = "#04050b";
+const WATERWAY_FILL = "#0c090e";
 
 // National border — the primary boundary line, kept lighter and more opaque
 // than the sub-national admin grey so the country skeleton reads as the
 // dominant hierarchy on the globe.
-const BORDER_COUNTRY = "rgba(150, 162, 158, 0.55)";
-const BORDER_ADMIN = "rgba(120, 132, 128, 0.22)";
+const BORDER_COUNTRY = "rgba(255, 86, 96, 0.38)";
+const BORDER_ADMIN = "rgba(176, 184, 196, 0.18)";
 
-const LABEL_MAJOR = "rgba(190, 198, 194, 0.72)";
-const LABEL_MINOR = "rgba(150, 160, 156, 0.48)";
-const LABEL_WATER = "rgba(120, 132, 138, 0.55)";
-const LABEL_HALO = "rgba(5, 7, 8, 0.85)";
+const LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
+const LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
+const LABEL_WATER = "rgba(140, 150, 166, 0.50)";
+const LABEL_HALO = "rgba(5, 3, 5, 0.85)";
 
 // ---------------------------------------------------------------------------
 // Default-view country whitelist.  At default / Central View zoom only the
@@ -1000,14 +1000,14 @@ function applyDarkTone(map: maplibregl.Map): void {
 
     try {
       if (
-        USE_TAIPAN_OSM_BASEMAP &&
+        USE_ECHIS_OSM_BASEMAP &&
         type === "symbol" &&
         (id === "water_name" || /^place_/.test(id))
       ) {
         continue;
       }
       if (
-        USE_TAIPAN_OSM_BASEMAP &&
+        USE_ECHIS_OSM_BASEMAP &&
         type === "line" &&
         (id === "boundary_regional_admin" || id === "boundary_local_admin")
       ) {
@@ -1132,7 +1132,7 @@ function applyDarkTone(map: maplibregl.Map): void {
 // label set.  Sub-country labels (cities, states, etc.) are NOT touched
 // here — CARTO's own zoom rules handle them.
 // ---------------------------------------------------------------------------
-const WHITELIST_LAYER_ID = "taipan-country-whitelist";
+const WHITELIST_LAYER_ID = "echis-country-whitelist";
 
 function applyCountryLabelWhitelist(map: maplibregl.Map): void {
   const style = map.getStyle();
@@ -1456,8 +1456,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       try {
         map = new maplibregl.Map({
           container,
-          style: USE_TAIPAN_OSM_BASEMAP
-            ? createTaipanOsmGlobeStyle({
+          style: USE_ECHIS_OSM_BASEMAP
+            ? createEchisOsmGlobeStyle({
                 landFill: LAND_FILL,
                 landOverlay: LAND_OVERLAY,
                 waterFill: WATER_FILL,
@@ -1486,7 +1486,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       }
       mapRef.current = map;
 
-      if (USE_TAIPAN_OSM_BASEMAP) {
+      if (USE_ECHIS_OSM_BASEMAP) {
         map.addControl(
           new maplibregl.AttributionControl({ compact: true }),
           "bottom-left",
@@ -1543,10 +1543,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
 
         // Dark refinement pass — only needed for the CARTO basemap.  When the
         // OSM basemap is active the style is pre-built with the correct palette
-        // by createTaipanOsmGlobeStyle, so running the pass would redundantly
+        // by createEchisOsmGlobeStyle, so running the pass would redundantly
         // call setPaintProperty on every layer (triggering shader revalidation)
         // at exactly the moment the browser is compiling tile shaders.
-        if (!USE_TAIPAN_OSM_BASEMAP) applyDarkTone(map);
+        if (!USE_ECHIS_OSM_BASEMAP) applyDarkTone(map);
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
