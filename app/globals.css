@@ -436,84 +436,10 @@ body {
   to { opacity: 1; }
 }
 
-/* ── Map: marker radar ping (crit / high only) ───────────── */
-.cyber-map-ping {
-  fill: none;
-  stroke-width: 1;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: cyber-map-ping-kf 2800ms ease-out infinite;
-}
-@keyframes cyber-map-ping-kf {
-  0% { transform: scale(0.7); opacity: 0.45; }
-  80% { transform: scale(2.6); opacity: 0.04; }
-  100% { transform: scale(2.8); opacity: 0; }
-}
-
-/* ── Map: marker breathing core ──────────────────────────── */
-.cyber-map-core {
-  animation: cyber-map-breath-kf 3000ms ease-in-out infinite;
-}
-@keyframes cyber-map-breath-kf {
-  0%, 100% { opacity: 0.92; }
-  50% { opacity: 1; }
-}
-
-/* ── Map: attack comet (no pre-drawn track) ──────────────── */
-.cyber-comet-trail,
-.cyber-comet-head {
-  fill: none;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-  animation: cyber-comet-kf 2600ms linear infinite;
-}
-.cyber-comet-trail {
-  stroke-dasharray: 20 80;
-  stroke-dashoffset: 100;
-}
-.cyber-comet-head {
-  stroke-dasharray: 4 96;
-  stroke-dashoffset: 100;
-}
-@keyframes cyber-comet-kf {
-  to { stroke-dashoffset: 0; }
-}
-
-/* ── Map: focus marker (selected news → map focus) ───────── */
-.cyber-focus-ring {
-  fill: none;
-  stroke: var(--c-accent);
-  stroke-width: 1.4;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: cyber-focus-ring-kf 1700ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-}
-@keyframes cyber-focus-ring-kf {
-  0% { transform: scale(0.3); opacity: 0.7; }
-  100% { transform: scale(3.4); opacity: 0; }
-}
-.cyber-focus-cross {
-  stroke: var(--c-accent);
-  stroke-width: 1;
-  stroke-linecap: round;
-  animation: cyber-focus-cross-kf 1700ms ease-out forwards;
-}
-@keyframes cyber-focus-cross-kf {
-  0% { opacity: 0.85; }
-  100% { opacity: 0; }
-}
+/* NOTE: Cyber Threat Map marker + animation styles (radar ping, breathing core,
+   attack comet, focus marker) were removed — that system is being redesigned. */
 
 @media (prefers-reduced-motion: reduce) {
   .cyber-ticker-track { animation: none; }
-  .cyber-map-ping,
-  .cyber-map-core,
-  .cyber-comet-trail,
-  .cyber-comet-head,
-  .cyber-focus-ring,
-  .cyber-focus-cross { animation: none; }
-  .cyber-comet-trail { stroke-dashoffset: 60; opacity: 0.5; }
-  .cyber-comet-head { opacity: 0; }
-  .cyber-focus-ring,
-  .cyber-focus-cross { opacity: 0; }
   .cyber-ctx-fade { animation: none; }
 }
