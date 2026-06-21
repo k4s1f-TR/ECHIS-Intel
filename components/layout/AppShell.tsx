@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Globe2, Map as MapIcon } from "lucide-react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
-// Main globe now uses the Luxe Globe system. The MapLibre OSM globe is kept
-// (disabled, not rendered) as a fallback — its handle/marker types are still
-// the shared contract both globes implement.
+// Luxe and MapLibre share the same map handle / marker contract so the user
+// can switch engines without changing the surrounding monitor workflow.
 import { LuxeGlobeMap } from "@/components/luxe/LuxeGlobeMap";
-import type {
-  MapLibreGlobeHandle,
-  MarkerFeature,
+import {
+  MapLibreGlobe,
+  type MapLibreGlobeHandle,
+  type MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
 import {
   FloatingMonitoringCard,
@@ -50,6 +51,97 @@ type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
+type MapSystem = "luxe" | "maplibre";
+
+const MAP_SYSTEM_OPTIONS = [
+  { key: "luxe", label: "Luxe", title: "Use Luxe globe", icon: Globe2 },
+  { key: "maplibre", label: "MapLibre", title: "Use MapLibre globe", icon: MapIcon },
+] as const;
+
+function MapSystemSwitch({
+  value,
+  onChange,
+  dockedToPanel,
+}: {
+  value: MapSystem;
+  onChange: (value: MapSystem) => void;
+  dockedToPanel: boolean;
+}) {
+  return (
+    <div
+      aria-label="Map system"
+      style={{
+        position: "absolute",
+        top: 16,
+        right: dockedToPanel ? 400 : 14,
+        zIndex: 18,
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        padding: 4,
+        borderRadius: 10,
+        background: "rgba(7,8,10,0.72)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        boxShadow: "0 14px 36px rgba(0,0,0,0.42), 0 1px 0 rgba(255,255,255,0.04) inset",
+        backdropFilter: "blur(14px)",
+        transition: "right 180ms ease, opacity 120ms ease",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: 8,
+          right: 8,
+          top: 0,
+          height: 1,
+          background: "linear-gradient(90deg, #b3121f 0%, #ff2b3d 100%)",
+          opacity: 0.92,
+        }}
+      />
+      {MAP_SYSTEM_OPTIONS.map(({ key, label, title, icon: Icon }) => {
+        const selected = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            title={title}
+            aria-pressed={selected}
+            onClick={() => onChange(key)}
+            style={{
+              height: 28,
+              minWidth: key === "maplibre" ? 94 : 72,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              borderRadius: 7,
+              padding: "0 10px",
+              border: selected
+                ? "1px solid rgba(255,255,255,0.16)"
+                : "1px solid transparent",
+              background: selected
+                ? "linear-gradient(90deg, #b3121f 0%, #ff2b3d 100%)"
+                : "transparent",
+              color: selected ? "#fff4f4" : "var(--c-t5)",
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              lineHeight: 1,
+              cursor: "pointer",
+              transition: "background 140ms ease, color 140ms ease, border-color 140ms ease",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Icon size={12} strokeWidth={1.7} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function filterSourceMarkerItems(
   marker: SourceMarkerFeature,
@@ -86,6 +178,7 @@ export function AppShell() {
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);
+  const [mapSystem, setMapSystem] = useState<MapSystem>("luxe");
   const [activeView, setActiveView] = useState<ViewMode>("situation");
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
   const [activeCategory, setActiveCategory] = useState<EventCategory | "all">("all");
@@ -559,19 +652,41 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            <LuxeGlobeMap
-              ref={globeMapRef}
-              activeView={globeView}
-              activeRegion={globeRegion}
-              activeSignalsRegion={globeSignalsRegion}
-              globalMarkers={globalMarkers}
-              signalsMarkers={signalsMarkers}
-              selectedGlobalId={selectedId}
-              selectedSignalsId={selectedSignalId}
-              onMarkerClick={(id, kind) => {
-                if (kind === "global") handleGlobalMarkerSelect(id);
-                else if (kind === "signals") handleSignalMarkerSelect(id);
-              }}
+            {mapSystem === "luxe" ? (
+              <LuxeGlobeMap
+                ref={globeMapRef}
+                activeView={globeView}
+                activeRegion={globeRegion}
+                activeSignalsRegion={globeSignalsRegion}
+                globalMarkers={globalMarkers}
+                signalsMarkers={signalsMarkers}
+                selectedGlobalId={selectedId}
+                selectedSignalsId={selectedSignalId}
+                onMarkerClick={(id, kind) => {
+                  if (kind === "global") handleGlobalMarkerSelect(id);
+                  else if (kind === "signals") handleSignalMarkerSelect(id);
+                }}
+              />
+            ) : (
+              <MapLibreGlobe
+                ref={globeMapRef}
+                activeView={globeView}
+                activeRegion={globeRegion}
+                activeSignalsRegion={globeSignalsRegion}
+                globalMarkers={globalMarkers}
+                signalsMarkers={signalsMarkers}
+                selectedGlobalId={selectedId}
+                selectedSignalsId={selectedSignalId}
+                onMarkerClick={(id, kind) => {
+                  if (kind === "global") handleGlobalMarkerSelect(id);
+                  else if (kind === "signals") handleSignalMarkerSelect(id);
+                }}
+              />
+            )}
+            <MapSystemSwitch
+              value={mapSystem}
+              onChange={setMapSystem}
+              dockedToPanel={activeMapRailMode !== null}
             />
             <div
               style={{

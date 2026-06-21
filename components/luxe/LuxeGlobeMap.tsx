@@ -662,7 +662,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
       eng._reconcile = reconcilePins;
 
       // ---- load country geometry, then init -----------------------------
-      fetch("https://unpkg.com/world-atlas@2/countries-50m.json")
+      fetch("/countries-50m.json")
         .then((r) => r.json())
         .then((topo) => {
           if (eng.disposed) return;
