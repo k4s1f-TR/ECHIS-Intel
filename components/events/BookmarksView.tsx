@@ -43,12 +43,12 @@ export function BookmarksView({
               <Bookmark size={15} style={{ color: "var(--accent-blue-text)" }} />
               <span
                 className="font-semibold uppercase"
-                style={{ color: "rgba(147,147,147,0.82)", fontSize: "10.5px", letterSpacing: "0.12em" }}
+                style={{ color: "var(--c-t4)", fontSize: "10.5px", letterSpacing: "0.12em" }}
               >
                 Saved Events
               </span>
             </div>
-            <h1 className="font-semibold" style={{ color: "rgba(235,235,235,0.95)", fontSize: "22px" }}>
+            <h1 className="font-semibold" style={{ color: "var(--c-t1)", fontSize: "22px" }}>
               Bookmarks
             </h1>
           </div>
@@ -68,7 +68,7 @@ export function BookmarksView({
           >
             <span
               className="font-semibold uppercase"
-              style={{ color: "rgba(170,170,170,0.8)", fontSize: "10px", letterSpacing: "0.12em" }}
+              style={{ color: "var(--c-t4)", fontSize: "10px", letterSpacing: "0.12em" }}
             >
               Bookmarked Events
             </span>
@@ -81,7 +81,7 @@ export function BookmarksView({
                 style={{
                   background: hasBookmarks ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.018)",
                   border: "1px solid rgba(255,255,255,0.065)",
-                  color: hasBookmarks ? "rgba(150,165,185,0.86)" : "rgba(80,80,80,0.72)",
+                  color: hasBookmarks ? "var(--c-t4)" : "var(--c-t6)",
                   cursor: hasBookmarks ? "pointer" : "default",
                   fontSize: "9.5px",
                   letterSpacing: "0.08em",
@@ -94,7 +94,7 @@ export function BookmarksView({
                 style={{
                   background: "rgba(255,255,255,0.035)",
                   border: "1px solid rgba(255,255,255,0.065)",
-                  color: "rgba(145,155,170,0.86)",
+                  color: "var(--c-t4)",
                   fontSize: "10.5px",
                 }}
               >
@@ -106,7 +106,7 @@ export function BookmarksView({
           {items.length === 0 ? (
             <div
               className="flex flex-1 items-center justify-center text-center"
-              style={{ color: "rgba(105,105,105,0.9)", fontSize: "12px" }}
+              style={{ color: "var(--c-t5)", fontSize: "12px" }}
             >
               No bookmarked events yet.
             </div>
@@ -162,7 +162,7 @@ export function BookmarksView({
 
                     <div
                       className="mb-1.5 flex items-center gap-2"
-                      style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.9)" }}
+                      style={{ fontSize: "10.5px", color: "var(--c-t5)" }}
                     >
                       <span>{item.report.timestamp}</span>
                       <span>{item.report.locationName}</span>
@@ -186,7 +186,7 @@ export function BookmarksView({
                           fontSize: "9px",
                           fontWeight: 700,
                           background: "rgba(255,255,255,0.045)",
-                          color: "rgba(150,165,185,0.9)",
+                          color: "var(--c-t4)",
                         }}
                       >
                         {SOCMINT_PLATFORM_LABELS[item.report.platform]}
@@ -197,7 +197,7 @@ export function BookmarksView({
                           fontSize: "9px",
                           fontWeight: 700,
                           background: "rgba(255,255,255,0.045)",
-                          color: "rgba(150,165,185,0.9)",
+                          color: "var(--c-t4)",
                         }}
                       >
                         {SOCMINT_TYPE_BADGE_LABELS[item.report.type]}
@@ -217,7 +217,7 @@ export function BookmarksView({
 
                     <p
                       className="line-clamp-2 leading-relaxed"
-                      style={{ fontSize: "11.5px", color: "rgba(110,110,110,0.9)" }}
+                      style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
                     >
                       {item.report.summary}
                     </p>

@@ -86,7 +86,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
           background: "var(--bg-panel)",
           border: "1px solid rgba(255, 255, 255, 0.12)",
           boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0, 0, 0, 0.55)",
-          color: "rgba(232, 238, 244, 0.94)",
+          color: "var(--c-t1)",
           pointerEvents: "auto",
         }}
         onClick={(clickEvent) => clickEvent.stopPropagation()}
@@ -123,7 +123,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                 <span
                   className="uppercase"
                   style={{
-                    color: "rgba(148, 163, 184, 0.78)",
+                    color: "var(--c-t4)",
                     fontSize: 10,
                     fontWeight: 800,
                     letterSpacing: "0.12em",
@@ -136,7 +136,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
               <h2
                 className="leading-tight"
                 style={{
-                  color: "rgba(248, 250, 252, 0.96)",
+                  color: "var(--c-t1)",
                   fontSize: 18,
                   fontWeight: 850,
                 }}
@@ -146,7 +146,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
               <div
                 className="mt-2"
                 style={{
-                  color: "rgba(177, 190, 205, 0.86)",
+                  color: "var(--c-t3)",
                   fontSize: 13,
                   fontWeight: 650,
                   lineHeight: 1.25,
@@ -184,7 +184,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                   borderRadius: 6,
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(190,205,220,0.82)",
+                  color: "var(--c-t3)",
                   cursor: "pointer",
                 }}
                 type="button"
@@ -241,7 +241,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
             <p
               style={{
                 marginTop: 10,
-                color: "rgba(203, 213, 225, 0.9)",
+                color: "var(--c-t2)",
                 fontSize: 13,
                 fontWeight: 500,
                 lineHeight: 1.65,
@@ -287,7 +287,7 @@ function DetailGrid({ items }: { items: Array<[string, string | undefined]> }) {
           <dt
             className="uppercase"
             style={{
-              color: "rgba(148, 163, 184, 0.62)",
+              color: "var(--c-t5)",
               fontSize: 9,
               fontWeight: 800,
               letterSpacing: "0.11em",
@@ -300,7 +300,7 @@ function DetailGrid({ items }: { items: Array<[string, string | undefined]> }) {
             className="mt-1.5 truncate"
             title={value}
             style={{
-              color: "rgba(220, 228, 238, 0.9)",
+              color: "var(--c-t2)",
               fontSize: 12,
               fontWeight: 600,
               lineHeight: 1.35,
@@ -325,7 +325,7 @@ function SectionLabel({
     <div
       className="uppercase"
       style={{
-        color: tone === "accent" ? "var(--accent-blue-text)" : "rgba(148, 163, 184, 0.72)",
+        color: tone === "accent" ? "var(--accent-blue-text)" : "var(--c-t4)",
         fontSize: 10,
         fontWeight: 850,
         letterSpacing: "0.12em",

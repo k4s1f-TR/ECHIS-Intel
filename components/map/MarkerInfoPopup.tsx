@@ -81,7 +81,7 @@ export function MarkerInfoPopup({
               <p
                 className="leading-snug"
                 style={{
-                  color: "rgba(235,242,250,0.95)",
+                  color: "var(--c-t1)",
                   fontSize: 12,
                   fontWeight: 750,
                 }}
@@ -90,7 +90,7 @@ export function MarkerInfoPopup({
               </p>
               <p
                 className="mt-1 truncate"
-                style={{ color: "rgba(150,165,182,0.85)", fontSize: 10.5 }}
+                style={{ color: "var(--c-t4)", fontSize: 10.5 }}
                 title={location}
               >
                 {location}
@@ -106,7 +106,7 @@ export function MarkerInfoPopup({
                 borderRadius: 5,
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(190,205,220,0.82)",
+                color: "var(--c-t3)",
                 cursor: "pointer",
               }}
               type="button"
@@ -118,7 +118,7 @@ export function MarkerInfoPopup({
           <p
             className="line-clamp-3"
             style={{
-              color: "rgba(170,182,196,0.86)",
+              color: "var(--c-t3)",
               fontSize: 11,
               lineHeight: 1.55,
               margin: 0,
@@ -133,7 +133,7 @@ export function MarkerInfoPopup({
               style={{
                 borderTop: "1px solid rgba(255,255,255,0.06)",
                 paddingTop: 7,
-                color: "rgba(126,138,152,0.88)",
+                color: "var(--c-t4)",
                 fontSize: 9.5,
               }}
             >
@@ -158,7 +158,7 @@ export function MarkerInfoPopup({
                 fontSize: 8.5,
                 fontWeight: 800,
                 letterSpacing: "0.13em",
-                color: "rgba(148,163,184,0.55)",
+                color: "var(--c-t5)",
                 marginBottom: 5,
                 lineHeight: 1,
               }}
@@ -181,7 +181,7 @@ export function MarkerInfoPopup({
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: isFirst ? "rgba(80,95,115,0.4)" : "rgba(148,163,184,0.82)",
+                  color: isFirst ? "var(--c-t6)" : "var(--c-t3)",
                   background: "transparent",
                   border: "none",
                   padding: "2px 0",
@@ -201,7 +201,7 @@ export function MarkerInfoPopup({
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: isLast ? "rgba(80,95,115,0.4)" : "rgba(148,163,184,0.82)",
+                  color: isLast ? "var(--c-t6)" : "var(--c-t3)",
                   background: "transparent",
                   border: "none",
                   padding: "2px 0",

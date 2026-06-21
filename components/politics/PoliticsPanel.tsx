@@ -189,7 +189,7 @@ function SourceFilterDropdown({
                   fontWeight: selected ? 600 : 500,
                 }}
               >
-                <span className="truncate">{option.label}</span>
+                <span className={selected ? "truncate accent-grad-text" : "truncate"}>{option.label}</span>
               </button>
             );
           })}
@@ -588,7 +588,7 @@ function PoliticsSidePanel({
                 }
               }}
             >
-              {item}
+              <span className={active ? "accent-grad-text" : undefined}>{item}</span>
             </button>
           );
         })}
@@ -791,7 +791,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
                     border: active ? `1px solid ${pa!.border}` : "1px solid rgba(255,255,255,0.06)",
                   }}
                 >
-                  {pill.label}
+                  <span className={active && pill.key === "all" ? "accent-grad-text" : undefined}>{pill.label}</span>
                 </button>
               );
             })}
@@ -863,7 +863,7 @@ export function PoliticsPanel({ events }: { events: OsintEvent[] }) {
             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(255,86,96,1)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--accent-blue-text)")}
           >
-            View all <ArrowRight size={10} />
+            <span className="accent-grad-text">View all</span> <ArrowRight size={10} />
           </button>
         </div>
         </div>{/* end bottom event list panel */}

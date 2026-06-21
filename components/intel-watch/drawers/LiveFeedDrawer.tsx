@@ -232,7 +232,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                 padding: "24px 20px",
                 textAlign: "center",
                 fontSize: 11,
-                color: "rgba(100, 115, 135, 0.6)",
+                color: "var(--c-t5)",
               }}
             >
               No events match the current filters.
@@ -265,7 +265,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                       border: "1px solid rgba(255, 255, 255, 0.1)",
                       fontSize: 7.5,
                       fontWeight: 700,
-                      color: "rgba(180, 195, 215, 0.85)",
+                      color: "var(--c-t3)",
                       letterSpacing: "0.03em",
                     }}
                   >
@@ -285,7 +285,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                       style={{
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "rgba(210, 220, 235, 0.93)",
+                        color: "var(--c-t2)",
                         lineHeight: 1.35,
                       }}
                     >
@@ -294,7 +294,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                     <span
                       style={{
                         fontSize: 11,
-                        color: "rgba(125, 140, 160, 0.8)",
+                        color: "var(--c-t5)",
                         lineHeight: 1.5,
                       }}
                     >
@@ -324,7 +324,7 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                       <span
                         style={{
                           fontSize: 9,
-                          color: "rgba(100, 115, 135, 0.7)",
+                          color: "var(--c-t5)",
                         }}
                       >
                         {event.source}
@@ -333,8 +333,8 @@ export function LiveFeedDrawer({ open, onClose }: Props) {
                         style={{
                           marginLeft: "auto",
                           fontSize: 9,
-                          color: "rgba(85, 100, 120, 0.65)",
-                          fontFamily: "ui-monospace, monospace",
+                          color: "var(--c-t5)",
+                          fontFamily: "var(--font-mono), ui-monospace, monospace",
                         }}
                       >
                         {event.timestamp}

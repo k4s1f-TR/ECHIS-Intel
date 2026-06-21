@@ -120,6 +120,11 @@ const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
   1,
 ] as unknown as maplibregl.FilterSpecification;
 
+const ECHIS_GRAD_DARK = "#3b0509";
+const ECHIS_GRAD_BRIGHT = "#a80d18";
+const ECHIS_GRAD_MID = "#6f0710";
+const ECHIS_GRAD_GLOW = "rgba(168,13,24,0.34)";
+
 const selectedMarkerOpacityExpression = (
   selectedId: string,
   baseOpacity: number,
@@ -144,7 +149,13 @@ const PIN_ICON_SIZE_DEFAULT = 1;
 const PIN_ICON_SIZE_SELECTED = 1.45;
 const PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
-  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="#ff2b3d"/>' +
+  "<defs>" +
+  '<linearGradient id="pinBody" x1="4" y1="2" x2="20" y2="31" gradientUnits="userSpaceOnUse">' +
+  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
+  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
+  "</linearGradient>" +
+  "</defs>" +
+  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="url(#pinBody)"/>' +
   '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
   "</svg>";
 
@@ -157,10 +168,9 @@ const GLOBAL_PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">' +
   "<defs>" +
   '<linearGradient id="pinBody" x1="7.5" y1="3" x2="21" y2="30" gradientUnits="userSpaceOnUse">' +
-  '<stop offset="0" stop-color="#ff766f"/>' +
-  '<stop offset="0.42" stop-color="#e9333b"/>' +
-  '<stop offset="0.76" stop-color="#b50d1b"/>' +
-  '<stop offset="1" stop-color="#7c0712"/>' +
+  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
+  `<stop offset="0.56" stop-color="${ECHIS_GRAD_MID}"/>` +
+  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
   "</linearGradient>" +
   '<linearGradient id="pinShade" x1="14" y1="4" x2="14" y2="31" gradientUnits="userSpaceOnUse">' +
   '<stop offset="0" stop-color="#ffffff" stop-opacity=".07"/>' +
@@ -171,12 +181,12 @@ const GLOBAL_PIN_SVG =
   '<feGaussianBlur stdDeviation="1.65"/>' +
   "</filter>" +
   "</defs>" +
-  '<path filter="url(#softRedHalo)" d="M14 31.05S4.45 20.25 4.45 12.65C4.45 6.35 8.78 2.05 14 2.05s9.55 4.3 9.55 10.6c0 7.6-9.55 18.4-9.55 18.4Z" fill="#ff4d47" opacity=".24"/>' +
-  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="#200308" opacity=".72"/>' +
+  `<path filter="url(#softRedHalo)" d="M14 31.05S4.45 20.25 4.45 12.65C4.45 6.35 8.78 2.05 14 2.05s9.55 4.3 9.55 10.6c0 7.6-9.55 18.4-9.55 18.4Z" fill="${ECHIS_GRAD_BRIGHT}" opacity=".2"/>` +
+  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="#160204" opacity=".76"/>' +
   '<path d="M14 30.45S5.28 20.18 5.28 12.85C5.28 6.95 9.18 3.02 14 3.02s8.72 3.93 8.72 9.83c0 7.33-8.72 17.6-8.72 17.6Z" fill="url(#pinBody)"/>' +
   '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="url(#pinShade)"/>' +
-  '<path d="M14 30.15S5.75 20.05 5.75 12.95C5.75 7.35 9.28 3.45 14 3.45s8.25 3.9 8.25 9.5c0 7.1-8.25 17.2-8.25 17.2Z" fill="none" stroke="#ff9a96" stroke-opacity=".16" stroke-width=".62"/>' +
-  '<path d="M8.65 9.6C9.5 7.18 11.38 5.65 13.82 5.48" fill="none" stroke="#ffd8d5" stroke-opacity=".28" stroke-width=".95" stroke-linecap="round"/>' +
+  `<path d="M14 30.15S5.75 20.05 5.75 12.95C5.75 7.35 9.28 3.45 14 3.45s8.25 3.9 8.25 9.5c0 7.1-8.25 17.2-8.25 17.2Z" fill="none" stroke="${ECHIS_GRAD_BRIGHT}" stroke-opacity=".32" stroke-width=".62"/>` +
+  '<path d="M8.65 9.6C9.5 7.18 11.38 5.65 13.82 5.48" fill="none" stroke="#f3c7c0" stroke-opacity=".24" stroke-width=".95" stroke-linecap="round"/>' +
   '<circle cx="14" cy="12.8" r="4.18" fill="#05070b"/>' +
   '<circle cx="14" cy="12.8" r="4.18" fill="none" stroke="#170309" stroke-opacity=".9" stroke-width=".52"/>' +
   "</svg>";
@@ -467,7 +477,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 22,
-          "circle-color": isGlobal ? "#e53634" : "#ff1a28",
+          "circle-color": isGlobal ? ECHIS_GRAD_MID : ECHIS_GRAD_BRIGHT,
           "circle-blur": isGlobal ? 0.94 : 1,
           "circle-opacity": 0,
           "circle-translate": isGlobal ? [0, -16] : [0, -11],
@@ -485,12 +495,12 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         paint: {
           "circle-radius": isGlobal ? 11 : 10,
           "circle-color": isGlobal
-            ? "rgba(255,74,72,0.2)"
-            : "rgba(255,26,40,0.45)",
+            ? "rgba(168,13,24,0.22)"
+            : ECHIS_GRAD_GLOW,
           "circle-blur": isGlobal ? 0.34 : 0.15,
           "circle-opacity": 0,
           "circle-stroke-width": isGlobal ? 1.2 : 2.5,
-          "circle-stroke-color": isGlobal ? "#ff6b68" : "#ff2535",
+          "circle-stroke-color": ECHIS_GRAD_BRIGHT,
           "circle-stroke-opacity": 0,
           "circle-translate": isGlobal ? [0, -16] : [0, -11],
           "circle-translate-anchor": "viewport",
@@ -513,7 +523,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 15,
-          "circle-color": "#ff5a54",
+          "circle-color": ECHIS_GRAD_BRIGHT,
           "circle-blur": 0.72,
           "circle-opacity": 0.24,
           "circle-opacity-transition": { duration: 180, delay: 0 },
@@ -563,7 +573,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "circle-opacity": 0.94,
           "circle-opacity-transition": { duration: 180, delay: 0 },
           "circle-stroke-width": 1.25,
-          "circle-stroke-color": "#f0444b",
+          "circle-stroke-color": ECHIS_GRAD_BRIGHT,
           "circle-stroke-opacity": 0.92,
           "circle-stroke-opacity-transition": { duration: 180, delay: 0 },
           "circle-translate": [9, -23],
@@ -909,17 +919,20 @@ const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 //
 // Borders, labels: muted gray, low opacity, no neon, no pure white.
 // ---------------------------------------------------------------------------
-const PANEL_BG = "#050304";
-const LAND_FILL = "#1a1517";
-const LAND_OVERLAY = "#211a1c";
-const WATER_FILL = "#04050b";
-const WATERWAY_FILL = "#0c090e";
+// --- Luxe palette (option A): vivid red ocean, black continents, white
+// borders — the Luxe Globe look applied to the detailed OSM basemap so all
+// zoom / city-district / label detail is preserved.
+const PANEL_BG = "#030203";
+const LAND_FILL = "#070607"; // black continents (land base)
+const LAND_OVERLAY = "#110405";
+const WATER_FILL = ECHIS_GRAD_DARK;
+const WATERWAY_FILL = ECHIS_GRAD_MID;
 
-// National border — the primary boundary line, kept lighter and more opaque
-// than the sub-national admin grey so the country skeleton reads as the
-// dominant hierarchy on the globe.
-const BORDER_COUNTRY = "rgba(255, 86, 96, 0.38)";
-const BORDER_ADMIN = "rgba(176, 184, 196, 0.18)";
+// National border — clean white, the dominant boundary line (Luxe look).
+const BORDER_COUNTRY = "rgba(168, 13, 24, 0.72)";
+// Sub-national (state/province/district) lines — faint white so OSM detail
+// stays visible without competing with the country skeleton.
+const BORDER_ADMIN = "rgba(111, 7, 16, 0.28)";
 
 const LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
 const LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
@@ -2111,6 +2124,32 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             background: PANEL_BG,
+          }}
+        />
+
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background:
+              "radial-gradient(ellipse at 42% 25%, rgba(244,112,102,0.13) 0%, rgba(112,7,16,0.08) 22%, transparent 48%), " +
+              "radial-gradient(ellipse at 58% 68%, rgba(255,255,255,0.035) 0%, transparent 36%), " +
+              "linear-gradient(135deg, rgba(255,255,255,0.045) 0%, transparent 18%, rgba(0,0,0,0.16) 72%, rgba(0,0,0,0.42) 100%)",
+            mixBlendMode: "screen",
+            opacity: 0.72,
+          }}
+        />
+
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background:
+              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 48%, rgba(3,2,3,0.34) 76%, rgba(3,2,3,0.72) 100%)",
           }}
         />
 

@@ -22,13 +22,13 @@ export function LiveStatusPill({ panelOffset = 0 }: LiveStatusPillProps) {
       <div className="flex items-center gap-1.5">
         <span
           className="tracking-widest uppercase"
-          style={{ fontSize: "8.5px", color: "rgba(90,90,90,0.85)", fontWeight: 600 }}
+          style={{ fontSize: "8.5px", color: "var(--c-t6)", fontWeight: 600 }}
         >
           Last Updated
         </span>
         <span
           className="font-semibold"
-          style={{ fontSize: "10.5px", color: "rgba(170,170,170,0.9)" }}
+          style={{ fontSize: "10.5px", color: "var(--c-t4)" }}
         >
           03:42 UTC
         </span>

@@ -216,7 +216,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                   whiteSpace: "nowrap",
                   fontSize: 9,
                   fontWeight: 600,
-                  color: "rgba(90, 105, 125, 0.7)",
+                  color: "var(--c-t5)",
                   letterSpacing: "0.06em",
                 }}
               >
@@ -232,7 +232,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                 padding: "24px 20px",
                 textAlign: "center",
                 fontSize: 11,
-                color: "rgba(100, 115, 135, 0.6)",
+                color: "var(--c-t5)",
               }}
             >
               No watchlist entries match the current filters.
@@ -272,7 +272,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                         fontSize: 10.5,
-                        color: "rgba(120, 135, 155, 0.75)",
+                        color: "var(--c-t4)",
                       }}
                     >
                       {entry.topic}
@@ -302,9 +302,9 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                       style={{
                         fontSize: 10,
                         fontWeight: 500,
-                        color: "rgba(140, 155, 175, 0.75)",
+                        color: "var(--c-t4)",
                         fontVariantNumeric: "tabular-nums",
-                        fontFamily: "ui-monospace, monospace",
+                        fontFamily: "var(--font-mono), ui-monospace, monospace",
                       }}
                     >
                       {entry.confidence}%
@@ -323,7 +323,7 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                           width: `${entry.confidence}%`,
                           height: "100%",
                           borderRadius: 1,
-                          background: "rgba(236, 47, 59, 0.5)",
+                          background: "var(--accent-grad)",
                         }}
                       />
                     </div>
@@ -332,8 +332,8 @@ export function PriorityWatchlistDrawer({ open, onClose }: Props) {
                   <span
                     style={{
                       fontSize: 10,
-                      color: "rgba(140, 155, 175, 0.75)",
-                      fontFamily: "ui-monospace, monospace",
+                      color: "var(--c-t4)",
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >

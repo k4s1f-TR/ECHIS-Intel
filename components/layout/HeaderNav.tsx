@@ -87,33 +87,29 @@ export function HeaderNav({
             <button
               key={tab.label}
               onClick={tabKey ? () => onTabSelect(tabKey) : undefined}
-              className="relative flex h-full flex-shrink-0 items-center whitespace-nowrap px-2.5 transition-colors duration-150 sm:px-3"
+              className="relative flex h-full flex-shrink-0 items-center whitespace-nowrap px-2.5 transition-opacity duration-150 sm:px-3"
               style={{
                 height: "52px",
-                fontSize: "var(--fs-md)",
-                fontWeight: active ? 500 : 400,
-                color: active
-                  ? "var(--icon-active)"
-                  : "var(--text-muted)",
+                fontSize: "13.5px",
+                fontWeight: active ? 700 : 600,
                 letterSpacing: "0.01em",
+                opacity: active ? 1 : 0.5,
                 cursor: tabKey ? "pointer" : "default",
               }}
               onMouseEnter={(e) => {
                 if (!active)
-                  (e.currentTarget as HTMLElement).style.color =
-                    "var(--icon-hover)";
+                  (e.currentTarget as HTMLElement).style.opacity = "0.85";
               }}
               onMouseLeave={(e) => {
                 if (!active)
-                  (e.currentTarget as HTMLElement).style.color =
-                    "var(--text-muted)";
+                  (e.currentTarget as HTMLElement).style.opacity = "0.5";
               }}
             >
-              {tab.label}
+              <span className="accent-grad-text">{tab.label}</span>
               {active && (
                 <span
                   className="absolute bottom-0 left-2 right-2 h-[2px] rounded-t-full"
-                  style={{ background: "var(--accent-blue-text)" }}
+                  style={{ background: "var(--accent-grad)" }}
                 />
               )}
             </button>
@@ -134,7 +130,7 @@ export function HeaderNav({
             color: "var(--text-secondary)",
             fontVariantNumeric: "tabular-nums",
             letterSpacing: "0.04em",
-            fontFamily: "ui-monospace, monospace",
+            fontFamily: "var(--font-mono), ui-monospace, monospace",
           }}
         >
           <GeoLiveClock />

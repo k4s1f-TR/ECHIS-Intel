@@ -18,7 +18,7 @@ const OSM_ATTRIBUTION =
 // Sub-national (state / province / district) lines sit *below* national
 // borders in the visual hierarchy, so their grey is kept dimmer than the
 // country border colour passed in via `borderCountry`.
-const OSM_ADMIN_BOUNDARY = "rgba(176, 184, 196, 0.30)";
+const OSM_ADMIN_BOUNDARY = "rgba(111, 7, 16, 0.28)";
 
 export type EchisOsmGlobeStylePalette = {
   landFill: string;
@@ -169,7 +169,7 @@ export function createEchisOsmGlobeStyle({
           false,
         ],
         paint: {
-          "line-color": "rgba(122, 122, 130, 0.16)",
+          "line-color": "rgba(111, 7, 16, 0.16)",
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.25, 13, 0.8],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 9, 0.2, 13, 0.36],
         },
@@ -187,7 +187,7 @@ export function createEchisOsmGlobeStyle({
           false,
         ],
         paint: {
-          "line-color": "rgba(132, 132, 140, 0.18)",
+          "line-color": "rgba(168, 13, 24, 0.18)",
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 13, 1.1],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 0.28, 13, 0.42],
         },

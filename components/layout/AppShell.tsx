@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
-import {
-  MapLibreGlobe,
-  type MapLibreGlobeHandle,
-  type MarkerFeature,
+// Main globe now uses the Luxe Globe system. The MapLibre OSM globe is kept
+// (disabled, not rendered) as a fallback — its handle/marker types are still
+// the shared contract both globes implement.
+import { LuxeGlobeMap } from "@/components/luxe/LuxeGlobeMap";
+import type {
+  MapLibreGlobeHandle,
+  MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
 import {
   FloatingMonitoringCard,
@@ -556,7 +559,7 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            <MapLibreGlobe
+            <LuxeGlobeMap
               ref={globeMapRef}
               activeView={globeView}
               activeRegion={globeRegion}

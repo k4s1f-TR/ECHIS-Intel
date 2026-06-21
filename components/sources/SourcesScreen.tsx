@@ -66,7 +66,7 @@ const STATUS_STYLES: Record<
     border: "rgba(251,191,36,0.22)",
   },
   candidate: {
-    color: "rgba(150,170,196,0.88)",
+    color: "var(--c-t3)",
     background: "rgba(184,190,202,0.07)",
     border: "rgba(184,190,202,0.18)",
   },
@@ -151,7 +151,7 @@ function Pill({
 }) {
   const styles = {
     neutral: {
-      color: "rgba(170,180,194,0.78)",
+      color: "var(--c-t3)",
       background: "var(--bg-surface)",
       border: "var(--border-primary)",
     },
@@ -237,7 +237,7 @@ function RuntimeStatePill({
       border: "rgba(248,113,113,0.18)",
     },
     neutral: {
-      color: "rgba(148,163,184,0.74)",
+      color: "var(--c-t4)",
       background: "var(--bg-surface)",
       border: "rgba(255,255,255,0.06)",
     },
@@ -583,7 +583,7 @@ function SourceRow({
               color:
                 !canLoad || isLoading
                   ? "rgba(145,155,170,0.62)"
-                  : "rgba(226,232,240,0.94)",
+                  : "var(--c-t1)",
               background:
                 !canLoad || isLoading
                   ? "var(--bg-surface)"
@@ -1045,7 +1045,7 @@ export function SourcesScreen() {
                     style={{
                       color: isFrance24Loading
                         ? "rgba(145,155,170,0.62)"
-                        : "rgba(226,232,240,0.94)",
+                        : "var(--c-t1)",
                       background: isFrance24Loading
                         ? "var(--bg-surface)"
                         : "rgba(251,191,36,0.09)",
@@ -1126,7 +1126,7 @@ export function SourcesScreen() {
                     style={{
                       color: isArabnewsLoading
                         ? "rgba(145,155,170,0.62)"
-                        : "rgba(226,232,240,0.94)",
+                        : "var(--c-t1)",
                       background: isArabnewsLoading
                         ? "var(--bg-surface)"
                         : "rgba(251,146,60,0.09)",
@@ -1207,7 +1207,7 @@ export function SourcesScreen() {
                     style={{
                       color: isSkynewsLoading
                         ? "rgba(145,155,170,0.62)"
-                        : "rgba(226,232,240,0.94)",
+                        : "var(--c-t1)",
                       background: isSkynewsLoading
                         ? "var(--bg-surface)"
                         : "var(--accent-blue-bg)",

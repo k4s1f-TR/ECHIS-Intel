@@ -116,7 +116,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                       fontWeight: 500,
                       color: "var(--c-t5)",
                       fontVariantNumeric: "tabular-nums",
-                      fontFamily: "ui-monospace, monospace",
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
                       minWidth: 26,
                     }}
                   >
@@ -136,7 +136,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                         width: `${entry.confidence}%`,
                         height: "100%",
                         borderRadius: "1px",
-                        background: "rgba(236,47,59,0.5)",
+                        background: "var(--accent-grad)",
                       }}
                     />
                   </div>
@@ -146,7 +146,7 @@ export function PriorityWatchlist({ onOpenDrawer }: Props) {
                   style={{
                     fontSize: "9.5px",
                     color: "var(--c-t5)",
-                    fontFamily: "ui-monospace, monospace",
+                    fontFamily: "var(--font-mono), ui-monospace, monospace",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >

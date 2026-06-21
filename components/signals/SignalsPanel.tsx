@@ -115,7 +115,7 @@ export function SignalsPanel({
                 borderRadius: "5px",
                 color: active
                   ? "var(--accent-blue-text)"
-                  : "rgba(100,100,100,0.85)",
+                  : "var(--c-t5)",
                 background: active ? "var(--accent-blue-bg)" : "transparent",
                 border: active
                   ? "1px solid var(--accent-blue-border)"
@@ -185,7 +185,7 @@ export function SignalsPanel({
                 style={{
                   fontSize: "10.5px",
                   fontWeight: 600,
-                  color: "rgba(170,170,170,0.85)",
+                  color: "var(--c-t4)",
                 }}
               >
                 {report.locationName}
@@ -194,7 +194,7 @@ export function SignalsPanel({
               <p
                 style={{
                   fontSize: "11px",
-                  color: "rgba(130,130,130,0.85)",
+                  color: "var(--c-t5)",
                   lineHeight: 1.5,
                   margin: 0,
                 }}
@@ -215,14 +215,14 @@ export function SignalsPanel({
                 </span>
                 <span
                   className="truncate"
-                  style={{ fontSize: "9px", color: "rgba(122,122,122,0.9)" }}
+                  style={{ fontSize: "9px", color: "var(--c-t5)" }}
                 >
                   {report.sourceName}
                 </span>
               </div>
 
               <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: "9.5px", color: "rgba(125,125,125,0.92)" }}>
+                <span style={{ fontSize: "9.5px", color: "var(--c-t5)" }}>
                   {report.timestamp}
                 </span>
                 {report.relatedEventId && (

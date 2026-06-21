@@ -135,7 +135,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                     fontSize: "var(--fs-sm)",
                     color: "var(--c-t5)",
                     fontVariantNumeric: "tabular-nums",
-                    fontFamily: "ui-monospace, monospace",
+                    fontFamily: "var(--font-mono), ui-monospace, monospace",
                     flexShrink: 0,
                   }}
                 >
@@ -155,7 +155,7 @@ export function AgencyActivity({ onOpenDrawer }: Props) {
                     width: `${pct}%`,
                     height: "100%",
                     borderRadius: "2px",
-                    background: "rgba(236,47,59,0.55)",
+                    background: "var(--accent-grad)",
                   }}
                 />
               </div>

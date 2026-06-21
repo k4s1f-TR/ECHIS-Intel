@@ -25,7 +25,7 @@ interface Props {
 
 const LABEL_STYLE = {
   fontSize: "8.5px",
-  color: "rgba(100,100,100,0.8)",
+  color: "var(--c-t5)",
   fontWeight: 600,
 } as const;
 
@@ -43,7 +43,7 @@ function itemStyle(active: boolean) {
     textAlign: "left" as const,
     padding: "7px 12px",
     fontSize: "12px",
-    color: active ? "var(--accent-blue-text)" : "rgba(170,170,170,0.8)",
+    color: active ? "var(--accent-blue-text)" : "var(--c-t4)",
     background: active ? "var(--accent-blue-bg)" : "transparent",
     cursor: "pointer",
   };
@@ -106,13 +106,13 @@ export function FloatingMonitoringCard({
             "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}
       >
-        <Globe2 size={10} style={{ color: "rgba(100,100,100,0.74)" }} />
-        <span style={{ fontSize: "10px", fontWeight: 700, color: "rgba(185,195,210,0.9)", letterSpacing: "0.08em" }}>
+        <Globe2 size={10} style={{ color: "var(--c-t5)" }} />
+        <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--c-t3)", letterSpacing: "0.08em" }}>
           Monitor
         </span>
         <ChevronRight
           size={12}
-          style={{ color: "rgba(100,100,100,0.78)" }}
+          style={{ color: "var(--c-t5)" }}
         />
       </button>
     );
@@ -134,7 +134,7 @@ export function FloatingMonitoringCard({
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1.5">
-          <Globe2 size={9} style={{ color: "rgba(100,100,100,0.7)" }} />
+          <Globe2 size={9} style={{ color: "var(--c-t5)" }} />
           <span className="tracking-widest uppercase" style={LABEL_STYLE}>
             Monitor
           </span>
@@ -147,7 +147,7 @@ export function FloatingMonitoringCard({
             onCollapsedChange?.(true);
           }}
           aria-label="Collapse monitoring card"
-          style={{ color: "rgba(100,100,100,0.8)" }}
+          style={{ color: "var(--c-t5)" }}
         >
           <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
         </button>
@@ -169,14 +169,14 @@ export function FloatingMonitoringCard({
         >
           <span
             className="font-semibold"
-            style={{ fontSize: "14px", color: "rgba(210,210,210,0.95)" }}
+            style={{ fontSize: "14px", color: "var(--c-t2)" }}
           >
             {monitoringTitle}
           </span>
           <ChevronDown
             size={12}
             style={{
-              color: "rgba(100,100,100,0.7)",
+              color: "var(--c-t5)",
               transform: regionOpen ? "rotate(180deg)" : undefined,
               transition: "transform 150ms",
             }}
@@ -184,7 +184,7 @@ export function FloatingMonitoringCard({
         </button>
         <span
           className="block mt-0.5"
-          style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.85)" }}
+          style={{ fontSize: "10.5px", color: "var(--c-t5)" }}
         >
           {monitoringSubtitle}
         </span>
@@ -264,13 +264,13 @@ export function FloatingMonitoringCard({
             setRegionOpen(false);
           }}
         >
-          <span style={{ fontSize: "12.5px", color: "rgba(185,185,185,0.9)" }}>
+          <span style={{ fontSize: "12.5px", color: "var(--c-t3)" }}>
             {categoryLabel}
           </span>
           <ChevronDown
             size={12}
             style={{
-              color: "rgba(100,100,100,0.7)",
+              color: "var(--c-t5)",
               transform: categoryOpen ? "rotate(180deg)" : undefined,
               transition: "transform 150ms",
             }}
@@ -327,7 +327,7 @@ export function FloatingMonitoringCard({
         <div className="flex items-end gap-2">
           <span
             className="font-bold leading-none"
-            style={{ fontSize: "28px", color: "rgba(220,220,220,0.97)" }}
+            style={{ fontSize: "28px", color: "var(--c-t1)" }}
           >
             {eventCount}
           </span>
@@ -340,7 +340,7 @@ export function FloatingMonitoringCard({
             </span>
             <span
               className="leading-tight"
-              style={{ fontSize: "9.5px", color: "rgba(100,100,100,0.8)" }}
+              style={{ fontSize: "9.5px", color: "var(--c-t5)" }}
             >
               vs last 24h
             </span>

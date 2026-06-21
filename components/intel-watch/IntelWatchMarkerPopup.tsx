@@ -22,7 +22,7 @@ function MetaRow({ label, value, tone }: { label: string; value: string; tone?: 
         style={{
           fontSize: "8.5px",
           fontWeight: 600,
-          color: "rgba(120,135,150,0.7)",
+          color: "var(--c-t4)",
           letterSpacing: "0.06em",
           textTransform: "uppercase",
         }}
@@ -33,7 +33,7 @@ function MetaRow({ label, value, tone }: { label: string; value: string; tone?: 
         style={{
           fontSize: "10px",
           fontWeight: 500,
-          color: tone ?? "rgba(195,210,220,0.85)",
+          color: tone ?? "var(--c-t2)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -91,7 +91,7 @@ export function IntelWatchMarkerPopup({
           style={{
             fontSize: "10.5px",
             fontWeight: 600,
-            color: "rgba(220,230,240,0.92)",
+            color: "var(--c-t1)",
           }}
         >
           {item.title}
@@ -108,7 +108,7 @@ export function IntelWatchMarkerPopup({
             borderRadius: "3px",
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.06)",
-            color: "rgba(180,195,210,0.75)",
+            color: "var(--c-t3)",
             cursor: "pointer",
           }}
           aria-label="Close"
@@ -125,7 +125,7 @@ export function IntelWatchMarkerPopup({
             style={{
               fontSize: "8.5px",
               fontWeight: 600,
-              color: "rgba(120,135,150,0.7)",
+              color: "var(--c-t4)",
               letterSpacing: "0.06em",
               textTransform: "uppercase",
             }}
@@ -150,7 +150,7 @@ export function IntelWatchMarkerPopup({
         <p
           style={{
             fontSize: "10px",
-            color: "rgba(165,180,195,0.78)",
+            color: "var(--c-t3)",
             lineHeight: 1.55,
             marginTop: 6,
             marginBottom: 6,

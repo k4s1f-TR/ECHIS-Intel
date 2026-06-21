@@ -202,7 +202,7 @@ export function AgencyActivityDrawer({ open, onClose }: Props) {
                 padding: "20px 0",
                 textAlign: "center",
                 fontSize: 11,
-                color: "rgba(100, 115, 135, 0.6)",
+                color: "var(--c-t5)",
               }}
             >
               No agencies match the current filters.
@@ -252,7 +252,7 @@ export function AgencyActivityDrawer({ open, onClose }: Props) {
                       <span
                         style={{
                           fontSize: 9.5,
-                          color: "rgba(90, 105, 125, 0.65)",
+                          color: "var(--c-t5)",
                         }}
                       >
                         {agency.region} - {agency.country}
@@ -276,9 +276,9 @@ export function AgencyActivityDrawer({ open, onClose }: Props) {
                         minWidth: 34,
                         textAlign: "right",
                         fontSize: 10,
-                        color: "rgba(140, 155, 175, 0.75)",
+                        color: "var(--c-t4)",
                         fontVariantNumeric: "tabular-nums",
-                        fontFamily: "ui-monospace, monospace",
+                        fontFamily: "var(--font-mono), ui-monospace, monospace",
                       }}
                     >
                       {agency.activityLevel}
@@ -299,7 +299,7 @@ export function AgencyActivityDrawer({ open, onClose }: Props) {
                           width: activityWidth,
                           height: "100%",
                           borderRadius: 2,
-                          background: "rgba(236, 47, 59, 0.55)",
+                          background: "var(--accent-grad)",
                         }}
                       />
                     </div>

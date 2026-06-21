@@ -169,7 +169,7 @@ export function IntelWatchLiveFeed({ onOpenDrawer }: Props) {
                     style={{
                       fontSize: "var(--fs-xs)",
                       color: "var(--c-t6)",
-                      fontFamily: "ui-monospace, monospace",
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
                       marginLeft: "auto",
                     }}
                   >

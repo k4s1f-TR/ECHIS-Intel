@@ -90,7 +90,7 @@ export function EventCard({
       {/* Meta: time + location */}
       <div
         className="flex items-center gap-3 mb-1.5"
-        style={{ fontSize: "10.5px", color: "rgba(100,100,100,0.9)" }}
+        style={{ fontSize: "10.5px", color: "var(--c-t5)" }}
       >
         <span className="flex items-center gap-1">
           <Clock size={9} style={{ color: "rgba(85,85,85,0.7)" }} />
@@ -105,7 +105,7 @@ export function EventCard({
       {/* Summary */}
       <p
         className="leading-relaxed line-clamp-2"
-        style={{ fontSize: "11.5px", color: "rgba(110,110,110,0.9)" }}
+        style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
       >
         {event.summary}
       </p>

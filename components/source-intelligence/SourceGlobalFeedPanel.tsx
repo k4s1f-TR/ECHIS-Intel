@@ -51,7 +51,7 @@ function ProvenanceChip({
         fontSize: "7.5px",
         fontWeight: 700,
         letterSpacing: "0.08em",
-        color: dimmed ? "rgba(100,115,135,0.6)" : "rgba(148,163,184,0.78)",
+        color: dimmed ? "var(--c-t5)" : "var(--c-t4)",
         background: dimmed ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)",
         border: `1px solid ${dimmed ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.08)"}`,
       }}
@@ -79,7 +79,7 @@ function DetailGrid({ items }: { items: Array<[string, string | undefined]> }) {
           <dt
             className="uppercase"
             style={{
-              color: "rgba(148,163,184,0.62)",
+              color: "var(--c-t5)",
               fontSize: 9,
               fontWeight: 800,
               letterSpacing: "0.11em",
@@ -92,7 +92,7 @@ function DetailGrid({ items }: { items: Array<[string, string | undefined]> }) {
             className="mt-1.5 truncate"
             title={value}
             style={{
-              color: "rgba(220,228,238,0.9)",
+              color: "var(--c-t2)",
               fontSize: 12,
               fontWeight: 600,
               lineHeight: 1.35,
@@ -117,7 +117,7 @@ function SectionLabel({
     <div
       className="uppercase"
       style={{
-        color: accent ? "var(--accent-blue-text)" : "rgba(148,163,184,0.72)",
+        color: accent ? "var(--accent-blue-text)" : "var(--c-t4)",
         fontSize: 10,
         fontWeight: 850,
         letterSpacing: "0.12em",
@@ -216,7 +216,7 @@ function SourceItemDetailModal({
           background: "var(--bg-panel)",
           border: "1px solid rgba(255,255,255,0.12)",
           boxShadow: "var(--shadow-inset-highlight), 0 32px 90px rgba(0,0,0,0.55)",
-          color: "rgba(232,238,244,0.94)",
+          color: "var(--c-t1)",
           pointerEvents: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -248,7 +248,7 @@ function SourceItemDetailModal({
                 <span
                   className="uppercase"
                   style={{
-                    color: "rgba(148,163,184,0.78)",
+                    color: "var(--c-t4)",
                     fontSize: 10,
                     fontWeight: 800,
                     letterSpacing: "0.12em",
@@ -261,7 +261,7 @@ function SourceItemDetailModal({
               <h2
                 className="leading-tight"
                 style={{
-                  color: "rgba(248,250,252,0.96)",
+                  color: "var(--c-t1)",
                   fontSize: 18,
                   fontWeight: 850,
                 }}
@@ -271,7 +271,7 @@ function SourceItemDetailModal({
               <div
                 className="mt-2"
                 style={{
-                  color: "rgba(177,190,205,0.86)",
+                  color: "var(--c-t3)",
                   fontSize: 13,
                   fontWeight: 650,
                   lineHeight: 1.25,
@@ -310,7 +310,7 @@ function SourceItemDetailModal({
                   borderRadius: 6,
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(190,205,220,0.82)",
+                  color: "var(--c-t3)",
                   cursor: "pointer",
                 }}
               >
@@ -337,7 +337,7 @@ function SourceItemDetailModal({
               <p
                 style={{
                   marginTop: 10,
-                  color: "rgba(203,213,225,0.9)",
+                  color: "var(--c-t2)",
                   fontSize: 13,
                   fontWeight: 500,
                   lineHeight: 1.65,
@@ -392,7 +392,7 @@ function SourceItemDetailModal({
                 Open original source article
               </a>
             ) : (
-              <span style={{ fontSize: 11, color: "rgba(70,70,70,0.9)" }}>
+              <span style={{ fontSize: 11, color: "var(--c-t6)" }}>
                 No source URL available.
               </span>
             )}
@@ -517,8 +517,8 @@ function SourceFeedCard({
         </span>
         {item.publishedAt && (
           <>
-            <span style={{ color: "rgba(55,55,55,0.9)" }}>-</span>
-            <span style={{ color: "rgba(95,95,95,0.9)" }}>{formatAge(item.publishedAt)}</span>
+            <span style={{ color: "var(--c-t6)" }}>-</span>
+            <span style={{ color: "var(--c-t5)" }}>{formatAge(item.publishedAt)}</span>
           </>
         )}
       </div>
@@ -604,19 +604,19 @@ export function SourceFilterList({
             "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}
       >
-        <Radio size={10} style={{ color: "rgba(100,100,100,0.74)" }} />
+        <Radio size={10} style={{ color: "var(--c-t5)" }} />
         <span
           style={{
             fontSize: "10px",
             fontWeight: 700,
-            color: "rgba(185,195,210,0.9)",
+            color: "var(--c-t3)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
           }}
         >
           Sources
         </span>
-        <ChevronRight size={12} style={{ color: "rgba(100,100,100,0.78)" }} />
+        <ChevronRight size={12} style={{ color: "var(--c-t5)" }} />
       </button>
     );
   }
@@ -644,7 +644,7 @@ export function SourceFilterList({
         <span
           className="uppercase"
           style={{
-            color: "rgba(125,140,160,0.78)",
+            color: "var(--c-t5)",
             fontSize: 8.5,
             fontWeight: 800,
             letterSpacing: "0.11em",
@@ -655,7 +655,7 @@ export function SourceFilterList({
         <div className="flex items-center gap-2">
           <span
             style={{
-              color: "rgba(80,95,115,0.8)",
+              color: "var(--c-t6)",
               fontSize: 9,
               fontWeight: 650,
             }}
@@ -667,7 +667,7 @@ export function SourceFilterList({
               type="button"
               aria-label="Collapse sources filter"
               onClick={() => onCollapsedChange?.(true)}
-              style={{ color: "rgba(100,100,100,0.8)" }}
+              style={{ color: "var(--c-t5)" }}
             >
               <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
             </button>
@@ -911,7 +911,7 @@ export function SourceGlobalFeedPanel({
             <Radio size={10} style={{ color: "rgba(250,86,96,0.45)" }} />
             <span
               className="font-semibold uppercase tracking-widest"
-              style={{ fontSize: "10px", color: "rgba(170,170,170,0.8)" }}
+              style={{ fontSize: "10px", color: "var(--c-t4)" }}
             >
               Source Intelligence
             </span>
@@ -949,10 +949,10 @@ export function SourceGlobalFeedPanel({
 
         {loadState === "error" && (
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center">
-            <span style={{ fontSize: "12px", fontWeight: 500, color: "rgba(110,110,110,0.85)" }}>
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--c-t5)" }}>
               Source feed unavailable.
             </span>
-            <span style={{ fontSize: "10.5px", color: "rgba(70,70,70,0.9)" }}>
+            <span style={{ fontSize: "10.5px", color: "var(--c-t6)" }}>
               No source intelligence items available.
             </span>
           </div>
@@ -973,7 +973,7 @@ export function SourceGlobalFeedPanel({
           >
             {visibleItems.length === 0 ? (
               <div className="flex flex-1 items-center justify-center">
-                <span style={{ fontSize: "11px", color: "rgba(70,70,70,0.9)" }}>
+                <span style={{ fontSize: "11px", color: "var(--c-t6)" }}>
                   No source intelligence items for this source.
                 </span>
               </div>
@@ -1000,7 +1000,7 @@ export function SourceGlobalFeedPanel({
             className="flex flex-shrink-0 items-center justify-between px-4 py-2"
             style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
           >
-            <span style={{ fontSize: "9.5px", color: "rgba(60,60,60,0.85)" }}>
+            <span style={{ fontSize: "9.5px", color: "var(--c-t6)" }}>
               {visibleItems.length} / {items.length} items
             </span>
             <span
@@ -1008,7 +1008,7 @@ export function SourceGlobalFeedPanel({
                 fontSize: "8.5px",
                 fontWeight: 600,
                 letterSpacing: "0.06em",
-                color: "rgba(55,55,55,0.9)",
+                color: "var(--c-t6)",
                 textTransform: "uppercase",
               }}
             >
