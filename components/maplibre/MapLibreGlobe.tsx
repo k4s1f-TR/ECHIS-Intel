@@ -9,6 +9,8 @@ import {
 } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { feature } from "topojson-client";
+import countriesAtlas from "world-atlas/countries-10m.json";
 import {
   createEchisOsmGlobeStyle,
   OSM_VECTOR_SOURCE_ID,
@@ -922,7 +924,182 @@ const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 // --- Luxe palette (option A): vivid red ocean, black continents, white
 // borders — the Luxe Globe look applied to the detailed OSM basemap so all
 // zoom / city-district / label detail is preserved.
+// ---------------------------------------------------------------------------
+// Luxe MapLibre style flag — OFF by default so the existing MAPLIBRE style is
+// unchanged.  Flip to `true` (or set NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE=1) to
+// render the premium Luxe-inspired style: glowing red ocean coastlines, silver
+// borders, deeper obsidian space, and a globe atmosphere halo.  The LUXE
+// (Three.js) renderer is unrelated and untouched.
+const USE_LUXE_MAPLIBRE_STYLE =
+  process.env.NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE === "1" ||
+  process.env.NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE === "true" ||
+  false;
+
+// --- Luxe palette (gated behind USE_LUXE_MAPLIBRE_STYLE) -------------------
+// Deep obsidian space behind the globe, near-black land, silver-grey borders,
+// and the bright/dark red coastline endpoints from the reference.
+const LUXE_PANEL_BG = "#0B0C0E";
+const LUXE_LAND_FILL = "#050506";
+const LUXE_LAND_OVERLAY = "#0d0e10";
+const LUXE_WATER_FILL = "#040405";
+const LUXE_WATERWAY_FILL = "rgba(120, 130, 146, 0.30)";
+const LUXE_BORDER_COUNTRY = "rgba(255, 43, 61, 0.78)";
+const LUXE_BORDER_ADMIN = "rgba(255, 43, 61, 0.30)";
+
+// Luxe outline source/layer — each country's polygon rings are converted into
+// independent line pieces. This avoids a topology mesh that "walks" around the
+// world as one continuous pen path and then visually connects unrelated ends.
+const LUXE_OUTLINE_SOURCE = "echis-luxe-outline";
+const LUXE_OUTLINE_LAYER = "echis-luxe-outline";
+const LUXE_ANTIMERIDIAN_JUMP_DEG = 180;
+const LUXE_POLAR_ARTIFACT_LAT = 88;
+const LUXE_MAX_EDGE_DEG = 0.75;
+
+let luxeOutlineGeoJsonCache: GeoJSON.FeatureCollection | null = null;
+
+function isAntimeridianClosure(
+  previous: GeoJSON.Position,
+  current: GeoJSON.Position,
+): boolean {
+  return Math.abs(previous[0] - current[0]) >= LUXE_ANTIMERIDIAN_JUMP_DEG;
+}
+
+function isPolarArtifactLine(line: GeoJSON.Position[]): boolean {
+  return (
+    line.length > 3 &&
+    line.every((coordinate) => Math.abs(coordinate[1]) >= LUXE_POLAR_ARTIFACT_LAT)
+  );
+}
+
+function isDrawableOutlineEdge(
+  previous: GeoJSON.Position,
+  current: GeoJSON.Position,
+): boolean {
+  if (isAntimeridianClosure(previous, current)) return false;
+  const deltaLng = Math.abs(previous[0] - current[0]);
+  const deltaLat = Math.abs(previous[1] - current[1]);
+  return Math.hypot(deltaLng, deltaLat) <= LUXE_MAX_EDGE_DEG;
+}
+
+function appendLineAsOutlineSegments(
+  line: GeoJSON.Position[],
+  lines: GeoJSON.Position[][],
+): void {
+  if (isPolarArtifactLine(line)) return;
+
+  for (let index = 1; index < line.length; index += 1) {
+    const previous = line[index - 1];
+    const current = line[index];
+    if (!previous || !current) continue;
+    if (isDrawableOutlineEdge(previous, current)) lines.push([previous, current]);
+  }
+}
+
+function appendGeometryAsOutlineSegments(
+  geometry: GeoJSON.Geometry | null,
+  lines: GeoJSON.Position[][],
+): void {
+  if (!geometry) return;
+
+  if (geometry.type === "LineString") {
+    appendLineAsOutlineSegments(geometry.coordinates, lines);
+    return;
+  }
+
+  if (geometry.type === "MultiLineString") {
+    geometry.coordinates.forEach((line) => appendLineAsOutlineSegments(line, lines));
+    return;
+  }
+
+  if (geometry.type === "Polygon") {
+    geometry.coordinates.forEach((ring) => appendLineAsOutlineSegments(ring, lines));
+    return;
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    geometry.coordinates.forEach((polygon) => {
+      polygon.forEach((ring) => appendLineAsOutlineSegments(ring, lines));
+    });
+    return;
+  }
+
+  if (geometry.type === "GeometryCollection") {
+    geometry.geometries.forEach((child) => appendGeometryAsOutlineSegments(child, lines));
+  }
+}
+
+function buildLuxeOutlineGeoJson(): GeoJSON.FeatureCollection {
+  const topology = countriesAtlas as unknown as TopoJSON.Topology;
+  const countriesGeoJson = feature(
+    topology,
+    topology.objects.countries as TopoJSON.GeometryCollection,
+  ) as GeoJSON.FeatureCollection;
+  const lines: GeoJSON.Position[][] = [];
+
+  countriesGeoJson.features.forEach((country) => {
+    appendGeometryAsOutlineSegments(country.geometry, lines);
+  });
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { kind: "outline" },
+        geometry: { type: "MultiLineString", coordinates: lines },
+      },
+    ],
+  };
+}
+
+function getLuxeOutlineGeoJson(): GeoJSON.FeatureCollection {
+  if (luxeOutlineGeoJsonCache) {
+    return luxeOutlineGeoJsonCache;
+  }
+  luxeOutlineGeoJsonCache = buildLuxeOutlineGeoJson();
+  return luxeOutlineGeoJsonCache;
+}
+
+function setupLuxeOutline(map: maplibregl.Map): void {
+  try {
+    if (!map.getSource(LUXE_OUTLINE_SOURCE)) {
+      map.addSource(LUXE_OUTLINE_SOURCE, {
+        type: "geojson",
+        data: getLuxeOutlineGeoJson(),
+        maxzoom: 6,
+        tolerance: 0,
+      });
+    }
+    const beforeId = [
+      "water_name",
+      "place_country_label",
+      "place_region_label",
+    ].find((id) => map.getLayer(id));
+    if (!map.getLayer(LUXE_OUTLINE_LAYER)) {
+      map.addLayer(
+        {
+          id: LUXE_OUTLINE_LAYER,
+          type: "line",
+          source: LUXE_OUTLINE_SOURCE,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": LUXE_BORDER_COUNTRY,
+            "line-width": 0.62,
+            "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.9, 6, 0.95],
+          },
+        } as unknown as maplibregl.LayerSpecification,
+        beforeId,
+      );
+    }
+  } catch (e) {
+    console.warn("[MapLibreGlobe] luxe outline setup failed:", e);
+  }
+}
+
 const PANEL_BG = "#030203";
+// Space colour behind the globe — obsidian in luxe, the original near-black
+// otherwise.  Used for the container / loading / error backgrounds.
+const ACTIVE_PANEL_BG = USE_LUXE_MAPLIBRE_STYLE ? LUXE_PANEL_BG : PANEL_BG;
 const LAND_FILL = "#070607"; // black continents (land base)
 const LAND_OVERLAY = "#110405";
 const WATER_FILL = ECHIS_GRAD_DARK;
@@ -1470,14 +1647,27 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         map = new maplibregl.Map({
           container,
           style: USE_ECHIS_OSM_BASEMAP
-            ? createEchisOsmGlobeStyle({
-                landFill: LAND_FILL,
-                landOverlay: LAND_OVERLAY,
-                waterFill: WATER_FILL,
-                waterwayFill: WATERWAY_FILL,
-                borderCountry: BORDER_COUNTRY,
-                labelHalo: LABEL_HALO,
-              })
+            ? createEchisOsmGlobeStyle(
+                USE_LUXE_MAPLIBRE_STYLE
+                  ? {
+                      landFill: LUXE_LAND_FILL,
+                      landOverlay: LUXE_LAND_OVERLAY,
+                      waterFill: LUXE_WATER_FILL,
+                      waterwayFill: LUXE_WATERWAY_FILL,
+                      borderCountry: LUXE_BORDER_COUNTRY,
+                      borderAdmin: LUXE_BORDER_ADMIN,
+                      showBoundaries: false,
+                      labelHalo: LABEL_HALO,
+                    }
+                  : {
+                      landFill: LAND_FILL,
+                      landOverlay: LAND_OVERLAY,
+                      waterFill: WATER_FILL,
+                      waterwayFill: WATERWAY_FILL,
+                      borderCountry: BORDER_COUNTRY,
+                      labelHalo: LABEL_HALO,
+                    },
+              )
             : CARTO_DARK_MATTER_STYLE_URL,
           center: DEFAULT_GLOBE_VIEW.center,
           zoom: DEFAULT_GLOBE_VIEW.zoom,
@@ -1554,6 +1744,38 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           );
         }
 
+        // Luxe atmosphere halo — a faint reddish glow at the globe's edge over
+        // obsidian space.  Wrapped defensively: setSky is unavailable on older
+        // MapLibre builds / mercator fallback, so any failure is swallowed and
+        // the map keeps working without the halo.
+        if (USE_LUXE_MAPLIBRE_STYLE) {
+          try {
+            (map as unknown as {
+              setSky?: (sky: Record<string, unknown>) => void;
+            }).setSky?.({
+              "sky-color": "#0B0C0E",
+              "sky-horizon-blend": 0.6,
+              "horizon-color": "#2a0a0d",
+              "horizon-fog-blend": 0.7,
+              "fog-color": "#1a0608",
+              "fog-ground-blend": 0.85,
+              "atmosphere-blend": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                0,
+                0.7,
+                4,
+                0.45,
+                6,
+                0,
+              ],
+            });
+          } catch (e) {
+            console.warn("[MapLibreGlobe] setSky unsupported — skipping halo:", e);
+          }
+        }
+
         // Dark refinement pass — only needed for the CARTO basemap.  When the
         // OSM basemap is active the style is pre-built with the correct palette
         // by createEchisOsmGlobeStyle, so running the pass would redundantly
@@ -1563,6 +1785,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
+        if (USE_LUXE_MAPLIBRE_STYLE) setupLuxeOutline(map);
         // Register the shared red pin icon before adding the symbol layers
         // that reference it; styleimagemissing acts as a safety net if the
         // image add races the layer add.
@@ -2114,7 +2337,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         style={{
           position: "absolute",
           inset: 0,
-          background: PANEL_BG,
+          background: ACTIVE_PANEL_BG,
           overflow: "hidden",
         }}
       >
@@ -2123,7 +2346,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           style={{
             position: "absolute",
             inset: 0,
-            background: PANEL_BG,
+            background: ACTIVE_PANEL_BG,
           }}
         />
 
@@ -2148,8 +2371,9 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background:
-              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 48%, rgba(3,2,3,0.34) 76%, rgba(3,2,3,0.72) 100%)",
+            background: USE_LUXE_MAPLIBRE_STYLE
+              ? "radial-gradient(circle at 50% 46%, transparent 0%, transparent 44%, rgba(11,12,14,0.45) 72%, rgba(11,12,14,0.92) 100%)"
+              : "radial-gradient(circle at 50% 46%, transparent 0%, transparent 48%, rgba(3,2,3,0.34) 76%, rgba(3,2,3,0.72) 100%)",
           }}
         />
 
@@ -2164,7 +2388,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
               color: "#6b7a90",
               fontSize: 13,
               letterSpacing: 0.4,
-              background: PANEL_BG,
+              background: ACTIVE_PANEL_BG,
               pointerEvents: "none",
             }}
           >
@@ -2184,7 +2408,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
               gap: 6,
               color: "#8a939c",
               fontSize: 13,
-              background: PANEL_BG,
+              background: ACTIVE_PANEL_BG,
               padding: 16,
               textAlign: "center",
             }}

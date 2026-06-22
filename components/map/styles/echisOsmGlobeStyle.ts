@@ -27,6 +27,12 @@ export type EchisOsmGlobeStylePalette = {
   waterwayFill: string;
   borderCountry: string;
   labelHalo: string;
+  // --- Luxe additions (optional; default style is unaffected) --------------
+  // In the luxe variant, MapLibreGlobe supplies one local outline layer for
+  // coastlines + country borders. This switch hides OSM line layers so two
+  // line systems do not overlap.
+  borderAdmin?: string;
+  showBoundaries?: boolean;
 };
 
 export function createEchisOsmGlobeStyle({
@@ -36,6 +42,8 @@ export function createEchisOsmGlobeStyle({
   waterwayFill,
   borderCountry,
   labelHalo,
+  borderAdmin = OSM_ADMIN_BOUNDARY,
+  showBoundaries = true,
 }: EchisOsmGlobeStylePalette): StyleSpecification {
   const sourceLayer = (name: string) => ({
     source: OSM_VECTOR_SOURCE_ID,
@@ -89,6 +97,7 @@ export function createEchisOsmGlobeStyle({
         type: "line",
         ...sourceLayer("waterway"),
         minzoom: 4,
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         paint: {
           "line-color": waterwayFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.25, 9, 0.9],
@@ -100,14 +109,18 @@ export function createEchisOsmGlobeStyle({
         type: "line",
         ...sourceLayer("boundary"),
         minzoom: 3.2,
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         filter: [
           "all",
           [">=", ["to-number", ["get", "admin_level"], 99], 3],
           ["<=", ["to-number", ["get", "admin_level"], 99], 6],
           ["!=", ["get", "maritime"], 1],
+          ["!=", ["get", "maritime"], "1"],
+          ["!=", ["get", "maritime"], true],
+          ["!=", ["get", "maritime"], "true"],
         ],
         paint: {
-          "line-color": OSM_ADMIN_BOUNDARY,
+          "line-color": borderAdmin,
           "line-width": ["interpolate", ["linear"], ["zoom"], 3.2, 0.3, 5.5, 0.5, 8, 0.7],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.2, 0, 4.2, 0.48, 7, 0.72],
           // Sub-national borders use a dashed pattern (vs. the solid national
@@ -123,13 +136,17 @@ export function createEchisOsmGlobeStyle({
         type: "line",
         ...sourceLayer("boundary"),
         minzoom: 5.4,
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         filter: [
           "all",
           [">=", ["to-number", ["get", "admin_level"], 99], 7],
           ["!=", ["get", "maritime"], 1],
+          ["!=", ["get", "maritime"], "1"],
+          ["!=", ["get", "maritime"], true],
+          ["!=", ["get", "maritime"], "true"],
         ],
         paint: {
-          "line-color": OSM_ADMIN_BOUNDARY,
+          "line-color": borderAdmin,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5.4, 0.28, 8, 0.55, 11, 0.75],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5.4, 0, 6.4, 0.34, 10, 0.58],
           // Dashed to match the regional admin line and the national-solid /
@@ -141,6 +158,7 @@ export function createEchisOsmGlobeStyle({
         id: "boundary_country",
         type: "line",
         ...sourceLayer("boundary"),
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         filter: [
           "all",
           // Coerce admin_level to a number before comparing — some vector
@@ -149,6 +167,9 @@ export function createEchisOsmGlobeStyle({
           // defensive pattern used by the regional / local admin layers.
           ["==", ["to-number", ["get", "admin_level"], 99], 2],
           ["!=", ["get", "maritime"], 1],
+          ["!=", ["get", "maritime"], "1"],
+          ["!=", ["get", "maritime"], true],
+          ["!=", ["get", "maritime"], "true"],
         ],
         paint: {
           "line-color": borderCountry,
@@ -161,6 +182,7 @@ export function createEchisOsmGlobeStyle({
         type: "line",
         ...sourceLayer("transportation"),
         minzoom: 8,
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         filter: [
           "match",
           ["get", "class"],
@@ -179,6 +201,7 @@ export function createEchisOsmGlobeStyle({
         type: "line",
         ...sourceLayer("transportation"),
         minzoom: 7,
+        layout: { visibility: showBoundaries ? "visible" : "none" },
         filter: [
           "match",
           ["get", "class"],

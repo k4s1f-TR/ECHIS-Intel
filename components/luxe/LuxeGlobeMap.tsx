@@ -25,7 +25,7 @@ import {
 } from "react";
 import * as THREE from "three";
 import { feature } from "topojson-client";
-import type { Feature, Geometry, Position } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import type { RegionKey } from "@/types/event";
 import type {
   MapLibreGlobeHandle,
@@ -49,7 +49,9 @@ const DEFAULT_MAP_ZOOM = 2.12;
 
 // Camera distance band (from the Luxe design) and how MapLibre "zoom" maps to it.
 const CAM_Z_DEFAULT = 3.65;
-const CAM_Z_MIN = 2.45;
+// Closest manual zoom-in distance. Lowered from 2.45 to allow a few extra
+// scroll steps inward (default / region framing levels are unchanged).
+const CAM_Z_MIN = 1.9;
 const CAM_Z_MAX = 4.8;
 const CAM_Z_STEP = 0.42; // zoom-button increment
 const INTERACTION_IDLE_MS = 15_000;
@@ -192,6 +194,18 @@ interface Pin {
   itemCount: number;
 }
 
+// Country-name label (README_LABELS addendum). `dir` is the unit direction on
+// the globe's local sphere (rotates with the group); `rank` is NE LABELRANK
+// (lower = more important) used for LOD + declutter priority.
+interface LabelItem {
+  el: HTMLDivElement;
+  dir: THREE.Vector3;
+  rank: number;
+  w: number;
+  h: number;
+  shown: boolean;
+}
+
 interface Engine {
   disposed: boolean;
   raf: number;
@@ -222,6 +236,9 @@ interface Engine {
   offsetXTarget: number;
   // markers
   pins: Map<string, Pin>;
+  // country-name labels
+  labels: LabelItem[];
+  labelLayer: HTMLDivElement | null;
   onResize: (() => void) | null;
   cleanup: (() => void) | null;
   _reconcile?: () => void;
@@ -251,6 +268,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
   function LuxeGlobeMap(props, ref) {
     const mountRef = useRef<HTMLDivElement>(null);
     const markersRef = useRef<HTMLDivElement>(null);
+    const labelLayerRef = useRef<HTMLDivElement>(null);
     const engineRef = useRef<Engine | null>(null);
     const propsRef = useRef(props);
 
@@ -309,6 +327,8 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         offsetX: 0,
         offsetXTarget: 0,
         pins: new Map(),
+        labels: [],
+        labelLayer: null,
         onResize: null,
         cleanup: null,
       };
@@ -472,8 +492,13 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           const dy = p.clientY - eng.drag.y;
           eng.drag.x = p.clientX;
           eng.drag.y = p.clientY;
-          const ky = dx * 0.0052;
-          const kx = dy * 0.0052;
+          // Screen-consistent pan (matches the previous MapLibre globe feel):
+          // rotation-per-pixel scales with camera distance so a point under the
+          // cursor tracks the cursor at every zoom level. 0.0016 * camZ reduces
+          // to the original 0.0052 at the default distance (camZ ≈ 3.25).
+          const k = 0.0016 * eng.camZ;
+          const ky = dx * k;
+          const kx = dy * k;
           eng.rot.y += ky;
           eng.rot.x = Math.max(-1.3, Math.min(1.3, eng.rot.x + kx));
           eng.vel.y = ky;
@@ -513,6 +538,201 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         const cam = eng.camera!;
         const visH = 2 * Math.tan((cam.fov * DEG) / 2) * cam.position.z;
         return visH / Math.max(1, eng.H);
+      };
+
+      // ---- country-name label layer (README_LABELS addendum) ------------
+      // Adds ONLY a DOM label overlay over the WebGL globe — no change to the
+      // material / colour texture / lighting. Logic mirrors the design file:
+      // NAME_TR from Natural Earth admin_0, 3D placement matching the sphere
+      // texture, back-face cull + edge fade, LABELRANK-based LOD, declutter.
+      const LABEL_BASE =
+        "https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/";
+
+      // Bounding-box centre of the feature's largest ring (label fallback when
+      // the curated LABEL_X / LABEL_Y anchor is missing).
+      const featCenter = (feat: Feature<Geometry>): [number, number] | null => {
+        const polys = polygons(feat);
+        let best: Position[] | null = null;
+        let bestLen = -1;
+        for (const poly of polys) {
+          const ring = poly[0];
+          if (ring && ring.length > bestLen) {
+            bestLen = ring.length;
+            best = ring;
+          }
+        }
+        if (!best) return null;
+        let minX = 1e9;
+        let maxX = -1e9;
+        let minY = 1e9;
+        let maxY = -1e9;
+        for (const p of best) {
+          if (p[0] < minX) minX = p[0];
+          if (p[0] > maxX) maxX = p[0];
+          if (p[1] < minY) minY = p[1];
+          if (p[1] > maxY) maxY = p[1];
+        }
+        return [(minX + maxX) / 2, (minY + maxY) / 2];
+      };
+
+      const addLabel = (text: string, lat: number, lon: number, rank: number) => {
+        if (!eng.labelLayer) return;
+        const el = document.createElement("div");
+        el.className = "g-country";
+        el.textContent = text;
+        el.style.position = "absolute";
+        el.style.left = "0";
+        el.style.top = "0";
+        el.style.opacity = "0";
+        // Length-based font scaling: long names (e.g. BOSNA-HERSEK, KUZEY
+        // MAKEDONYA) shrink so their box is narrower and crowded neighbours
+        // (e.g. SIRBISTAN) still fit. Names up to 9 chars stay at full 8px.
+        const len = text.length;
+        const fontPx = Math.max(5.5, Math.min(8, 8 - (len - 9) * 0.45));
+        el.style.fontSize = `${fontPx}px`;
+        eng.labelLayer.appendChild(el);
+        const dir = latLngToVector3(lat, lon, 1).normalize();
+        const adv = fontPx * 0.58 + 0.4; // ≈ glyph advance at this font size
+        eng.labels.push({
+          el,
+          dir,
+          rank: isNaN(rank) ? 5 : rank,
+          w: len * adv,
+          h: fontPx + 2,
+          shown: false,
+        });
+      };
+
+      const loadLabels = () => {
+        // Production note (per README): vendor this GeoJSON locally instead of
+        // hot-linking jsDelivr. Kept as-is here to match the handoff exactly.
+        fetch(LABEL_BASE + "ne_110m_admin_0_countries.geojson")
+          .then((r) => r.json())
+          .then((fc: FeatureCollection) => {
+            if (eng.disposed || !fc || !fc.features) return;
+            for (const f of fc.features) {
+              const p = (f.properties ?? {}) as Record<string, unknown>;
+              const name = (p.NAME_TR || p.NAME || p.ADMIN || p.name) as
+                | string
+                | undefined;
+              if (!name) continue;
+              let lon = p.LABEL_X != null ? Number(p.LABEL_X) : null;
+              let lat = p.LABEL_Y != null ? Number(p.LABEL_Y) : null;
+              if (lon == null || lat == null || isNaN(lon) || isNaN(lat)) {
+                const c = featCenter(f as Feature<Geometry>);
+                if (!c) continue;
+                lon = c[0];
+                lat = c[1];
+              }
+              let rank = Number(p.LABELRANK);
+              if (isNaN(rank)) rank = 5;
+              addLabel(String(name).toUpperCase(), lat, lon, rank);
+            }
+          })
+          .catch((err) => console.warn("country labels failed", err));
+      };
+
+      const labelNormal = new THREE.Vector3();
+      const labelToCam = new THREE.Vector3();
+      const labelWP = new THREE.Vector3();
+
+      const updateLabels = () => {
+        const cam = eng.camera;
+        const g = eng.group;
+        if (!cam || !g || !eng.labels.length) return;
+        g.updateMatrixWorld();
+        const W = eng.W;
+        const H = eng.H;
+        // Zoom-based LOD: far view (t→1) shows only major countries; zooming in
+        // (t→0) raises maxRank so more countries become eligible.
+        const t = Math.max(
+          0,
+          Math.min(1, (eng.camZ - CAM_Z_MIN) / (CAM_Z_MAX - CAM_Z_MIN)),
+        );
+        // Zoom-in (t→0) reveals all ranks (incl. small countries, rank 9–12);
+        // zoom-out (t→1) keeps only majors. Overlap is handled by the declutter
+        // pass below, so a generous ceiling here is safe.
+        const maxRank = Math.round(12 - 9 * t);
+        // Hide labels nearer the limb when zoomed out (Central View): a higher
+        // facing threshold keeps names off the globe's silhouette so they don't
+        // stick out / clip at the edge. Zoomed in (t→0) it relaxes to the
+        // design's original 0.14 since the limb is mostly off-screen anyway.
+        const facingMin = 0.14 + 0.2 * t;
+        const hide = (L: LabelItem) => {
+          if (L.shown) {
+            L.el.style.opacity = "0";
+            L.shown = false;
+          }
+        };
+
+        const cand: { L: LabelItem; sx: number; sy: number; fade: number }[] = [];
+        for (const L of eng.labels) {
+          if (L.rank > maxRank) {
+            hide(L);
+            continue;
+          }
+          // surface point lifted slightly off the sphere, in world space
+          labelWP.copy(L.dir).multiplyScalar(1.012);
+          g.localToWorld(labelWP);
+          labelNormal.copy(labelWP).sub(g.position).normalize();
+          labelToCam.copy(cam.position).sub(labelWP).normalize();
+          const facing = labelNormal.dot(labelToCam);
+          if (facing <= facingMin) {
+            hide(L);
+            continue;
+          }
+          const ndc = labelWP.clone().project(cam);
+          const sx = (ndc.x * 0.5 + 0.5) * W;
+          const sy = (-ndc.y * 0.5 + 0.5) * H;
+          // Drop labels whose text box would spill past the viewport edges so
+          // nothing overflows / gets half-clipped.
+          if (
+            sx - L.w / 2 < 2 ||
+            sx + L.w / 2 > W - 2 ||
+            sy - L.h / 2 < 2 ||
+            sy + L.h / 2 > H - 2
+          ) {
+            hide(L);
+            continue;
+          }
+          const fade = Math.min(1, (facing - facingMin) / 0.22);
+          cand.push({ L, sx, sy, fade });
+        }
+
+        // Declutter: place highest-priority (lowest rank) first; skip any label
+        // whose box overlaps an already-placed one.
+        cand.sort((a, b) => a.L.rank - b.L.rank);
+        const placed: { x: number; y: number; w: number; h: number }[] = [];
+        for (const c of cand) {
+          const L = c.L;
+          const x0 = c.sx - L.w / 2;
+          const y0 = c.sy - L.h / 2;
+          let clash = false;
+          for (const r of placed) {
+            if (
+              x0 < r.x + r.w + 1 &&
+              x0 + L.w + 1 > r.x &&
+              y0 < r.y + r.h + 1 &&
+              y0 + L.h + 1 > r.y
+            ) {
+              clash = true;
+              break;
+            }
+          }
+          if (clash) {
+            if (L.shown) {
+              L.el.style.opacity = "0";
+              L.shown = false;
+            }
+            continue;
+          }
+          placed.push({ x: x0, y: y0, w: L.w, h: L.h });
+          L.el.style.transform = `translate(-50%,-50%) translate(${c.sx.toFixed(
+            1,
+          )}px,${c.sy.toFixed(1)}px)`;
+          L.el.style.opacity = c.fade.toFixed(2);
+          L.shown = true;
+        }
       };
 
       const updateMarkers = () => {
@@ -594,10 +814,13 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           eng.group.position.x = eng.offsetX;
         }
         if (eng.camera) {
-          eng.camera.position.z += (eng.camZ - eng.camera.position.z) * 0.08;
+          // Slightly snappier zoom easing so button / wheel zoom responds with
+          // the same immediacy as the previous globe's 350ms eased zoom.
+          eng.camera.position.z += (eng.camZ - eng.camera.position.z) * 0.12;
         }
         eng.renderer!.render(eng.scene!, eng.camera!);
         updateMarkers();
+        updateLabels();
       };
 
       const applyView = (animated: boolean) => {
@@ -719,6 +942,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         };
         window.addEventListener("resize", eng.onResize);
 
+        eng.labelLayer = labelLayerRef.current;
+        loadLabels();
+
         applyView(false); // first paint: jump to framing, no spin
         reconcilePins();
         animate();
@@ -834,6 +1060,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         if (eng.cleanup) eng.cleanup();
         for (const pin of eng.pins.values()) pin.el.remove();
         eng.pins.clear();
+        for (const l of eng.labels) l.el.remove();
+        eng.labels.length = 0;
+        eng.labelLayer = null;
         if (eng.renderer) {
           eng.renderer.dispose();
           const el = eng.renderer.domElement;
@@ -932,6 +1161,16 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
         <div ref={markersRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
         <div
+          ref={labelLayerRef}
+          className="g-label-layer"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            overflow: "hidden",
+          }}
+        />
+        <div
           style={{
             position: "absolute",
             inset: 0,
@@ -941,6 +1180,17 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           }}
         />
         <style>{`
+          .g-country {
+            font: 500 8px/1 'Helvetica Neue', Arial, sans-serif;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.72);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.7);
+            white-space: nowrap;
+            pointer-events: none;
+            will-change: opacity, transform;
+            transition: opacity 0.22s ease;
+          }
           .luxe-marker {
             --pin-w: 24px;
             --pin-h: 34px;
