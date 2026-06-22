@@ -138,9 +138,21 @@ function camZForMapZoom(z: number): number {
 // lat/lng → unit-sphere position matching THREE.SphereGeometry's equirectangular
 // UV mapping (verified against the colour-texture projection used by the Luxe core).
 function latLngToVector3(lat: number, lng: number, r = 1): THREE.Vector3 {
+  return setLatLngVec(new THREE.Vector3(), lat, lng, r);
+}
+
+// Allocation-free variant: writes the unit-sphere position into `out`. Used on
+// the per-frame projection paths (markers) where a fresh Vector3 per call would
+// churn the GC and cause frame hitches.
+function setLatLngVec(
+  out: THREE.Vector3,
+  lat: number,
+  lng: number,
+  r = 1,
+): THREE.Vector3 {
   const phi = (90 - lat) * DEG;
   const theta = (lng + 180) * DEG;
-  return new THREE.Vector3(
+  return out.set(
     -r * Math.sin(phi) * Math.cos(theta),
     r * Math.cos(phi),
     r * Math.sin(phi) * Math.sin(theta),
@@ -274,6 +286,7 @@ function startRotationFrame(
 
 const TMP = new THREE.Vector3();
 const TMP2 = new THREE.Vector3();
+const TMP3 = new THREE.Vector3();
 const NDC2 = new THREE.Vector2();
 const RAYCASTER = new THREE.Raycaster();
 
@@ -298,16 +311,18 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
       const cam = eng.camera;
       const g = eng.group;
       if (!cam || !g) return null;
-      g.updateMatrixWorld();
-      const wp = TMP.copy(latLngToVector3(lat, lng, 1));
-      g.localToWorld(wp);
+      // World matrices are refreshed once per frame (renderer.render +
+      // the animate loop), so this hot per-marker path neither updates the
+      // matrix nor allocates — it reuses shared temps.
+      setLatLngVec(TMP, lat, lng, 1);
+      g.localToWorld(TMP); // TMP = marker world position
       // occlusion: surface normal (from globe centre) vs direction to camera
-      const normal = TMP2.copy(wp).sub(g.position).normalize();
-      const toCam = new THREE.Vector3().copy(cam.position).sub(wp).normalize();
-      const visible = normal.dot(toCam) > 0.02;
-      const ndc = wp.clone().project(cam);
-      const x = (ndc.x * 0.5 + 0.5) * eng.W;
-      const y = (-ndc.y * 0.5 + 0.5) * eng.H;
+      TMP2.copy(TMP).sub(g.position).normalize();
+      TMP3.copy(cam.position).sub(TMP).normalize();
+      const visible = TMP2.dot(TMP3) > 0.02;
+      TMP.project(cam); // TMP → NDC in place (world value no longer needed)
+      const x = (TMP.x * 0.5 + 0.5) * eng.W;
+      const y = (-TMP.y * 0.5 + 0.5) * eng.H;
       return { x, y, visible };
     };
 
@@ -709,6 +724,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
               if (isNaN(rank)) rank = 5;
               addLabel(String(name).toUpperCase(), lat, lon, rank);
             }
+            // Sort once by rank so the per-frame declutter pass can place
+            // highest-priority labels first without re-sorting every frame.
+            eng.labels.sort((a, b) => a.rank - b.rank);
           })
           .catch((err) => console.warn("country labels failed", err));
       };
@@ -716,12 +734,16 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
       const labelNormal = new THREE.Vector3();
       const labelToCam = new THREE.Vector3();
       const labelWP = new THREE.Vector3();
+      // Pooled declutter scratch — placed label boxes for the current frame,
+      // reused so the per-frame label pass allocates nothing.
+      const labelPlaced: { x: number; y: number; w: number; h: number }[] = [];
 
       const updateLabels = () => {
         const cam = eng.camera;
         const g = eng.group;
         if (!cam || !g || !eng.labels.length) return;
-        g.updateMatrixWorld();
+        // World matrix is already current (renderer.render refreshed it this
+        // frame), so no per-call updateMatrixWorld here.
         const W = eng.W;
         const H = eng.H;
         // Zoom-based LOD: far view (t→1) shows only major countries; zooming in
@@ -746,7 +768,11 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           }
         };
 
-        const cand: { L: LabelItem; sx: number; sy: number; fade: number }[] = [];
+        // Single allocation-free pass. eng.labels is pre-sorted by rank
+        // (ascending) at load time, so iterating in order already places
+        // highest-priority names first for the declutter check — no per-frame
+        // candidate array, sort, or projection clone.
+        let placedCount = 0;
         for (const L of eng.labels) {
           if (L.rank > maxRank) {
             hide(L);
@@ -762,9 +788,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             hide(L);
             continue;
           }
-          const ndc = labelWP.clone().project(cam);
-          const sx = (ndc.x * 0.5 + 0.5) * W;
-          const sy = (-ndc.y * 0.5 + 0.5) * H;
+          labelWP.project(cam); // → NDC in place (world value no longer needed)
+          const sx = (labelWP.x * 0.5 + 0.5) * W;
+          const sy = (-labelWP.y * 0.5 + 0.5) * H;
           // Drop labels whose text box would spill past the viewport edges so
           // nothing overflows / gets half-clipped.
           if (
@@ -776,20 +802,12 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             hide(L);
             continue;
           }
-          const fade = Math.min(1, (facing - facingMin) / 0.22);
-          cand.push({ L, sx, sy, fade });
-        }
-
-        // Declutter: place highest-priority (lowest rank) first; skip any label
-        // whose box overlaps an already-placed one.
-        cand.sort((a, b) => a.L.rank - b.L.rank);
-        const placed: { x: number; y: number; w: number; h: number }[] = [];
-        for (const c of cand) {
-          const L = c.L;
-          const x0 = c.sx - L.w / 2;
-          const y0 = c.sy - L.h / 2;
+          // Declutter: skip any label whose box overlaps an already-placed one.
+          const x0 = sx - L.w / 2;
+          const y0 = sy - L.h / 2;
           let clash = false;
-          for (const r of placed) {
+          for (let i = 0; i < placedCount; i++) {
+            const r = labelPlaced[i];
             if (
               x0 < r.x + r.w + 1 &&
               x0 + L.w + 1 > r.x &&
@@ -801,17 +819,24 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             }
           }
           if (clash) {
-            if (L.shown) {
-              L.el.style.opacity = "0";
-              L.shown = false;
-            }
+            hide(L);
             continue;
           }
-          placed.push({ x: x0, y: y0, w: L.w, h: L.h });
-          L.el.style.transform = `translate(-50%,-50%) translate(${c.sx.toFixed(
+          let slot = labelPlaced[placedCount];
+          if (!slot) {
+            slot = { x: 0, y: 0, w: 0, h: 0 };
+            labelPlaced[placedCount] = slot;
+          }
+          slot.x = x0;
+          slot.y = y0;
+          slot.w = L.w;
+          slot.h = L.h;
+          placedCount++;
+          const fade = Math.min(1, (facing - facingMin) / 0.22);
+          L.el.style.transform = `translate(-50%,-50%) translate(${sx.toFixed(
             1,
-          )}px,${c.sy.toFixed(1)}px)`;
-          L.el.style.opacity = c.fade.toFixed(2);
+          )}px,${sy.toFixed(1)}px)`;
+          L.el.style.opacity = fade.toFixed(2);
           L.shown = true;
         }
       };
@@ -1135,6 +1160,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             };
             el.addEventListener("click", (e) => {
               e.stopPropagation();
+              eng.group?.updateMatrixWorld();
               const p = projectPoint(eng, pin!.lng, pin!.lat);
               propsRef.current.onMarkerClick?.(
                 rawId,
@@ -1235,7 +1261,8 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         },
         projectMarker: (lng: number, lat: number) => {
           const eng = engineRef.current;
-          if (!eng || !eng.camera) return null;
+          if (!eng || !eng.camera || !eng.group) return null;
+          eng.group.updateMatrixWorld();
           const p = projectPoint(eng, lng, lat);
           return p ? { x: p.x, y: p.y } : null;
         },

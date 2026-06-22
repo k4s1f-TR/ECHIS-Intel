@@ -2356,12 +2356,18 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
+            // Camera-fixed atmosphere / key-light. Reworked from two competing
+            // bright blobs (a salmon spot + a separate white spot) into a single
+            // coherent soft key light: a warm-neutral core that reads as light
+            // (not red paint), feathered far out so there is no hard circular
+            // edge, plus a whisper of cool ambient bounce to round the sphere
+            // without reading as a second highlight. Restrained and premium.
             background:
-              "radial-gradient(ellipse at 42% 25%, rgba(244,112,102,0.13) 0%, rgba(112,7,16,0.08) 22%, transparent 48%), " +
-              "radial-gradient(ellipse at 58% 68%, rgba(255,255,255,0.035) 0%, transparent 36%), " +
-              "linear-gradient(135deg, rgba(255,255,255,0.045) 0%, transparent 18%, rgba(0,0,0,0.16) 72%, rgba(0,0,0,0.42) 100%)",
+              "radial-gradient(78% 72% at 36% 24%, rgba(255,240,235,0.085) 0%, rgba(240,122,112,0.05) 32%, rgba(120,12,20,0.02) 58%, transparent 80%), " +
+              "radial-gradient(95% 88% at 66% 74%, rgba(176,196,224,0.022) 0%, transparent 66%), " +
+              "linear-gradient(132deg, rgba(255,255,255,0.03) 0%, transparent 26%, rgba(0,0,0,0.13) 74%, rgba(0,0,0,0.32) 100%)",
             mixBlendMode: "screen",
-            opacity: 0.72,
+            opacity: 0.62,
           }}
         />
 
