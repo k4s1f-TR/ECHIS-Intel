@@ -53,7 +53,13 @@ const CAM_Z_DEFAULT = 3.65;
 // scroll steps inward (default / region framing levels are unchanged).
 const CAM_Z_MIN = 1.9;
 const CAM_Z_MAX = 4.8;
-const CAM_Z_STEP = 0.42; // zoom-button increment
+// MapLibre parity: MapLibre zoom is logarithmic — each unit halves/doubles the
+// scale and every wheel notch / button press is a constant *proportional* step
+// at any zoom level. Mirror that here in camera-distance space (camZ *= 2^±Δz)
+// instead of stepping the distance linearly, so Luxe zoom feels identical to
+// the MapLibre globe. Values mirror MapLibreGlobe: ZOOM_STEP 0.75, wheel 1/450.
+const MAP_ZOOM_STEP = 0.75;
+const WHEEL_ZOOM_RATE = 1 / 450;
 const INTERACTION_IDLE_MS = 15_000;
 const VIEW_TRANSITION_MS = 1_400;
 const CENTRAL_VIEW_ANIM_MS = 1_200;
@@ -212,6 +218,10 @@ interface Engine {
   rot: { x: number; y: number };
   vel: { x: number; y: number };
   drag: { x: number; y: number } | null;
+  // Cursor-anchored zoom (MapLibre parity): the globe-local surface point under
+  // the pointer when a wheel zoom began (`local`) plus the canvas-space pixel it
+  // must stay pinned to (`sx`,`sy`). Active until the camera distance settles.
+  zoomAnchor: { local: THREE.Vector3; sx: number; sy: number } | null;
   camZ: number;
   W: number;
   H: number;
@@ -257,12 +267,15 @@ function startRotationFrame(
   eng.frameDurationMs = durationMs;
   eng.framing = true;
   eng.vel = { x: 0, y: 0 };
+  eng.zoomAnchor = null;
   eng.pausedUntil = performance.now() + pauseMs;
   eng.lastAutoAt = null;
 }
 
 const TMP = new THREE.Vector3();
 const TMP2 = new THREE.Vector3();
+const NDC2 = new THREE.Vector2();
+const RAYCASTER = new THREE.Raycaster();
 
 export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
   function LuxeGlobeMap(props, ref) {
@@ -305,6 +318,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         rot: { ...rotForLatLng(DEFAULT_CENTER[1], DEFAULT_CENTER[0]) },
         vel: { x: 0, y: 0 },
         drag: null,
+        zoomAnchor: null,
         camZ: CAM_Z_DEFAULT,
         W: 4096,
         H: 2048,
@@ -482,6 +496,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           eng.vel.y = 0;
           eng.vel.x = 0;
           eng.framing = false;
+          eng.zoomAnchor = null;
           eng.lastAutoAt = null;
           dom.style.cursor = "grabbing";
         };
@@ -492,26 +507,92 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           const dy = p.clientY - eng.drag.y;
           eng.drag.x = p.clientX;
           eng.drag.y = p.clientY;
-          // Screen-consistent pan (matches the previous MapLibre globe feel):
-          // rotation-per-pixel scales with camera distance so a point under the
-          // cursor tracks the cursor at every zoom level. 0.0016 * camZ reduces
-          // to the original 0.0052 at the default distance (camZ ≈ 3.25).
-          const k = 0.0016 * eng.camZ;
+          // Geographically-anchored drag (MapLibre parity): rotation-per-pixel
+          // derived from the camera fov + viewport height so the grabbed point
+          // tracks the cursor ~1:1 at any zoom / resolution. The previous fixed
+          // 0.0016*camZ ran roughly 2x hot, which is what made the globe feel
+          // twitchy and quick to "fling". depth ≈ camZ − 1 = the near surface.
+          const cam = eng.camera;
+          const depth = Math.max(0.1, eng.camZ - 1);
+          const k = cam
+            ? ((2 * Math.tan((cam.fov * DEG) / 2)) / Math.max(1, eng.H)) * depth
+            : 0.0016 * eng.camZ;
           const ky = dx * k;
           const kx = dy * k;
           eng.rot.y += ky;
           eng.rot.x = Math.max(-1.3, Math.min(1.3, eng.rot.x + kx));
-          eng.vel.y = ky;
-          eng.vel.x = kx;
+          // Low-pass the inertia seed: blend recent motion rather than taking a
+          // single frame's delta, so one fast frame can't fling the globe.
+          eng.vel.y = eng.vel.y * 0.6 + ky * 0.4;
+          eng.vel.x = eng.vel.x * 0.6 + kx * 0.4;
           e.preventDefault();
         };
         const onUp = () => {
-          if (eng.drag) pauseAuto(INTERACTION_IDLE_MS);
+          if (eng.drag) {
+            // Bound the inertia so a flick can't send the globe spinning —
+            // MapLibre's drag inertia is gentle and capped.
+            const cap = 0.045;
+            eng.vel.y = Math.max(-cap, Math.min(cap, eng.vel.y));
+            eng.vel.x = Math.max(-cap, Math.min(cap, eng.vel.x));
+            pauseAuto(INTERACTION_IDLE_MS);
+          }
           eng.drag = null;
           dom.style.cursor = "grab";
         };
         const onWheel = (e: WheelEvent) => {
-          eng.camZ = Math.max(CAM_Z_MIN, Math.min(CAM_Z_MAX, eng.camZ + e.deltaY * 0.0016));
+          // Exponential (MapLibre-parity) zoom: a constant proportional step per
+          // wheel notch rather than a fixed camera-distance delta. deltaY > 0
+          // (scroll down) zooms out → camZ grows; deltaY < 0 zooms in → shrinks.
+          // Normalize across devices/OS (pixel vs line vs page) and clamp a
+          // single notch so a coarse mouse wheel can't teleport the zoom in big
+          // steps — that uneven jump is the "stepped / jagged" feel.
+          let delta = e.deltaY;
+          if (e.deltaMode === 1) delta *= 40; // DOM_DELTA_LINE → px
+          else if (e.deltaMode === 2) delta *= 800; // DOM_DELTA_PAGE → px
+          delta = Math.max(-100, Math.min(100, delta));
+          const factor = Math.pow(2, delta * WHEEL_ZOOM_RATE);
+          const newCamZ = Math.max(CAM_Z_MIN, Math.min(CAM_Z_MAX, eng.camZ * factor));
+
+          // Cursor-anchored zoom (MapLibre parity): raycast the pointer onto the
+          // sphere and remember the surface point + screen pixel under it. The
+          // animate loop then keeps that point pinned under the cursor while the
+          // camera distance eases, so we zoom toward the pointer — not the centre.
+          const cam = eng.camera;
+          const g = eng.group;
+          if (cam && g && newCamZ !== eng.camZ) {
+            const rect = dom.getBoundingClientRect();
+            NDC2.set(
+              ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+              -((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1,
+            );
+            RAYCASTER.setFromCamera(NDC2, cam);
+            const o = RAYCASTER.ray.origin;
+            const d = RAYCASTER.ray.direction;
+            const ocx = o.x - g.position.x;
+            const ocy = o.y - g.position.y;
+            const ocz = o.z - g.position.z;
+            const b = ocx * d.x + ocy * d.y + ocz * d.z;
+            const c = ocx * ocx + ocy * ocy + ocz * ocz - 1; // sphere r = 1
+            const disc = b * b - c;
+            const t = disc >= 0 ? -b - Math.sqrt(disc) : -1;
+            if (t > 0) {
+              const hit = new THREE.Vector3(
+                o.x + d.x * t,
+                o.y + d.y * t,
+                o.z + d.z * t,
+              );
+              eng.zoomAnchor = {
+                local: g.worldToLocal(hit),
+                sx: e.clientX - rect.left,
+                sy: e.clientY - rect.top,
+              };
+            } else {
+              // Pointer is off the globe — fall back to plain centred zoom.
+              eng.zoomAnchor = null;
+            }
+          }
+
+          eng.camZ = newCamZ;
           pauseAuto(INTERACTION_IDLE_MS);
           e.preventDefault();
         };
@@ -803,8 +884,8 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         } else if (!eng.drag) {
           eng.rot.y += eng.vel.y;
           eng.rot.x = Math.max(-1.3, Math.min(1.3, eng.rot.x + eng.vel.x));
-          eng.vel.y *= 0.94;
-          eng.vel.x *= 0.94;
+          eng.vel.y *= 0.92;
+          eng.vel.x *= 0.92;
         }
 
         if (eng.group) {
@@ -818,6 +899,38 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           // the same immediacy as the previous globe's 350ms eased zoom.
           eng.camera.position.z += (eng.camZ - eng.camera.position.z) * 0.12;
         }
+
+        // Cursor-anchored zoom correction: nudge the globe each frame so the
+        // pointed-at surface point stays under the cursor while the camera
+        // distance eases — this is what makes wheel zoom track the pointer like
+        // MapLibre instead of zooming toward the globe centre. The screen-pixel
+        // → rotation gain mirrors the drag mapping; it self-corrects over frames.
+        if (eng.zoomAnchor && eng.group && eng.camera) {
+          const g = eng.group;
+          const cam = eng.camera;
+          g.updateMatrixWorld();
+          const wp = TMP.copy(eng.zoomAnchor.local);
+          g.localToWorld(wp);
+          const depth = Math.max(0.1, cam.position.z - wp.z);
+          const ndc = wp.project(cam);
+          const curX = (ndc.x * 0.5 + 0.5) * eng.W;
+          const curY = (-ndc.y * 0.5 + 0.5) * eng.H;
+          // Gain uses the anchor's true camera→surface depth (not the globe
+          // centre distance), so a one-shot correction lands without the
+          // overshoot/oscillation that made the zoom look jagged.
+          const k =
+            ((2 * Math.tan((cam.fov * DEG) / 2)) / Math.max(1, eng.H)) * depth;
+          eng.rot.y += (eng.zoomAnchor.sx - curX) * k;
+          eng.rot.x = Math.max(
+            -1.3,
+            Math.min(1.3, eng.rot.x + (eng.zoomAnchor.sy - curY) * k),
+          );
+          g.rotation.y = eng.rot.y;
+          g.rotation.x = eng.rot.x;
+          // Done once the camera distance has reached the target.
+          if (Math.abs(cam.position.z - eng.camZ) < 0.004) eng.zoomAnchor = null;
+        }
+
         eng.renderer!.render(eng.scene!, eng.camera!);
         updateMarkers();
         updateLabels();
@@ -1101,14 +1214,22 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         zoomIn: () => {
           const eng = engineRef.current;
           if (!eng) return;
-          eng.camZ = Math.max(CAM_Z_MIN, Math.min(CAM_Z_MAX, eng.camZ - CAM_Z_STEP));
+          // camZ *= 2^(-0.75): same proportional step as MapLibre zoomTo(+0.75).
+          eng.camZ = Math.max(
+            CAM_Z_MIN,
+            Math.min(CAM_Z_MAX, eng.camZ * Math.pow(2, -MAP_ZOOM_STEP)),
+          );
           eng.pausedUntil = performance.now() + INTERACTION_IDLE_MS;
           eng.lastAutoAt = null;
         },
         zoomOut: () => {
           const eng = engineRef.current;
           if (!eng) return;
-          eng.camZ = Math.max(CAM_Z_MIN, Math.min(CAM_Z_MAX, eng.camZ + CAM_Z_STEP));
+          // camZ *= 2^(+0.75): same proportional step as MapLibre zoomTo(-0.75).
+          eng.camZ = Math.max(
+            CAM_Z_MIN,
+            Math.min(CAM_Z_MAX, eng.camZ * Math.pow(2, MAP_ZOOM_STEP)),
+          );
           eng.pausedUntil = performance.now() + INTERACTION_IDLE_MS;
           eng.lastAutoAt = null;
         },

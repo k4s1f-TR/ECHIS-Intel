@@ -2,11 +2,11 @@
 import { Boxes } from "lucide-react";
 import { defenseSupplyChainPressure } from "@/data/defenseIndustryMockData";
 
-const STATUS_COLOR: Record<string, { color: string; track: string }> = {
-  Critical: { color: "var(--c-high)", track: "rgba(255,122,47,0.14)" },
-  High: { color: "var(--c-med)", track: "rgba(241,194,79,0.14)" },
-  Elevated: { color: "var(--c-elev)", track: "rgba(176,184,196,0.11)" },
-  Moderate: { color: "var(--c-t5)", track: "rgba(176,184,196,0.08)" },
+const STATUS_COLOR: Record<string, { tag: string; fill: string }> = {
+  Critical: { tag: "var(--c-crit)", fill: "linear-gradient(90deg, var(--c-accent-2), var(--c-crit))" },
+  High: { tag: "var(--c-high)", fill: "linear-gradient(90deg, var(--c-accent-2), var(--c-high))" },
+  Elevated: { tag: "var(--c-elev)", fill: "linear-gradient(90deg, rgba(150,160,172,0.3), var(--c-elev))" },
+  Moderate: { tag: "var(--c-elev)", fill: "linear-gradient(90deg, rgba(150,160,172,0.3), var(--c-elev))" },
 };
 
 export function SupplyChainPressurePanel() {
@@ -28,10 +28,11 @@ export function SupplyChainPressurePanel() {
         <Boxes size={12} style={{ color: "var(--c-silver-dim)" }} />
         <span
           style={{
+            fontFamily: "var(--font-disp)",
             fontSize: "var(--fs-sm)",
-            fontWeight: 700,
+            fontWeight: 600,
             color: "var(--c-t4)",
-            letterSpacing: "0.1em",
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
           }}
         >
@@ -44,16 +45,17 @@ export function SupplyChainPressurePanel() {
           return (
             <div key={row.name} className="flex flex-col gap-1.5">
               <div className="flex items-end justify-between">
-                <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: "var(--c-t3)" }}>
+                <span style={{ fontSize: "var(--fs-base)", fontWeight: 500, color: "var(--c-t3)" }}>
                   {row.name}
                 </span>
                 <div className="flex items-center gap-2">
                   <span
                     style={{
+                      fontFamily: "var(--font-disp)",
                       fontSize: "var(--fs-2xs)",
                       fontWeight: 600,
-                      color: tone.color,
-                      letterSpacing: "0.05em",
+                      color: tone.tag,
+                      letterSpacing: "0.07em",
                       textTransform: "uppercase",
                     }}
                   >
@@ -61,8 +63,9 @@ export function SupplyChainPressurePanel() {
                   </span>
                   <span
                     style={{
-                      fontSize: "var(--fs-sm)",
-                      fontWeight: 700,
+                      fontFamily: "var(--font-num)",
+                      fontSize: "var(--fs-md)",
+                      fontWeight: 600,
                       color: "var(--c-t2)",
                       fontVariantNumeric: "tabular-nums",
                       minWidth: "24px",
@@ -73,8 +76,8 @@ export function SupplyChainPressurePanel() {
                   </span>
                 </div>
               </div>
-              <div className="w-full rounded-full overflow-hidden" style={{ height: "3px", background: tone.track }}>
-                <div className="h-full rounded-full" style={{ width: `${row.score}%`, background: tone.color }} />
+              <div className="w-full rounded-full overflow-hidden" style={{ height: "5px", background: "rgba(255,255,255,0.045)" }}>
+                <div className="h-full rounded-full" style={{ width: `${row.score}%`, background: tone.fill }} />
               </div>
             </div>
           );

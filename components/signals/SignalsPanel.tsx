@@ -152,11 +152,14 @@ export function SignalsPanel({
                   ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
                   : "var(--c-card-bg)",
                 border: isSelected
-                  ? "1px solid var(--accent-blue-border)"
+                  ? "1px solid var(--c-accent-border)"
                   : "1px solid var(--c-border-3)",
                 borderRadius: "8px",
                 padding: "10px 12px",
                 cursor: "pointer",
+                boxShadow: isSelected
+                  ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)"
+                  : "none",
               }}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
@@ -183,9 +186,10 @@ export function SignalsPanel({
               <div
                 className="mb-1.5"
                 style={{
-                  fontSize: "10.5px",
-                  fontWeight: 600,
-                  color: "var(--c-t4)",
+                  fontFamily: "var(--font-disp)",
+                  fontSize: "var(--c-fs-md)",
+                  fontWeight: 500,
+                  color: "var(--c-t1)",
                 }}
               >
                 {report.locationName}
@@ -194,7 +198,7 @@ export function SignalsPanel({
               <p
                 style={{
                   fontSize: "11px",
-                  color: "var(--c-t5)",
+                  color: "var(--c-t4)",
                   lineHeight: 1.5,
                   margin: 0,
                 }}

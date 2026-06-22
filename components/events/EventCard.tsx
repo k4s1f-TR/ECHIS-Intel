@@ -71,7 +71,8 @@ export function EventCard({
         <p
           className="flex-1 leading-snug font-medium pr-1"
           style={{
-            fontSize: "12.5px",
+            fontFamily: "var(--font-disp)",
+            fontSize: "var(--c-fs-md)",
             color: selected
               ? "rgba(238,240,244,0.98)"
               : "var(--c-t3)",

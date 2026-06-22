@@ -39,25 +39,20 @@ function FeedCard({
           ? "1px solid var(--c-border-1)"
           : "1px solid var(--c-border-3)",
         borderRadius: "var(--c-radius-sm)",
-        padding: "10px 12px 10px 14px",
+        padding: "10px 12px",
         marginBottom: "6px",
         boxShadow: isSelected ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)" : "none",
         transform: hovered && !isSelected ? "translateX(2px)" : "translateX(0)",
         transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
       }}
     >
-      {isSelected && (
-        <div
-          className="absolute left-0 top-3 bottom-3 w-[2.5px]"
-          style={{ background: "var(--c-accent)", borderRadius: "0 3px 3px 0", boxShadow: "0 0 9px var(--c-accent-glow)" }}
-        />
-      )}
       <p
         className="line-clamp-2 leading-snug mb-1.5"
         style={{
-          fontSize: "var(--fs-base)",
-          fontWeight: 600,
-          color: isSelected || hovered ? "var(--c-t1)" : "var(--c-t3)",
+          fontFamily: "var(--font-disp)",
+          fontSize: "var(--c-fs-md)",
+          fontWeight: 500,
+          color: "var(--c-t1)",
         }}
       >
         {item.headline}
@@ -75,10 +70,12 @@ function FeedCard({
       </p>
       <div className="flex items-center gap-1.5">
         <span
-          className="px-1.5 py-0.5 rounded"
+          className="px-1.5 py-0.5 rounded uppercase"
           style={{
+            fontFamily: "var(--font-disp)",
             fontSize: "var(--fs-2xs)",
             fontWeight: 600,
+            letterSpacing: "0.06em",
             color: "var(--c-elev)",
             background: "var(--c-elev-bg)",
             border: "1px solid var(--c-elev-border)",
@@ -89,8 +86,10 @@ function FeedCard({
         <span
           className="px-1.5 py-0.5 rounded uppercase"
           style={{
+            fontFamily: "var(--font-disp)",
             fontSize: "var(--fs-2xs)",
-            fontWeight: 700,
+            fontWeight: 600,
+            letterSpacing: "0.06em",
             background: pri.bg,
             color: pri.text,
             border: `1px solid ${pri.border}`,
@@ -129,10 +128,11 @@ export function DefenseIndustryFeedPanel({
           <Factory size={12} style={{ color: "var(--c-silver-dim)" }} />
           <span
             style={{
+              fontFamily: "var(--font-disp)",
               fontSize: "var(--fs-sm)",
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--c-t4)",
-              letterSpacing: "0.1em",
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
             }}
           >

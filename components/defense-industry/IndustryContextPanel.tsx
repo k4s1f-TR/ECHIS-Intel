@@ -16,8 +16,8 @@ function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: s
       <Icon size={11} style={{ color: "var(--c-silver-dim)", flexShrink: 0 }} />
       <span
         style={{
-          fontSize: "var(--fs-xs)",
-          fontWeight: 600,
+          fontSize: "var(--fs-2xs)",
+          fontWeight: 700,
           color: "var(--c-t5)",
           letterSpacing: "0.1em",
           textTransform: "uppercase" as const,
@@ -34,7 +34,7 @@ function SectionValue({ children }: { children: React.ReactNode }) {
     <p
       style={{
         fontSize: "var(--fs-md)",
-        fontWeight: 500,
+        fontWeight: 600,
         color: "var(--c-t2)",
         marginBottom: "12px",
         paddingLeft: "19px",
@@ -53,10 +53,10 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     >
       <span
         style={{
-          fontSize: "var(--fs-xs)",
-          fontWeight: 600,
+          fontSize: "var(--fs-2xs)",
+          fontWeight: 700,
           color: "var(--c-t5)",
-          letterSpacing: "0.06em",
+          letterSpacing: "0.09em",
           textTransform: "uppercase" as const,
         }}
       >
@@ -64,7 +64,8 @@ function MetaRow({ label, value }: { label: string; value: string }) {
       </span>
       <span
         style={{
-          fontSize: "var(--fs-sm)",
+          fontFamily: "var(--font-num)",
+          fontSize: "var(--fs-base)",
           fontWeight: 500,
           color: "var(--c-t3)",
           fontVariantNumeric: "tabular-nums",
@@ -109,15 +110,15 @@ function StatusBar({
             <div
               key={i}
               style={{
-                width: 14,
+                width: 13,
                 height: 4,
-                borderRadius: 1,
-                background: i <= level ? color : "var(--bg-surface-active)",
+                borderRadius: 2,
+                background: i <= level ? color : "rgba(255,255,255,0.08)",
               }}
             />
           ))}
         </div>
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color, minWidth: 32 }}>{caption}</span>
+        <span style={{ fontFamily: "var(--font-disp)", fontSize: "var(--fs-xs)", fontWeight: 600, color, minWidth: 32 }}>{caption}</span>
       </div>
     </div>
   );
@@ -145,10 +146,11 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
         <Factory size={12} style={{ color: "var(--c-silver-dim)" }} />
         <span
           style={{
+            fontFamily: "var(--font-disp)",
             fontSize: "var(--fs-sm)",
-            fontWeight: 700,
+            fontWeight: 600,
             color: "var(--c-t4)",
-            letterSpacing: "0.1em",
+            letterSpacing: "0.14em",
             textTransform: "uppercase" as const,
           }}
         >
@@ -180,8 +182,8 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
           style={{
             fontSize: "var(--fs-base)",
             fontWeight: 400,
-            color: "var(--c-t4)",
-            lineHeight: 1.65,
+            color: "var(--c-t3)",
+            lineHeight: 1.56,
             marginBottom: 16,
             paddingLeft: 19,
           }}
@@ -196,23 +198,13 @@ export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: stri
           <StatusBar
             label="Confidence"
             level={ctx.confidenceLevel}
-            color={
-              ctx.confidenceLevel >= 4
-                ? "var(--c-elev)"
-                : "var(--c-med)"
-            }
+            color="var(--c-silver)"
             caption={ctx.confidence}
           />
           <StatusBar
             label="Impact"
             level={ctx.impactLevel}
-            color={
-              ctx.impactLevel >= 4
-                ? "var(--c-high)"
-                : ctx.impactLevel === 3
-                ? "var(--c-med)"
-                : "var(--c-elev)"
-            }
+            color="var(--c-crit)"
             caption={ctx.impact}
           />
         </div>

@@ -39,22 +39,6 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
         transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
       }}
     >
-      {/* Selected accent bar */}
-      {isSelected && (
-        <span
-          className="absolute"
-          style={{
-            left: 0,
-            top: 12,
-            bottom: 12,
-            width: "2.5px",
-            background: "var(--c-accent)",
-            borderRadius: "0 3px 3px 0",
-            boxShadow: "0 0 9px var(--c-accent-glow)",
-          }}
-        />
-      )}
-
       {/* Title */}
       <p
         className="c-disp"
@@ -71,7 +55,7 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
       </div>
 
       {/* Summary */}
-      <p style={{ fontSize: "var(--c-fs-base)", lineHeight: 1.5, color: "var(--c-t4)", marginBottom: 10 }}>
+      <p style={{ fontSize: "var(--c-fs-sm)", lineHeight: 1.55, color: "var(--c-t4)", marginBottom: 10 }}>
         {item.summary}
       </p>
 
@@ -128,10 +112,6 @@ export function CyberNewsPanel({ selectedNewsId, onSelectNews }: { selectedNewsI
         <div className="flex items-center gap-[9px]">
           <Newspaper size={15} style={{ color: "var(--c-silver-dim)" }} />
           <span className="cyber-panel-title">Cyber Security News</span>
-        </div>
-        <div className="cyber-live-pill">
-          <span className="dot" />
-          Live
         </div>
       </div>
 

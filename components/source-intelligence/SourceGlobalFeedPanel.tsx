@@ -420,7 +420,7 @@ function SourceFeedCard({
   onCardClick: () => void;
 }) {
   const activeBorder = isSelected
-    ? "var(--accent-blue-border)"
+    ? "var(--c-accent-border)"
     : isOpen
       ? "rgba(240,64,76,0.22)"
       : "rgba(255,255,255,0.055)";
@@ -447,6 +447,9 @@ function SourceFeedCard({
         padding: "10px 11px",
         border: `1px solid ${activeBorder}`,
         background: activeBg,
+        boxShadow: isSelected
+          ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)"
+          : "none",
       }}
     >
       <div className="mb-1.5 flex items-start gap-2">
@@ -464,8 +467,9 @@ function SourceFeedCard({
         <p
           className="line-clamp-2 flex-1 pr-1 font-medium leading-snug"
           style={{
-            fontSize: "12.5px",
-            color: "var(--c-t3)",
+            fontFamily: "var(--font-disp)",
+            fontSize: "var(--c-fs-md)",
+            color: "var(--c-t1)",
           }}
         >
           {item.title}
@@ -526,7 +530,7 @@ function SourceFeedCard({
       {item.summary && (
         <p
           className="line-clamp-2 leading-relaxed"
-          style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
+          style={{ fontSize: "11.5px", color: "var(--c-t4)" }}
         >
           {item.summary}
         </p>

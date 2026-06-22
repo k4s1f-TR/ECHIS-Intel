@@ -76,10 +76,11 @@ export function DefenseIndustryPanel() {
               <Factory size={12} style={{ color: "var(--c-silver-dim)" }} />
               <span
                 style={{
+                  fontFamily: "var(--font-disp)",
                   fontSize: "var(--fs-sm)",
-                  fontWeight: 700,
+                  fontWeight: 600,
                   color: "var(--c-t4)",
-                  letterSpacing: "0.1em",
+                  letterSpacing: "0.14em",
                   textTransform: "uppercase",
                 }}
               >

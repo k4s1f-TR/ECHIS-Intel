@@ -627,12 +627,17 @@ function ListCard({
       onClick={onSelect}
       className="relative cursor-pointer"
       style={{
-        background: selected ? "var(--accent-blue-bg)" : "var(--bg-surface)",
-        border: selected ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-dim)",
+        background: selected
+          ? "linear-gradient(180deg, rgba(255,43,61,0.17), rgba(255,43,61,0.05))"
+          : "var(--bg-surface)",
+        border: selected ? "1px solid var(--c-accent-border)" : "1px solid var(--border-dim)",
         borderRadius: "var(--radius-md)",
         padding: "10px 12px 10px 16px",
         marginBottom: "5px",
         flexShrink: 0,
+        boxShadow: selected
+          ? "0 0 0 1px var(--c-accent-bg-soft), 0 10px 28px rgba(0,0,0,0.35)"
+          : "none",
       }}
       onMouseEnter={(e) => {
         if (!selected) {
@@ -657,7 +662,7 @@ function ListCard({
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <p
           className="leading-snug line-clamp-2 flex-1"
-          style={{ fontSize: "var(--fs-md)", fontWeight: 500, color: selected ? "var(--text-heading)" : "var(--text-body)" }}
+          style={{ fontFamily: "var(--font-disp)", fontSize: "var(--fs-md)", fontWeight: 500, color: "var(--text-heading)" }}
         >
           {event.title}
         </p>

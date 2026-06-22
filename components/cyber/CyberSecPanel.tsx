@@ -150,10 +150,6 @@ export function CyberSecPanel() {
                 <Shield size={15} style={{ color: "var(--c-silver-dim)" }} />
                 <span className="cyber-panel-title">Global Threat Map</span>
               </div>
-              <div className="cyber-live-pill">
-                <span className="dot" />
-                Live
-              </div>
             </div>
             <div className="min-h-0 flex-1">
               <CyberMap />
