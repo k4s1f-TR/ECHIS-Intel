@@ -422,3 +422,32 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .cyber-ctx-fade { animation: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   POLICY — "DOSSIER" (editorial geopolitical feed)
+   Reuses the crimson/silver `--c-*` ladder already defined on
+   `.cyber-premium` (the Policy screen renders inside it). This scope
+   only adds the editorial serif alias, the airy scrollbar accent, and
+   the two header/feed live-dot keyframes from the design handoff.
+   ════════════════════════════════════════════════════════════════ */
+.policy-dossier {
+  --pd-serif: var(--font-serif), Georgia, "Times New Roman", serif;
+  --scrollbar-accent: rgba(255, 255, 255, 0.07);
+  --scrollbar-accent-hover: rgba(255, 72, 84, 0.3);
+}
+.policy-dossier .pd-serif {
+  font-family: var(--pd-serif);
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.82); }
+}
+@keyframes liveBlink {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .policy-dossier [style*="pulseDot"],
+  .policy-dossier [style*="liveBlink"] { animation: none !important; }
+}

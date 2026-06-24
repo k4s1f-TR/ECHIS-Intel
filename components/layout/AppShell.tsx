@@ -33,7 +33,7 @@ import { SignalsPanel } from "@/components/signals/SignalsPanel";
 import { SocmintDetailModal } from "@/components/signals/SocmintDetailModal";
 import { SignalsFloatingCard } from "@/components/signals/SignalsFloatingCard";
 import { SourcesScreen } from "@/components/sources/SourcesScreen";
-import { PoliticsPanel } from "@/components/politics/PoliticsPanel";
+import { PolicyDossierScreen } from "@/components/policy/PolicyDossierScreen";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
 import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
 import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
@@ -915,7 +915,7 @@ export function AppShell() {
           )}
           {activeSection === "dashboard" && activeTopTab === "politics" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
-              <PoliticsPanel events={displayedEvents} />
+              <PolicyDossierScreen />
             </div>
           )}
           {activeSection === "dashboard" && activeTopTab === "cyber" && (
