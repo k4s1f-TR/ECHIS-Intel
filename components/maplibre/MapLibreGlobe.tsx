@@ -82,12 +82,6 @@ interface MapLibreGlobeProps {
   selectedSignalsId?: string | null;
 }
 
-// MapLibre adds `.features` to layer-specific mouse events; this local alias
-// avoids repeating the intersection type throughout the file.
-type LayerClickEvent = maplibregl.MapMouseEvent & {
-  features?: maplibregl.MapGeoJSONFeature[];
-};
-
 const MARKER_SOURCE_GLOBAL  = "echis-markers-global";
 const MARKER_SOURCE_SIGNALS = "echis-markers-signals";
 
@@ -110,6 +104,61 @@ const MARKER_SEL_GLOBAL     = "echis-markers-global-selected";
 const MARKER_SEL_SIGNALS    = "echis-markers-signals-selected";
 const MARKER_BADGE_GLOBAL   = "echis-markers-global-count-badge";
 const MARKER_BADGE_TEXT_GLOBAL = "echis-markers-global-count-badge-text";
+const GLOBAL_MARKER_INTERACTION_LAYERS = [
+  MARKER_LAYER_GLOBAL,
+  MARKER_HOVER_LAYER_GLOBAL,
+  MARKER_SEL_GLOBAL,
+  MARKER_BADGE_GLOBAL,
+  MARKER_BADGE_TEXT_GLOBAL,
+] as const;
+const SIGNALS_MARKER_INTERACTION_LAYERS = [
+  MARKER_LAYER_SIGNALS,
+  MARKER_HOVER_LAYER_SIGNALS,
+  MARKER_SEL_SIGNALS,
+] as const;
+const ALL_MARKER_INTERACTION_LAYERS = [
+  ...GLOBAL_MARKER_INTERACTION_LAYERS,
+  ...SIGNALS_MARKER_INTERACTION_LAYERS,
+] as const;
+const GLOBAL_MARKER_INTERACTION_LAYER_SET = new Set<string>(
+  GLOBAL_MARKER_INTERACTION_LAYERS,
+);
+let didWarnMarkerQueryFailure = false;
+
+function queryMarkerAtPoint(
+  map: maplibregl.Map,
+  point: maplibregl.PointLike,
+): { feature: maplibregl.MapGeoJSONFeature; kind: MarkerKind } | null {
+  const layers = ALL_MARKER_INTERACTION_LAYERS.filter((layerId) =>
+    map.getLayer(layerId),
+  );
+  if (layers.length === 0) return null;
+
+  try {
+    const feature = map
+      .queryRenderedFeatures(point, { layers: [...layers] })
+      .find((candidate) => candidate.properties?.id);
+    if (!feature) return null;
+
+    return {
+      feature,
+      kind: GLOBAL_MARKER_INTERACTION_LAYER_SET.has(feature.layer.id)
+        ? "global"
+        : "signals",
+    };
+  } catch (error) {
+    // MapLibre 5.24 can briefly retain a feature-grid entry for an empty
+    // OpenFreeMap vector tile while sources/styles are being refreshed. Its
+    // delegated layer events let the resulting DictionaryCoder bounds error
+    // escape globally. Keep marker interaction best-effort until the next
+    // pointer event instead of taking down the Next.js development overlay.
+    if (!didWarnMarkerQueryFailure) {
+      didWarnMarkerQueryFailure = true;
+      console.warn("[MapLibreGlobe] marker hit-test skipped:", error);
+    }
+    return null;
+  }
+}
 
 // Filter value used to make the selected-pin layer show nothing when there
 // is no active selection — matches a feature id that can never exist.
@@ -122,10 +171,13 @@ const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
   1,
 ] as unknown as maplibregl.FilterSpecification;
 
-const ECHIS_GRAD_DARK = "#3b0509";
-const ECHIS_GRAD_BRIGHT = "#a80d18";
-const ECHIS_GRAD_MID = "#6f0710";
-const ECHIS_GRAD_GLOW = "rgba(168,13,24,0.34)";
+// Silver marker accent tokens (design_handoff_silver_map_marker).  Used only by
+// the marker glow / selection / badge layers — the silver redesign exists to
+// break the pins out of the red basemap, so their highlight halo is silver, not
+// red.
+const SILVER_RING = "#BABDC5"; // inner disc ring + count-badge ring (muted gunmetal, less glare)
+const SILVER_HALO = "rgba(200,204,214,0.34)"; // selection bloom — toned down so it doesn't shout
+const SILVER_GLOW = "rgba(198,202,212,0.3)"; // selection / hover ring glow
 
 const selectedMarkerOpacityExpression = (
   selectedId: string,
@@ -134,64 +186,61 @@ const selectedMarkerOpacityExpression = (
   ["match", ["get", "id"], selectedId, baseOpacity, 0] as maplibregl.ExpressionSpecification;
 
 // ---------------------------------------------------------------------------
-// Premium red location-pin icon — single shared SVG image used by both the
-// Global View and SOCMINT marker symbol layers.  Deep red body, dark inner
-// core, controlled rim/highlight detail, and a small shadow for legibility on
-// dark land/water without pushing into oversized neon bloom.
+// Silver location-pin icon — metallic silver-to-charcoal teardrop with a dark
+// inner badge disc (design_handoff_silver_map_marker).  Shared by the Global
+// View and SOCMINT marker symbol layers.  Silver was chosen to break the pins
+// out of the dark/red basemap, where the previous all-red pins blended in and
+// read as "alarm".
 //
-// Sizing: the SVG is 28x34 source pixels and registered at pixelRatio:1.
-// The default icon-size below renders the marker at about 32px tall, while
-// selected/hover states remain restrained. icon-anchor: "bottom" keeps the
-// pin tip aligned with the geographic coordinate during zoom / drag /
-// auto-rotate.
+// Geometry is the handoff canonical: viewBox 0 0 36 46, teardrop path and the
+// 6-stop vertical body gradient verbatim.  The width/height below uniformly
+// scale that 36:46 viewBox (never stretched) to the previous on-screen
+// footprint, so the glow / badge translate offsets stay as tuned.  Per-pin
+// pixelRatio + icon-size then set the final size. icon-anchor: "bottom" keeps
+// the tip on the geographic coordinate during zoom / drag / auto-rotate.
+//
+// Two ring variants per the handoff state table: default (#E6E7EC, 0.9 px) and
+// active/selected (#FFFFFF, 1.2 px).
 // ---------------------------------------------------------------------------
-const PIN_ICON_ID = "echis-marker-pin";
-const PIN_ICON_PIXEL_RATIO = 2;
-const PIN_ICON_SIZE_DEFAULT = 1;
-const PIN_ICON_SIZE_SELECTED = 1.45;
-const PIN_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
+// Muted gunmetal variant of the handoff body gradient — the original silver was
+// too bright against the dark basemap; darker highlight + cooler mids keep the
+// pin legible without glaring ("çok göze batmasın").
+const SILVER_PIN_BODY_STOPS =
+  '<stop offset="0%" stop-color="#C0C3CA"/>' +
+  '<stop offset="22%" stop-color="#92959E"/>' +
+  '<stop offset="42%" stop-color="#565962"/>' +
+  '<stop offset="62%" stop-color="#2F3036"/>' +
+  '<stop offset="82%" stop-color="#1A191F"/>' +
+  '<stop offset="100%" stop-color="#0A090D"/>';
+
+const buildSilverPinSvg = (ringColor: string, ringWidth: number): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" width="27" height="34.5" viewBox="0 0 36 46" fill="none">' +
   "<defs>" +
-  '<linearGradient id="pinBody" x1="4" y1="2" x2="20" y2="31" gradientUnits="userSpaceOnUse">' +
-  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
-  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
+  '<linearGradient id="markerBody" x1="0" y1="0" x2="0" y2="1">' +
+  SILVER_PIN_BODY_STOPS +
   "</linearGradient>" +
   "</defs>" +
-  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="url(#pinBody)"/>' +
-  '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
+  '<path d="M18 1C9 1 2 8 2 17c0 11 16 28 16 28s16-17 16-28C34 8 27 1 18 1z" ' +
+  'fill="url(#markerBody)" stroke="rgba(255,255,255,0.18)" stroke-width="0.4"/>' +
+  `<circle cx="18" cy="17" r="9.5" fill="rgba(20,16,22,0.92)" stroke="${ringColor}" stroke-width="${ringWidth}"/>` +
   "</svg>";
 
+const PIN_ICON_ID = "echis-marker-pin";
+const PIN_SEL_ICON_ID = "echis-marker-pin-selected";
+const PIN_ICON_PIXEL_RATIO = 2;
+const PIN_ICON_SIZE_DEFAULT = 0.85;
+const PIN_ICON_SIZE_SELECTED = 1.24;
+const PIN_SVG = buildSilverPinSvg(SILVER_RING, 0.9);
+const PIN_SELECTED_SVG = buildSilverPinSvg("#FFFFFF", 1.2);
+
 const GLOBAL_PIN_ICON_ID = "echis-marker-pin-premium";
+const GLOBAL_PIN_SEL_ICON_ID = "echis-marker-pin-premium-selected";
 const GLOBAL_PIN_ICON_PIXEL_RATIO = 1;
-const GLOBAL_PIN_ICON_SIZE_DEFAULT = 0.8;
-const GLOBAL_PIN_ICON_SIZE_HOVER = 0.86;
-const GLOBAL_PIN_ICON_SIZE_SELECTED = 0.94;
-const GLOBAL_PIN_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">' +
-  "<defs>" +
-  '<linearGradient id="pinBody" x1="7.5" y1="3" x2="21" y2="30" gradientUnits="userSpaceOnUse">' +
-  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
-  `<stop offset="0.56" stop-color="${ECHIS_GRAD_MID}"/>` +
-  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
-  "</linearGradient>" +
-  '<linearGradient id="pinShade" x1="14" y1="4" x2="14" y2="31" gradientUnits="userSpaceOnUse">' +
-  '<stop offset="0" stop-color="#ffffff" stop-opacity=".07"/>' +
-  '<stop offset=".52" stop-color="#ffffff" stop-opacity=".01"/>' +
-  '<stop offset="1" stop-color="#030203" stop-opacity=".13"/>' +
-  "</linearGradient>" +
-  '<filter id="softRedHalo" x="-38%" y="-28%" width="176%" height="158%" color-interpolation-filters="sRGB">' +
-  '<feGaussianBlur stdDeviation="1.65"/>' +
-  "</filter>" +
-  "</defs>" +
-  `<path filter="url(#softRedHalo)" d="M14 31.05S4.45 20.25 4.45 12.65C4.45 6.35 8.78 2.05 14 2.05s9.55 4.3 9.55 10.6c0 7.6-9.55 18.4-9.55 18.4Z" fill="${ECHIS_GRAD_BRIGHT}" opacity=".2"/>` +
-  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="#160204" opacity=".76"/>' +
-  '<path d="M14 30.45S5.28 20.18 5.28 12.85C5.28 6.95 9.18 3.02 14 3.02s8.72 3.93 8.72 9.83c0 7.33-8.72 17.6-8.72 17.6Z" fill="url(#pinBody)"/>' +
-  '<path d="M14 31.2S4.7 20.45 4.7 12.75C4.7 6.55 8.9 2.35 14 2.35s9.3 4.2 9.3 10.4c0 7.7-9.3 18.45-9.3 18.45Z" fill="url(#pinShade)"/>' +
-  `<path d="M14 30.15S5.75 20.05 5.75 12.95C5.75 7.35 9.28 3.45 14 3.45s8.25 3.9 8.25 9.5c0 7.1-8.25 17.2-8.25 17.2Z" fill="none" stroke="${ECHIS_GRAD_BRIGHT}" stroke-opacity=".32" stroke-width=".62"/>` +
-  '<path d="M8.65 9.6C9.5 7.18 11.38 5.65 13.82 5.48" fill="none" stroke="#f3c7c0" stroke-opacity=".24" stroke-width=".95" stroke-linecap="round"/>' +
-  '<circle cx="14" cy="12.8" r="4.18" fill="#05070b"/>' +
-  '<circle cx="14" cy="12.8" r="4.18" fill="none" stroke="#170309" stroke-opacity=".9" stroke-width=".52"/>' +
-  "</svg>";
+const GLOBAL_PIN_ICON_SIZE_DEFAULT = 0.68;
+const GLOBAL_PIN_ICON_SIZE_HOVER = 0.73;
+const GLOBAL_PIN_ICON_SIZE_SELECTED = 0.8;
+const GLOBAL_PIN_SVG = buildSilverPinSvg(SILVER_RING, 0.9);
+const GLOBAL_PIN_SELECTED_SVG = buildSilverPinSvg("#FFFFFF", 1.2);
 
 function registerSvgIcon(
   map: maplibregl.Map,
@@ -227,10 +276,17 @@ function registerSvgIcon(
 
 function registerPinIcons(map: maplibregl.Map): void {
   registerSvgIcon(map, PIN_ICON_ID, PIN_SVG, PIN_ICON_PIXEL_RATIO);
+  registerSvgIcon(map, PIN_SEL_ICON_ID, PIN_SELECTED_SVG, PIN_ICON_PIXEL_RATIO);
   registerSvgIcon(
     map,
     GLOBAL_PIN_ICON_ID,
     GLOBAL_PIN_SVG,
+    GLOBAL_PIN_ICON_PIXEL_RATIO,
+  );
+  registerSvgIcon(
+    map,
+    GLOBAL_PIN_SEL_ICON_ID,
+    GLOBAL_PIN_SELECTED_SVG,
     GLOBAL_PIN_ICON_PIXEL_RATIO,
   );
 }
@@ -479,7 +535,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 22,
-          "circle-color": isGlobal ? ECHIS_GRAD_MID : ECHIS_GRAD_BRIGHT,
+          "circle-color": SILVER_HALO,
           "circle-blur": isGlobal ? 0.94 : 1,
           "circle-opacity": 0,
           "circle-translate": isGlobal ? [0, -16] : [0, -11],
@@ -496,13 +552,11 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": isGlobal ? 11 : 10,
-          "circle-color": isGlobal
-            ? "rgba(168,13,24,0.22)"
-            : ECHIS_GRAD_GLOW,
+          "circle-color": SILVER_GLOW,
           "circle-blur": isGlobal ? 0.34 : 0.15,
           "circle-opacity": 0,
           "circle-stroke-width": isGlobal ? 1.2 : 2.5,
-          "circle-stroke-color": ECHIS_GRAD_BRIGHT,
+          "circle-stroke-color": SILVER_RING,
           "circle-stroke-opacity": 0,
           "circle-translate": isGlobal ? [0, -16] : [0, -11],
           "circle-translate-anchor": "viewport",
@@ -525,7 +579,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 15,
-          "circle-color": ECHIS_GRAD_BRIGHT,
+          "circle-color": SILVER_HALO,
           "circle-blur": 0.72,
           "circle-opacity": 0.24,
           "circle-opacity-transition": { duration: 180, delay: 0 },
@@ -575,7 +629,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
           "circle-opacity": 0.94,
           "circle-opacity-transition": { duration: 180, delay: 0 },
           "circle-stroke-width": 1.25,
-          "circle-stroke-color": ECHIS_GRAD_BRIGHT,
+          "circle-stroke-color": SILVER_RING,
           "circle-stroke-opacity": 0.92,
           "circle-stroke-opacity-transition": { duration: 180, delay: 0 },
           "circle-translate": [9, -23],
@@ -623,6 +677,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
   ) => {
     const isGlobal = source === MARKER_SOURCE_GLOBAL;
     const iconId = isGlobal ? GLOBAL_PIN_ICON_ID : PIN_ICON_ID;
+    const selIconId = isGlobal ? GLOBAL_PIN_SEL_ICON_ID : PIN_SEL_ICON_ID;
     const defaultSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_DEFAULT : PIN_ICON_SIZE_DEFAULT;
     const selectedSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_SELECTED : PIN_ICON_SIZE_SELECTED;
     // Normal pins — all features; selected feature excluded once a selection exists
@@ -654,7 +709,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         filter: FILTER_MATCH_NONE,
         layout: {
           visibility: "none",
-          "icon-image": iconId,
+          "icon-image": selIconId,
           "icon-anchor": "bottom",
           "icon-size": selectedSize,
           "icon-allow-overlap": true,
@@ -925,17 +980,11 @@ const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 // borders — the Luxe Globe look applied to the detailed OSM basemap so all
 // zoom / city-district / label detail is preserved.
 // ---------------------------------------------------------------------------
-// Luxe MapLibre style flag — OFF by default so the existing MAPLIBRE style is
-// unchanged.  Flip to `true` (or set NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE=1) to
-// render the premium Luxe-inspired style: glowing red ocean coastlines, silver
-// borders, deeper obsidian space, and a globe atmosphere halo.  The LUXE
-// (Three.js) renderer is unrelated and untouched.
-const USE_LUXE_MAPLIBRE_STYLE =
-  process.env.NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE === "1" ||
-  process.env.NEXT_PUBLIC_ECHIS_USE_LUXE_MAPLIBRE === "true" ||
-  false;
-
-// --- Luxe palette (gated behind USE_LUXE_MAPLIBRE_STYLE) -------------------
+// MapLibre's accepted appearance is the premium Luxe-inspired style: glowing
+// red coastlines, silver detail, deep obsidian space, and an atmosphere halo.
+// It is intentionally unconditional; the renderer switch in AppShell chooses
+// between Luxe (Three.js) and MapLibre, not between two MapLibre themes.
+// --- Premium MapLibre palette ----------------------------------------------
 // Deep obsidian space behind the globe, near-black land, silver-grey borders,
 // and the bright/dark red coastline endpoints from the reference.
 const LUXE_PANEL_BG = "#0B0C0E";
@@ -1096,20 +1145,15 @@ function setupLuxeOutline(map: maplibregl.Map): void {
   }
 }
 
-const PANEL_BG = "#030203";
-// Space colour behind the globe — obsidian in luxe, the original near-black
-// otherwise.  Used for the container / loading / error backgrounds.
-const ACTIVE_PANEL_BG = USE_LUXE_MAPLIBRE_STYLE ? LUXE_PANEL_BG : PANEL_BG;
-const LAND_FILL = "#070607"; // black continents (land base)
-const LAND_OVERLAY = "#110405";
-const WATER_FILL = ECHIS_GRAD_DARK;
-const WATERWAY_FILL = ECHIS_GRAD_MID;
-
-// National border — clean white, the dominant boundary line (Luxe look).
-const BORDER_COUNTRY = "rgba(168, 13, 24, 0.72)";
-// Sub-national (state/province/district) lines — faint white so OSM detail
-// stays visible without competing with the country skeleton.
-const BORDER_ADMIN = "rgba(111, 7, 16, 0.28)";
+const ACTIVE_PANEL_BG = LUXE_PANEL_BG;
+// These aliases keep the CARTO diagnostic fallback on the same accepted
+// premium palette instead of silently reverting MapLibre to the legacy look.
+const LAND_FILL = LUXE_LAND_FILL;
+const LAND_OVERLAY = LUXE_LAND_OVERLAY;
+const WATER_FILL = LUXE_WATER_FILL;
+const WATERWAY_FILL = LUXE_WATERWAY_FILL;
+const BORDER_COUNTRY = LUXE_BORDER_COUNTRY;
+const BORDER_ADMIN = LUXE_BORDER_ADMIN;
 
 const LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
 const LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
@@ -1648,25 +1692,16 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           container,
           style: USE_ECHIS_OSM_BASEMAP
             ? createEchisOsmGlobeStyle(
-                USE_LUXE_MAPLIBRE_STYLE
-                  ? {
-                      landFill: LUXE_LAND_FILL,
-                      landOverlay: LUXE_LAND_OVERLAY,
-                      waterFill: LUXE_WATER_FILL,
-                      waterwayFill: LUXE_WATERWAY_FILL,
-                      borderCountry: LUXE_BORDER_COUNTRY,
-                      borderAdmin: LUXE_BORDER_ADMIN,
-                      showBoundaries: false,
-                      labelHalo: LABEL_HALO,
-                    }
-                  : {
-                      landFill: LAND_FILL,
-                      landOverlay: LAND_OVERLAY,
-                      waterFill: WATER_FILL,
-                      waterwayFill: WATERWAY_FILL,
-                      borderCountry: BORDER_COUNTRY,
-                      labelHalo: LABEL_HALO,
-                    },
+                {
+                  landFill: LUXE_LAND_FILL,
+                  landOverlay: LUXE_LAND_OVERLAY,
+                  waterFill: LUXE_WATER_FILL,
+                  waterwayFill: LUXE_WATERWAY_FILL,
+                  borderCountry: LUXE_BORDER_COUNTRY,
+                  borderAdmin: LUXE_BORDER_ADMIN,
+                  showBoundaries: false,
+                  labelHalo: LABEL_HALO,
+                },
               )
             : CARTO_DARK_MATTER_STYLE_URL,
           center: DEFAULT_GLOBE_VIEW.center,
@@ -1700,21 +1735,58 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       map.doubleClickZoom.disable();
 
       // ── Marker click + cursor handlers ──────────────────────────────────
-      // Declared here (after map construction) so both handleStyleLoad
-      // (which registers them) and the cleanup function (which removes them)
-      // share the same references via closure.
+      // Use non-delegated map events and one guarded hit-test. MapLibre's
+      // layer-bound event overload performs its own unguarded feature query
+      // before calling our listener, so a transient empty vector tile can
+      // otherwise surface as a global DictionaryCoder runtime error.
       const cursorEnter = () => {
         try { map.getCanvas().style.cursor = "pointer"; } catch { /* noop */ }
       };
       const cursorLeave = () => {
         try { map.getCanvas().style.cursor = ""; } catch { /* noop */ }
       };
-      let markerClickGlobal: ((e: LayerClickEvent) => void) | null = null;
-      let markerClickSignals: ((e: LayerClickEvent) => void) | null = null;
-      let markerHoverGlobal: ((e: LayerClickEvent) => void) | null = null;
-      let markerHoverSignals: ((e: LayerClickEvent) => void) | null = null;
-      let markerLeaveGlobal: (() => void) | null = null;
-      let markerLeaveSignals: (() => void) | null = null;
+      const clearMarkerHover = () => {
+        cursorLeave();
+        applyMarkerHover(map, "global", null);
+        applyMarkerHover(map, "signals", null);
+      };
+      const markerClick = (e: maplibregl.MapMouseEvent) => {
+        const hit = queryMarkerAtPoint(map, e.point);
+        if (!hit?.feature.properties) return;
+        const id = String(hit.feature.properties.id ?? "");
+        if (id) {
+          onMarkerClickRef.current?.(id, hit.kind, {
+            x: e.point.x,
+            y: e.point.y,
+          });
+        }
+      };
+      const markerMouseMove = (e: maplibregl.MapMouseEvent) => {
+        const hit = queryMarkerAtPoint(map, e.point);
+        if (!hit?.feature.properties) {
+          clearMarkerHover();
+          return;
+        }
+
+        cursorEnter();
+        const id = String(hit.feature.properties.id ?? "");
+        const selectedId =
+          hit.kind === "global"
+            ? selectedGlobalIdRef.current
+            : selectedSignalsIdRef.current;
+        applyMarkerHover(map, hit.kind, id && id !== selectedId ? id : null);
+        applyMarkerHover(
+          map,
+          hit.kind === "global" ? "signals" : "global",
+          null,
+        );
+      };
+      const markerMouseOut = () => {
+        clearMarkerHover();
+      };
+      map.on("click", markerClick);
+      map.on("mousemove", markerMouseMove);
+      map.on("mouseout", markerMouseOut);
 
       let resolved = false;
       let styleReady = false;
@@ -1744,36 +1816,32 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           );
         }
 
-        // Luxe atmosphere halo — a faint reddish glow at the globe's edge over
-        // obsidian space.  Wrapped defensively: setSky is unavailable on older
-        // MapLibre builds / mercator fallback, so any failure is swallowed and
-        // the map keeps working without the halo.
-        if (USE_LUXE_MAPLIBRE_STYLE) {
-          try {
-            (map as unknown as {
-              setSky?: (sky: Record<string, unknown>) => void;
-            }).setSky?.({
-              "sky-color": "#0B0C0E",
-              "sky-horizon-blend": 0.6,
-              "horizon-color": "#2a0a0d",
-              "horizon-fog-blend": 0.7,
-              "fog-color": "#1a0608",
-              "fog-ground-blend": 0.85,
-              "atmosphere-blend": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                0,
-                0.7,
-                4,
-                0.45,
-                6,
-                0,
-              ],
-            });
-          } catch (e) {
-            console.warn("[MapLibreGlobe] setSky unsupported — skipping halo:", e);
-          }
+        // Premium atmosphere halo — a faint reddish glow at the globe's edge
+        // over obsidian space. Wrapped defensively for older MapLibre builds.
+        try {
+          (map as unknown as {
+            setSky?: (sky: Record<string, unknown>) => void;
+          }).setSky?.({
+            "sky-color": "#0B0C0E",
+            "sky-horizon-blend": 0.6,
+            "horizon-color": "#2a0a0d",
+            "horizon-fog-blend": 0.7,
+            "fog-color": "#1a0608",
+            "fog-ground-blend": 0.85,
+            "atmosphere-blend": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              0.7,
+              4,
+              0.45,
+              6,
+              0,
+            ],
+          });
+        } catch (e) {
+          console.warn("[MapLibreGlobe] setSky unsupported — skipping halo:", e);
         }
 
         // Dark refinement pass — only needed for the CARTO basemap.  When the
@@ -1785,77 +1853,13 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
-        if (USE_LUXE_MAPLIBRE_STYLE) setupLuxeOutline(map);
-        // Register the shared red pin icon before adding the symbol layers
-        // that reference it; styleimagemissing acts as a safety net if the
-        // image add races the layer add.
+        setupLuxeOutline(map);
+        // Register the shared pin icons before adding the symbol layers that
+        // reference them; styleimagemissing is a safety net for image races.
         registerPinIcons(map);
         // Marker foundation — empty sources + symbol layers for Global View
         // and SOCMINT.  Visibility/data driven by props via useEffects below.
         setupMarkerLayers(map);
-
-        // Register click + hover handlers after the layers exist so MapLibre
-        // can bind them correctly.
-        markerClickGlobal = (e: LayerClickEvent) => {
-          const feature = e.features?.[0];
-          if (!feature?.properties) return;
-          const id = String(feature.properties.id ?? "");
-          if (id) onMarkerClickRef.current?.(id, "global", { x: e.point.x, y: e.point.y });
-        };
-        markerClickSignals = (e: LayerClickEvent) => {
-          const feature = e.features?.[0];
-          if (!feature?.properties) return;
-          const id = String(feature.properties.id ?? "");
-          if (id) onMarkerClickRef.current?.(id, "signals", { x: e.point.x, y: e.point.y });
-        };
-        markerHoverGlobal = (e: LayerClickEvent) => {
-          cursorEnter();
-          const feature = e.features?.[0];
-          const id = feature?.properties ? String(feature.properties.id ?? "") : "";
-          applyMarkerHover(
-            map,
-            "global",
-            id && id !== selectedGlobalIdRef.current ? id : null,
-          );
-        };
-        markerHoverSignals = (e: LayerClickEvent) => {
-          cursorEnter();
-          const feature = e.features?.[0];
-          const id = feature?.properties ? String(feature.properties.id ?? "") : "";
-          applyMarkerHover(
-            map,
-            "signals",
-            id && id !== selectedSignalsIdRef.current ? id : null,
-          );
-        };
-        markerLeaveGlobal = () => {
-          cursorLeave();
-          applyMarkerHover(map, "global", null);
-        };
-        markerLeaveSignals = () => {
-          cursorLeave();
-          applyMarkerHover(map, "signals", null);
-        };
-        map.on("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
-        map.on("click", MARKER_HOVER_LAYER_GLOBAL, markerClickGlobal);
-        map.on("click", MARKER_SEL_GLOBAL, markerClickGlobal);
-        map.on("click", MARKER_BADGE_GLOBAL, markerClickGlobal);
-        map.on("click", MARKER_BADGE_TEXT_GLOBAL, markerClickGlobal);
-        map.on("click", MARKER_LAYER_SIGNALS, markerClickSignals);
-        map.on("click", MARKER_HOVER_LAYER_SIGNALS, markerClickSignals);
-        map.on("click", MARKER_SEL_SIGNALS, markerClickSignals);
-        map.on("mousemove", MARKER_LAYER_GLOBAL, markerHoverGlobal);
-        map.on("mousemove", MARKER_SEL_GLOBAL, markerHoverGlobal);
-        map.on("mousemove", MARKER_BADGE_GLOBAL, markerHoverGlobal);
-        map.on("mousemove", MARKER_BADGE_TEXT_GLOBAL, markerHoverGlobal);
-        map.on("mouseleave", MARKER_LAYER_GLOBAL, markerLeaveGlobal);
-        map.on("mouseleave", MARKER_SEL_GLOBAL, markerLeaveGlobal);
-        map.on("mouseleave", MARKER_BADGE_GLOBAL, markerLeaveGlobal);
-        map.on("mouseleave", MARKER_BADGE_TEXT_GLOBAL, markerLeaveGlobal);
-        map.on("mousemove", MARKER_LAYER_SIGNALS, markerHoverSignals);
-        map.on("mousemove", MARKER_SEL_SIGNALS, markerHoverSignals);
-        map.on("mouseleave", MARKER_LAYER_SIGNALS, markerLeaveSignals);
-        map.on("mouseleave", MARKER_SEL_SIGNALS, markerLeaveSignals);
 
         // Force a resize after style commit in case the container was sized
         // during a transition / mount race.
@@ -2128,38 +2132,9 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           map.off("style.load", handleStyleLoad);
           map.off("load", handleLoad);
           map.off("error", handleError);
-          if (markerClickGlobal) {
-            map.off("click", MARKER_LAYER_GLOBAL, markerClickGlobal);
-            map.off("click", MARKER_HOVER_LAYER_GLOBAL, markerClickGlobal);
-            map.off("click", MARKER_SEL_GLOBAL, markerClickGlobal);
-            map.off("click", MARKER_BADGE_GLOBAL, markerClickGlobal);
-            map.off("click", MARKER_BADGE_TEXT_GLOBAL, markerClickGlobal);
-          }
-          if (markerClickSignals) {
-            map.off("click", MARKER_LAYER_SIGNALS, markerClickSignals);
-            map.off("click", MARKER_HOVER_LAYER_SIGNALS, markerClickSignals);
-            map.off("click", MARKER_SEL_SIGNALS, markerClickSignals);
-          }
-          if (markerHoverGlobal) {
-            map.off("mousemove", MARKER_LAYER_GLOBAL, markerHoverGlobal);
-            map.off("mousemove", MARKER_SEL_GLOBAL, markerHoverGlobal);
-            map.off("mousemove", MARKER_BADGE_GLOBAL, markerHoverGlobal);
-            map.off("mousemove", MARKER_BADGE_TEXT_GLOBAL, markerHoverGlobal);
-          }
-          if (markerHoverSignals) {
-            map.off("mousemove", MARKER_LAYER_SIGNALS, markerHoverSignals);
-            map.off("mousemove", MARKER_SEL_SIGNALS, markerHoverSignals);
-          }
-          if (markerLeaveGlobal) {
-            map.off("mouseleave", MARKER_LAYER_GLOBAL, markerLeaveGlobal);
-            map.off("mouseleave", MARKER_SEL_GLOBAL, markerLeaveGlobal);
-            map.off("mouseleave", MARKER_BADGE_GLOBAL, markerLeaveGlobal);
-            map.off("mouseleave", MARKER_BADGE_TEXT_GLOBAL, markerLeaveGlobal);
-          }
-          if (markerLeaveSignals) {
-            map.off("mouseleave", MARKER_LAYER_SIGNALS, markerLeaveSignals);
-            map.off("mouseleave", MARKER_SEL_SIGNALS, markerLeaveSignals);
-          }
+          map.off("click", markerClick);
+          map.off("mousemove", markerMouseMove);
+          map.off("mouseout", markerMouseOut);
           map.remove();
         } catch {
           // Defensive: removal during HMR can race with internal teardown.
@@ -2377,9 +2352,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background: USE_LUXE_MAPLIBRE_STYLE
-              ? "radial-gradient(circle at 50% 46%, transparent 0%, transparent 44%, rgba(11,12,14,0.45) 72%, rgba(11,12,14,0.92) 100%)"
-              : "radial-gradient(circle at 50% 46%, transparent 0%, transparent 48%, rgba(3,2,3,0.34) 76%, rgba(3,2,3,0.72) 100%)",
+            background:
+              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 44%, rgba(11,12,14,0.45) 72%, rgba(11,12,14,0.92) 100%)",
           }}
         />
 

@@ -1,853 +1,239 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# Next.js Version Notice
+# AGENTS.md — ECHIS
 
-This project may use Next.js APIs or conventions that differ from common
-training examples. Before making framework-level changes, check the relevant
-docs under `node_modules/next/dist/docs/` and follow deprecation warnings.
-<!-- END:nextjs-agent-rules -->
+Standing instructions for coding agents. Keep this file short.
+Per-task prompts use the template at the bottom; do not re-state the
+project on every prompt.
 
-# ECHIS Agent Instructions
+---
 
-## Purpose of This File
+## 1. What this project is
 
-This file is the standing instruction set for coding agents working on
-ECHIS.
+ECHIS — Next.js dark OSINT / situational-awareness dashboard.
+Single Next.js app, no separate backend service.
 
-Task prompts should stay short and only include the current task, scope,
-do-not-touch items, acceptance criteria, and validation requirements.
+Stack (see `package.json` for exact versions):
+Next.js 16 · React 19 · TypeScript · Tailwind 4 · MapLibre GL ·
+react-simple-maps · topojson-client / world-atlas · lucide-react.
 
-Use this structure for future task prompts:
+The app is **not** purely static. `app/api/sources/*` proxies real
+news APIs server-side using keys in `.env.local`. Most UI screens
+still render mock data from `data/**` — both paths are valid.
 
-```text
-Use AGENTS.md.
+---
 
-Task:
-...
+## 2. Source-of-truth files (read these, do not duplicate them here)
 
-Scope:
-...
+| Concern                        | File                                            |
+|--------------------------------|-------------------------------------------------|
+| Top-level UI state + wiring    | `components/layout/AppShell.tsx`                |
+| Nav labels + order             | `components/layout/HeaderNav.tsx` (`NAV_TABS`)  |
+| Left rail items                | `components/layout/LeftRail.tsx` (`topIcons`)   |
+| Global design tokens           | `app/globals.css` (`:root`, `.cyber-premium`)   |
+| Severity colors → tokens       | `lib/theme.ts`                                  |
+| Globe default camera           | `components/maplibre/MapLibreGlobe.tsx` → `DEFAULT_GLOBE_VIEW` |
+| Source pipeline                | `data/source-intelligence/sourceIntelligencePipeline.ts` |
+| Source adapters (server)       | `lib/sources/*Adapter.ts`                       |
+| Source API routes              | `app/api/sources/*/route.ts`                    |
+| Event / source / socmint types | `types/event.ts`, `types/source.ts`, `types/socmint.ts` |
 
-Do not touch:
-...
+When a fact in AGENTS.md disagrees with code, **code wins**. Edit
+this file or ask before assuming.
 
-Acceptance:
-...
+---
 
-Validation:
-...
+## 3. Core rules
+
+1. **Small, scoped changes.** Touch only what the task names.
+   No drive-by refactors, no renames, no "while I'm here" cleanup.
+2. **Preserve working behavior.** If you don't understand why
+   something is the way it is, read the surrounding code before
+   changing it; if still unclear, ask.
+3. **No new abstractions** unless they remove more complexity than
+   they add. Reuse existing patterns in the same folder.
+4. **No new dependencies, no new env vars, no schema changes** unless
+   the task asks for it.
+5. **Mock vs. live data:** keep them on their existing paths.
+   `data/**` is mock; `app/api/sources/**` + `lib/sources/**` is live.
+   Don't move data between them without an explicit ask.
+6. **OSINT-safe wording.** No classified / covert / real-time
+   surveillance / agency-tracking language. Use public-source phrasing.
+7. **Storage keys are legacy and stable.** `borueyes.bookmarks` and
+   any other persisted key stays as-is unless renaming is the task.
+
+---
+
+## 4. Security (non-negotiable)
+
+- `.env.local` holds **real third-party API keys**. Never paste its
+  contents, never echo a key in logs, summaries, error messages, code
+  comments, or commit messages. Never add a new key without asking.
+- `.env*` is gitignored (`.gitignore`); keep it that way. Do not
+  create `.env.example` entries that include real values.
+- Server routes in `app/api/**` run with `runtime = "nodejs"` and read
+  `process.env.*` — keys must stay server-side. Never expose a key to
+  the client via `NEXT_PUBLIC_*` or by embedding it in a component.
+- Treat any user-pasted PII / IPs / coordinates in tasks as sensitive:
+  do not commit them, do not invent live factual claims around them.
+
+---
+
+## 5. Visual system (one paragraph; the rest is in CSS)
+
+Theme: deep black base (`--bg-base #060305`) + crimson gradient
+(`--accent-grad: #b3121f → #ff2b3d`) + cool silver text ladder
+(`--text-heading` → `--text-dim`, also aliased as `--c-t1..t6`).
+The whole app is wrapped in `.cyber-premium` in `AppShell.tsx`, so the
+`--c-*` tokens are available everywhere. Severity tokens live as
+`--sev-{critical|high|medium|low}-{text|bg|border}`. Note: tokens
+named `--accent-blue-*` are historical — their **values are crimson**.
+Don't rename them, just use them.
+
+Fonts: Space Grotesk (`--font-display`), Hanken Grotesk (`--font-ui`),
+JetBrains Mono (`--font-mono`), Newsreader (`--font-serif`, Policy
+only). Loaded once in `app/layout.tsx`.
+
+For Cyber News visual spec details (gradients, panel surface, badge
+rules), see `CYBER_NEWS_TEKNIK_TASARIM_RAPORU.md`. **Do not inline that
+document into AGENTS.md or into per-task prompts.**
+
+---
+
+## 6. Globe / map (the only place where wrong moves cost hours)
+
+Two globe renderers ship and the user switches between them at runtime
+(`MapSystemSwitch` in `AppShell.tsx`):
+
+- **Luxe** (`components/luxe/LuxeGlobeMap.tsx`) — current default.
+- **MapLibre** (`components/maplibre/MapLibreGlobe.tsx`).
+
+Both expose the same handle (`MapLibreGlobeHandle`) and marker
+contract (`MarkerFeature`). When the task says "the globe", clarify
+which one. **Do not delete either.**
+
+Hard rules:
+
+- `DEFAULT_GLOBE_VIEW` is the single source of truth for initial,
+  refresh, and "Center View" camera. Don't hard-code alt values.
+- Auto-rotate is longitude-based (`map.jumpTo({ center:[lng,lat] })`),
+  not `rotateTo`. Don't replace it with continuous bearing animation.
+- One map instance at a time; on unmount call `map.remove()` and clear
+  every RAF / timeout / listener.
+- Globe panel must never be blank — keep the loading state and the
+  dark error fallback.
+- Geographic camera (where we look on Earth) and screen framing (where
+  the globe sits in the layout) are separate problems. Solve panel
+  overlap with padding/offset, not by moving the camera.
+
+Shared 2D SVG map (`SharedWorldMap2D`) is used by Intel Watch,
+Cyber News, and Defense Industry. Treat it as frozen: Antarctica
+removed, Russia wrap fixed, accepted projection. Don't re-touch
+unless the task targets it explicitly.
+
+---
+
+## 7. Don't-touch list (unless the task says so)
+
+App shell · HeaderNav · LeftRail · storage keys · `DEFAULT_GLOBE_VIEW`
+· `SharedWorldMap2D` · accepted globe camera / labels / markers ·
+source pipeline (`data/source-intelligence/**`) · unrelated screens ·
+unrelated mock data · `app/luxe-globe/` (standalone test page).
+
+Reserved (don't build unless asked): Air Track, Ship Track, Analytics,
+auth, real database, websocket / streaming, scraping.
+
+---
+
+## 8. Validation
+
+Run **after every change**:
+
 ```
-
----
-
-## Project
-
-ECHIS is a frontend-only, dark premium OSINT / situational-awareness /
-intelligence monitoring dashboard prototype.
-
-The interface should feel:
-
-- dark
-- premium
-- restrained
-- serious
-- analyst-oriented
-- operational
-- professional
-
-Avoid:
-
-- game-like HUD UI
-- flashy sci-fi panels
-- marketing / landing-page visuals
-- generic cyberpunk styling
-- hacker clichés
-- excessive neon or glow
-- filler modules added only to occupy empty space
-
-The current product uses mock/static frontend data only.
-
----
-
-## Stack
-
-Main stack:
-
-- Next.js 16
-- React 19
-- TypeScript
-- Tailwind CSS
-- lucide-react
-- MapLibre GL
-- topojson-client
-- world-atlas
-- react-simple-maps
-
-The active Monitor / Global View / SOCMINT globe is **MapLibre-only**.
-
-Do not reintroduce Three.js as an active globe renderer.
-
----
-
-## Core Working Rules
-
-- Make small, scoped changes.
-- Preserve existing behavior unless the task clearly asks otherwise.
-- Do not refactor unrelated code.
-- Do not add backend, auth, database, scraping, live tracking, real APIs,
-  websocket infrastructure, or persistence unless explicitly requested.
-- Use existing mock/static data patterns.
-- Do not change data schemas unless required by the task.
-- Do not invent live/current factual claims.
-- Keep wording neutral and OSINT-safe.
-- Keep the UI dark, restrained, premium, and analyst-oriented.
-- Follow existing component, data, and styling patterns.
-- Add abstractions only when they clearly reduce complexity.
-
----
-
-## Branding and Navigation
-
-Visible product/UI brand:
-
-```text
-ECHIS
-```
-
-Current top-level product direction/order:
-
-```text
-Monitor → Intel Watch → Cyber News → Defense Industry → Policy → Sources
-```
-
-Visible naming rules:
-
-- `Politics` should appear as `Policy`.
-- `Cyber Sec.` should appear as `Cyber News`.
-- Legacy names such as `borueyes` may still exist in paths, storage keys, or
-  internal references. Do not rename them unless explicitly requested.
-
----
-
-## Known Architecture
-
-Common project structure:
-
-- `app/page.tsx` renders `<AppShell />`
-- `app/layout.tsx` imports global CSS / MapLibre CSS and app metadata
-- `app/globals.css` contains global dark theme, overflow, and scrollbars
-- `components/layout/AppShell.tsx` owns app state and screen switching
-- `components/layout/HeaderNav.tsx` controls top navigation
-- `components/layout/LeftRail.tsx` controls the icon-only left rail
-- `components/events/*` contains event cards / right panel / bookmarks logic
-- `components/signals/*` contains SOCMINT panel/card logic
-- `components/sources/SourcesScreen.tsx` contains the Source Registry screen
-- `components/politics/PoliticsPanel.tsx` contains Policy
-- `components/cyber/*` contains Cyber News
-- `components/intel-watch/*` contains Intel Watch
-- active Monitor / Global View / SOCMINT globe logic is MapLibre-only
-
-If old Three.js files or comments still exist, do not treat them as the active
-globe system. Clean them only when the current task explicitly asks for cleanup.
-
----
-
-## Protected Areas
-
-Do not change these unless the task explicitly targets them:
-
-- app shell
-- top navigation
-- left rail
-- unrelated tabs/screens
-- unrelated mock data
-- backend/API/auth/database assumptions
-- storage keys
-- Intel Watch layout
-- Cyber News layout
-- Defense Industry layout
-- Sources
-- `SharedWorldMap2D`
-- active MapLibre globe accepted camera/composition
-- active MapLibre globe dark style
-- active MapLibre globe label LOD
-- active MapLibre globe auto-rotate behavior
-- active MapLibre globe marker behavior
-- SOCMINT behavior
-- Global View marker data
-
----
-
-## UI Guidance
-
-Keep the UI:
-
-- dark
-- restrained
-- premium
-- modern
-- readable
-- operational
-- analyst-oriented
-
-Preferred direction:
-
-- base near `#0B0F14`
-- green is an accent, not the base color
-- neon green `#00FF88` only sparingly
-- red/yellow/orange/blue should be muted and meaningful
-
-Suggested semantic color use:
-
-- red = conflict / operation / high risk
-- blue = diplomatic / cooperation / public statement
-- yellow = uncertain / developing / monitoring
-- orange = border tension / elevated concern
-
-Avoid:
-
-- excessive glow
-- decorative borders
-- busy effects
-- gaming style
-- military exaggeration
-- marketing hero sections
-- cyberpunk / hacker clichés
-- non-functional UI that appears active
-
-Side panels should support the main view, not overpower it.
-
-Prefer clean, sharp icon styling.
-
-Keep header, left rail, top nav, and module navigation visually consistent.
-
----
-
-## Data Guidance
-
-Events should follow the existing `OsintEvent` model.
-
-Sources should follow the existing `OsintSource` model.
-
-Important data/type areas may include:
-
-- `types/event.ts`
-- `data/mockEvents.ts`
-- `types/socmint.ts`
-- `data/socmintReports.ts`
-- `types/source.ts`
-- `data/mockSources.ts`
-- `data/intel-watch/*`
-- `data/cyberMockData.ts`
-
-Rules:
-
-- Source counts should be derived from `mockEvents.sourceId` where possible.
-- New mock data should use existing categories, regions, source IDs, severity
-  values, and verification values where possible.
-- Do not invent live/current factual claims.
-- Use generic OSINT-style mock placeholders.
-- Use public-source wording.
-
----
-
-## Active MapLibre Globe
-
-The active Monitor / Global View / SOCMINT globe is **MapLibre-only**.
-
-MapLibre owns:
-
-- globe rendering
-- basemap
-- labels
-- borders/coastlines
-- zoom
-- drag
-- camera movement
-- screen framing
-- source/layer based marker rendering
-
-Do not reintroduce or rebuild:
-
-- Three.js globe renderer
-- Three.js camera system
-- Three.js marker sprites
-- Three.js raycasting marker selection
-- Three.js canvas texture country/capital label system
-- Three.js surface/material/lighting system
-
-Accepted visual direction:
-
-- black / near-black background
-- near-black water
-- dark graphite land
-- subtle borders/coastlines
-- muted labels
-- crisp professional label/border rendering
-- no navy/lacivert look
-- no bright consumer-map look
-
-The globe panel must never become blank.
-
-Preserve:
-
-- visible loading state
-- visible dark error fallback
-- verified container sizing
-- MapLibre CSS
-- `map.remove()` cleanup
-- no multiple map instances
-
----
-
-## Globe Camera / Central View
-
-Initial load / refresh and Central View must use the same accepted default
-camera state.
-
-Use one source of truth, such as:
-
-```ts
-DEFAULT_GLOBE_VIEW
-```
-
-Do not create separate hardcoded camera values for:
-
-- initial load
-- refresh
-- Central View
-- reset view
-- Monitor
-- Global View
-- SOCMINT
-
-Central View should smoothly return to the accepted default camera.
-
-Do not alter the accepted center / zoom / composition unless explicitly
-requested.
-
----
-
-## Globe Auto-Rotate
-
-Auto-rotate must be MapLibre-native and longitude / center based.
-
-Do not use continuous bearing animation for globe auto-rotate.
-
-Avoid this for auto-rotate:
-
-```ts
-map.rotateTo(...)
-```
-
-Preferred principle:
-
-```ts
-const center = map.getCenter()
-
-map.jumpTo({
-  center: [nextLng, center.lat],
-  bearing: 0,
-  pitch: map.getPitch(),
-  zoom: map.getZoom(),
-})
-```
-
-Expected behavior:
-
-- natural horizontal globe movement
-- no clock-like rotation
-- no counter-clockwise disk spin
-- no stutter
-- no multiple RAF loops
-- no camera jump after pause/resume
-
-Implementation expectations:
-
-- pause on real user interaction
-- resume according to task-defined idle rules
-- programmatic auto-rotate events must not be treated as user interaction
-- reset `lastFrameTime` on resume
-- cleanup RAF / timers / listeners on unmount
-
----
-
-## Globe Label / LOD Rules
-
-Default / Central View may use simplified label visibility to avoid clutter.
-
-At distant/default zoom:
-
-- show continent names
-- show selected important country labels if configured
-
-On zoom-in:
-
-- normal detailed labels may return
-
-Prefer:
-
-- MapLibre style layer filters
-- `minzoom`
-- expression-based label logic
-
-Do not build a heavy custom label system unless explicitly requested.
-
-Label stability matters more than maximum label coverage.
-
----
-
-## Globe Marker Layer Rules
-
-When marker work is requested:
-
-- use existing mock/static marker data
-- keep Global View and SOCMINT markers logically separated
-- prefer MapLibre source/layer structure where possible
-- markers should be small, sharp, premium, and proportional
-- avoid oversized sprites
-- avoid cheap glowing dots
-- avoid overcrowding
-- avoid new live data
-
-If far-side globe marker hiding is complex, implement a simple safe version or
-leave a clear TODO.
-
-Do not break the accepted globe foundation while adding markers.
-
----
-
-## Screen Framing / View Transitions
-
-Separate these two concepts:
-
-```text
-Geographic camera view = what part of the world the globe looks at
-Screen framing = where the globe sits inside available UI space
-```
-
-Do not change the accepted geographic camera just to fix panel overlap.
-
-For Monitor → Global View / SOCMINT transitions:
-
-- preserve the accepted Central View / initial geographic view
-- frame the globe into the available empty workspace
-- prevent the globe from sitting behind left/right panels
-- use padding / offset / available viewport logic where appropriate
-- use smooth MapLibre camera transitions
-- avoid jump/snap behavior
-- pause auto-rotate during major transitions
-- resume auto-rotate according to existing idle rules
-
----
-
-## Shared 2D SVG Map
-
-Intel Watch, Cyber News, and Defense Industry use the accepted shared 2D SVG
-map foundation.
-
-Do not touch unless explicitly requested:
-
-- `SharedWorldMap2D`
-- Intel Watch shared 2D map
-- Cyber News shared 2D map
-- Defense Industry shared 2D map
-
-Accepted shared 2D map traits:
-
-- direct black background
-- Antarctica removed
-- no duplicate world wrapping
-- Russia continuity / wrap issue fixed
-- smooth geometry
-- thin subtle country borders
-- accepted zoom / pan / hover / tooltip / modal behavior
-
----
-
-## Intel Watch
-
-Intel Watch is a general OSINT / geopolitical intelligence monitoring desk.
-
-It should not look like a Cyber News / cybersecurity dashboard.
-
-Focus areas:
-
-- public information
-- public news mentions
-- regional signals
-- geopolitical developments
-- diplomatic activity
-- policy signals
-- security developments
-- influence-operation mentions
-- border tensions
-- sanctions monitoring
-- cooperation mentions
-- analyst workflow
-
-Do not include:
-
-- secret data
-- classified language
-- covert operation language
-- real operational claims
-- real-time tracking claims
-- unsupported intelligence assertions
-
-Use OSINT-safe wording such as:
-
-- public-source reporting indicates
-- open-source mentions increased
-- regional monitoring signal
-- reported activity
-- public statements
-- media and institutional references
-- public-source references
-- news and official statements
-
-Avoid language such as:
-
-- classified
-- secret source
-- covert operation
-- confirmed intelligence operation
-- real-time surveillance
-- intelligence agency claim
-
-### Intel Watch 2D SVG Map
-
-Accepted Intel Watch map state:
-
-- 2D SVG world map works
-- Antarctica removed
-- Russia / duplicate wrapping fixed
-- country hover highlight works
-- country-name tooltip works
-- mouse wheel zoom works
-- zoom buttons work
-- drag / pan works
-- country click-to-zoom works
-- red pulsing markers work
-- marker click opens centered modal
-- map clipping correct
-- layout and right-side panels accepted
-
-Do not change unless explicitly requested:
-
-- projection
-- projection type
-- default fitExtent
-- default scale/position
-- country geometry/filtering
-- Antarctica removal
-- Russia continuity fix
-- duplicate-wrap prevention
-- base map colors
-- country borders
-- hover highlight
-- tooltip
-- wheel zoom
-- zoom buttons
-- drag/pan
-- country click-to-zoom
-- reset behavior
-- marker positions/color/size/pulse
-- layout
-- right-side panels
-
-Existing SVG transform principle:
-
-```tsx
-<g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-  countries
-  borders
-  markers
-</g>
-```
-
-Reset:
-
-```ts
-zoom = 1
-pan = { x: 0, y: 0 }
-```
-
-### Intel Watch Marker Modal
-
-Marker click should open a centered HTML overlay modal.
-
-Modal rules:
-
-- centered in the map panel
-- map behind blurred/dimmed
-- not dependent on marker screen coordinates
-- stable during zoom/pan
-- implemented as HTML overlay, not SVG text
-- map interactions blocked while modal is open
-
-Close via:
-
-- X / close button
-- Escape
-- backdrop click if implemented
-
-Do not close on:
-
-- modal inner click
-- hover
-- mouse move
-
-Allowed modal sections only:
-
-1. Header
-   - Location
-   - Signal Type
-   - Severity badge
-   - Close button
-
-2. Metadata
-   - Source
-   - Updated
-   - Region
-   - Category
-
-3. Event Brief
-
-4. Source Context
-
-Do not add:
-
-- Confidence
-- confidence percentage
-- probability score
-- Key Observations
-- Monitoring Focus
-- Tags / Related Tags
-- analyst recommendation
-- AI-generated assessment language
-- secret/classified/covert language
-- real-time surveillance
-- agency tracking claims
-
----
-
-## Cyber News
-
-Cyber News is a cybersecurity news / cyber intelligence dashboard.
-
-It is not a deep technical SOC engineering screen.
-
-It should feel:
-
-- modern
-- premium
-- dark
-- restrained
-- operational
-- vivid but not flashy
-
-Accepted layout:
-
-- preserve top nav / left rail
-- main area is 3 columns
-- left/top: CYBER THREAT MAP
-- under map: Session IP strip
-- left/bottom: MOST MENTIONED REGIONS
-- left/bottom second panel: AFFECTED SECTORS / EXPOSURE
-- center: CYBER SECURITY NEWS
-- right: THREAT CONTEXT
-
-Interaction:
-
-- Cyber Security News cards are clickable
-- `selectedNewsId` updates on click
-- Threat Context reflects selected item
-- selected card has subtle active state only
-
-Do not re-add:
-
-- Time Filter
-- View Full Report
-- Threat Context footer CTA
-- View All News footer/link/container
-- map header severity legend
-- VPN / Not Detected in Session IP
-- thin left-side severity strips
-- unnecessary new modules
-
-Threat Context field order:
-
-1. COUNTRY
-2. AFFECTED ENTITY / ORGANIZATION
-3. HACK INCIDENT
-4. ATTACK TYPE / VECTOR
-5. THREAT ACTOR / GROUP
-6. TARGET / ASSET
-7. TARGET SECTOR
-8. SUMMARY
-9. FIRST SEEN
-10. LAST UPDATE
-11. CONFIDENCE
-12. IMPACT
-
-Session IP strip:
-
-- IP: `185.234.219.102`
-- Location: `Istanbul, Türkiye`
-- Badge: `ISP`
-- Value: `Türk Telekom`
-
-Do not add VPN detection claims.
-
-Affected Sectors should use compact horizontal bars. Do not use donut charts.
-
----
-
-## Defense Industry
-
-Defense Industry uses the shared Intel-style 2D SVG base map unless explicitly
-changed.
-
-Accepted direction:
-
-- `DefenseIndustryPanel.tsx` renders `DefenseIndustryMap`
-- `DefenseIndustryMap` imports `SharedWorldMap2D`
-- old Defense canvas/custom map is not rendered
-- markers are bright, sharp orange point markers
-- no country-fill highlight system
-- layout unchanged
-- scrollbar accent should match Defense / Key Segments accent, not Cyber green
-
----
-
-## Sources
-
-Sources refers to the Source Registry screen.
-
-Sources should align with current naming:
-
-- Policy
-- Cyber News
-- Defense Industry
-
-Keep Sources frontend mock/static only.
-
-Do not add real scraping, API, database, or live source ingestion unless
-requested.
-
----
-
-## Bookmarks
-
-Bookmarks may use the legacy localStorage key:
-
-```text
-borueyes.bookmarks
-```
-
-Do not rename storage keys unless explicitly requested.
-
-Bookmarks can include both OSINT events and SOCMINT reports if already
-implemented.
-
----
-
-## Reserved Areas
-
-Do not build unless explicitly requested:
-
-- Air Track
-- Ship Track
-- Analytics / AI Analysis
-- real backend
-- live intelligence ingestion
-- real scraping/data pipelines
-
----
-
-## Validation
-
-Run after changes:
-
-```bash
 npm run lint
 ```
 
-On Windows PowerShell, if execution policy blocks scripts:
+(Windows PowerShell, if script policy blocks: `npm.cmd run lint`.)
 
-```bash
-npm.cmd run lint
+Run **build** when any of these changed: TypeScript types, imports,
+data models, component structure, MapLibre lifecycle / camera code,
+API route, or shared util:
+
 ```
-
-Run build when TypeScript, imports, data models, component structure,
-MapLibre lifecycle, camera logic, or shared code changes:
-
-```bash
 npm run build
 ```
 
-For tiny CSS/text-only changes, lint is usually enough.
+Manual browser check for any UI behavior change: no console errors,
+no blank screen, unrelated screens unaffected, hover / tooltip / zoom
+/ drag / reset still work, modal close returns map interactions.
 
-Manual browser validation is expected for UI behavior changes.
-
-Common checks:
-
-- no console errors
-- no blank screen
-- unrelated screens unaffected
-- layout unchanged unless requested
-- hover/tooltip/zoom/drag/reset behavior preserved unless requested
-- marker/modal interaction correct when relevant
-- map interactions return after modal close when relevant
-
-Fix only scoped errors caused by the current change.
-
-Report unrelated/pre-existing errors separately.
+Report unrelated pre-existing errors separately — do not fix them in
+the same change.
 
 ---
 
-## Final Response Format
+## 9. Communication
 
-Keep summaries short.
+Work silently. No "I'm now reading…", "Next I'll…", no narration of
+tool calls.
 
-Include only:
+Final report — keep it to this shape:
 
-- Files changed
-- What changed, max 3 bullets
-- Validation result
-- Risks or follow-up, only if relevant
+```
+Files changed:
+  - path/one.tsx
+  - path/two.ts
 
-Do not include:
+What changed (≤3 bullets):
+  - …
 
-- internal reasoning
-- chain-of-thought
-- long implementation commentary
-- progress narration
-- obvious repo inspection steps
-- repeated project description
+Validation:
+  - npm run lint: pass
+  - npm run build: pass | not run (reason)
+  - manual: …
+
+Risks / follow-up (only if real):
+  - …
+```
+
+No chain-of-thought, no project re-introduction, no unrelated
+suggestions.
 
 ---
 
-## Communication Rules / Silent Mode
+## 10. Task prompt template
 
-Do not print progress updates such as:
+Future task prompts should be this short:
 
-- “I’m reading…”
-- “I’ve located…”
-- “I’m now checking…”
-- “Next I will…”
-- “I’m going to…”
+```
+Use AGENTS.md.
 
-Do not summarize tool usage while working.
+Task:
+  …
 
-Work silently until either:
+Scope:
+  …
 
-- the task is completed, or
-- a blocker requires user input
+Do not touch:
+  …
 
-Final response only:
+Acceptance:
+  …
 
-- Files changed
-- What changed, max 3 bullets
-- Validation result
-- Risks/follow-up only if relevant
+Validation:
+  npm run lint  (+ npm run build if listed in §8)
+```
+
+---
+
+## 11. Legacy docs in this repo
+
+These files exist for history. Read them only if the current task
+points you to them; do **not** treat them as standing rules:
+
+- `CURRENT_UI_STATE.md` — older UI snapshot.
+- `CYBER_NEWS_TEKNIK_TASARIM_RAPORU.md` — Cyber News visual spec.
+- `echis-common-agent-context.md` — Turkish duplicate of an earlier
+  AGENTS.md.
+- `PROMPT-globe-restyle.md` — one-shot prompt, already applied.
+- `design_handoff_cybernews_premium/` — design reference assets.
+
+If any of them contradicts §1–§9 of this file, **this file wins**.
