@@ -33,6 +33,26 @@ import type {
   GlobeViewMode,
   MarkerKind,
 } from "@/components/maplibre/MapLibreGlobe";
+import {
+  calculatePanInertia,
+  cameraDistanceForZoom,
+  classifyWheelInput,
+  clamp,
+  createContinuousWheelEasing,
+  mapEase,
+  normalizeWheelDelta,
+  panInertiaEase,
+  radiansPerPixel,
+  trimMotionSamples,
+  WHEEL_CLASSIFICATION_DELAY_MS,
+  wheelDeltaToZoomDelta,
+  WHEEL_ZOOM_EASE_MS,
+  WHEEL_ZOOM_TIME_ADJUSTMENT_MS,
+  zoomForCameraDistance,
+  type MotionSample,
+  type WheelEaseState,
+  type WheelInputType,
+} from "@/components/luxe/luxeGlobeMotion";
 
 // ---------------------------------------------------------------------------
 // Framing constants — mirrored from MapLibreGlobe so behaviour matches.
@@ -59,12 +79,12 @@ const CAM_Z_MAX = 4.8;
 // instead of stepping the distance linearly, so Luxe zoom feels identical to
 // the MapLibre globe. Values mirror MapLibreGlobe: ZOOM_STEP 0.75, wheel 1/450.
 const MAP_ZOOM_STEP = 0.75;
-const WHEEL_ZOOM_RATE = 1 / 450;
 const INTERACTION_IDLE_MS = 15_000;
 const VIEW_TRANSITION_MS = 1_400;
 const CENTRAL_VIEW_ANIM_MS = 1_200;
 const CENTRAL_VIEW_IDLE_DELAY_MS = 3_000;
 const FOCUS_MARKER_ANIM_MS = 1_500;
+const BUTTON_ZOOM_ANIM_MS = 350;
 const AUTO_ROTATE_DEG_PER_SEC = 1.5;
 const AUTO_ROTATE_MAX_DT_S = 0.05;
 
@@ -125,13 +145,12 @@ const VIEW_FRAMING: Record<GlobeViewMode, { left: number; right: number }> = {
 const DEG = Math.PI / 180;
 
 function camZForMapZoom(z: number): number {
-  // DEFAULT_MAP_ZOOM -> CAM_Z_DEFAULT; MapLibre zoom scales by powers of two,
-  // so mirror that ratio in Three.js camera distance instead of using a
-  // linear offset. This keeps Luxe Central View / region levels closer to
-  // the MapLibre globe while preserving the existing Luxe zoom limits.
-  return Math.max(
+  return cameraDistanceForZoom(
+    z,
+    DEFAULT_MAP_ZOOM,
+    CAM_Z_DEFAULT,
     CAM_Z_MIN,
-    Math.min(CAM_Z_MAX, CAM_Z_DEFAULT / 2 ** (z - DEFAULT_MAP_ZOOM)),
+    CAM_Z_MAX,
   );
 }
 
@@ -235,13 +254,40 @@ interface Engine {
   disposed: boolean;
   raf: number;
   rot: { x: number; y: number };
-  vel: { x: number; y: number };
-  drag: { x: number; y: number } | null;
+  drag: { x: number; y: number; samples: MotionSample[] } | null;
+  pinch: {
+    distance: number;
+    centerX: number;
+    centerY: number;
+  } | null;
+  inertia: {
+    startRot: { x: number; y: number };
+    targetRot: { x: number; y: number };
+    startAt: number;
+    durationMs: number;
+  } | null;
   // Cursor-anchored zoom (MapLibre parity): the globe-local surface point under
   // the pointer when a wheel zoom began (`local`) plus the canvas-space pixel it
   // must stay pinned to (`sx`,`sy`). Active until the camera distance settles.
   zoomAnchor: { local: THREE.Vector3; sx: number; sy: number } | null;
   camZ: number;
+  zoomTween: {
+    startZ: number;
+    targetZ: number;
+    startAt: number;
+    durationMs: number;
+  } | null;
+  wheelZoom: {
+    active: boolean;
+    type: WheelInputType | null;
+    pendingDelta: number;
+    lastValue: number;
+    lastEventAt: number;
+    classificationTimer: number | null;
+    startZoom: number | null;
+    targetZoom: number | null;
+    ease: WheelEaseState | null;
+  };
   W: number;
   H: number;
   geo: Feature<Geometry>[] | null;
@@ -275,6 +321,24 @@ interface Engine {
   _applyView?: (animated: boolean) => void;
 }
 
+function stopWheelZoom(eng: Engine, clearAnchor = true) {
+  if (eng.wheelZoom.classificationTimer !== null) {
+    window.clearTimeout(eng.wheelZoom.classificationTimer);
+  }
+  eng.wheelZoom = {
+    active: false,
+    type: null,
+    pendingDelta: 0,
+    lastValue: 0,
+    lastEventAt: 0,
+    classificationTimer: null,
+    startZoom: null,
+    targetZoom: null,
+    ease: null,
+  };
+  if (clearAnchor) eng.zoomAnchor = null;
+}
+
 function startRotationFrame(
   eng: Engine,
   target: { x: number; y: number },
@@ -288,10 +352,21 @@ function startRotationFrame(
   eng.frameDurationMs = durationMs;
   eng.frameEasing = easing;
   eng.framing = true;
-  eng.vel = { x: 0, y: 0 };
-  eng.zoomAnchor = null;
+  eng.inertia = null;
+  stopWheelZoom(eng);
   eng.pausedUntil = performance.now() + pauseMs;
   eng.lastAutoAt = null;
+}
+
+function startCameraZoom(eng: Engine, targetZ: number, durationMs: number) {
+  stopWheelZoom(eng);
+  eng.camZ = clamp(targetZ, CAM_Z_MIN, CAM_Z_MAX);
+  eng.zoomTween = {
+    startZ: eng.camera?.position.z ?? eng.camZ,
+    targetZ: eng.camZ,
+    startAt: performance.now(),
+    durationMs,
+  };
 }
 
 const TMP = new THREE.Vector3();
@@ -341,10 +416,23 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         disposed: false,
         raf: 0,
         rot: { ...rotForLatLng(DEFAULT_CENTER[1], DEFAULT_CENTER[0]) },
-        vel: { x: 0, y: 0 },
         drag: null,
+        pinch: null,
+        inertia: null,
         zoomAnchor: null,
         camZ: CAM_Z_DEFAULT,
+        zoomTween: null,
+        wheelZoom: {
+          active: false,
+          type: null,
+          pendingDelta: 0,
+          lastValue: 0,
+          lastEventAt: 0,
+          classificationTimer: null,
+          startZoom: null,
+          targetZoom: null,
+          ease: null,
+        },
         W: 4096,
         H: 2048,
         geo: null,
@@ -507,6 +595,10 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         eng.lastAutoAt = null;
       };
 
+      const startZoomTween = (targetZ: number, durationMs: number) => {
+        startCameraZoom(eng, targetZ, durationMs);
+      };
+
       const startFrame = (
         target: { x: number; y: number },
         durationMs: number,
@@ -516,21 +608,82 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
       };
 
       const bindControls = (dom: HTMLCanvasElement) => {
+        const touchGesture = (touches: TouchList) => {
+          const first = touches[0];
+          const second = touches[1];
+          return {
+            distance: Math.hypot(
+              second.clientX - first.clientX,
+              second.clientY - first.clientY,
+            ),
+            centerX: (first.clientX + second.clientX) / 2,
+            centerY: (first.clientY + second.clientY) / 2,
+          };
+        };
+
         const onDown = (e: MouseEvent | TouchEvent) => {
+          stopWheelZoom(eng);
+          if ("touches" in e && e.touches.length >= 2) {
+            eng.pinch = touchGesture(e.touches);
+            eng.drag = null;
+            eng.inertia = null;
+            eng.framing = false;
+            eng.zoomAnchor = null;
+            eng.lastAutoAt = null;
+            e.preventDefault();
+            return;
+          }
           const p = "touches" in e ? e.touches[0] : e;
-          eng.drag = { x: p.clientX, y: p.clientY };
-          eng.vel.y = 0;
-          eng.vel.x = 0;
+          eng.drag = { x: p.clientX, y: p.clientY, samples: [] };
+          eng.pinch = null;
+          eng.inertia = null;
           eng.framing = false;
           eng.zoomAnchor = null;
           eng.lastAutoAt = null;
           dom.style.cursor = "grabbing";
         };
         const onMove = (e: MouseEvent | TouchEvent) => {
+          if ("touches" in e && e.touches.length >= 2) {
+            const next = touchGesture(e.touches);
+            if (eng.pinch && eng.camera) {
+              const dx = next.centerX - eng.pinch.centerX;
+              const dy = next.centerY - eng.pinch.centerY;
+              const k = radiansPerPixel(
+                eng.camera.position.z,
+                eng.camera.fov * DEG,
+                eng.H,
+              );
+              eng.rot.y += dx * k;
+              eng.rot.x = clamp(eng.rot.x + dy * k, -1.3, 1.3);
+
+              if (eng.pinch.distance > 0 && next.distance > 0) {
+                const targetZoom = zoomForCameraDistance(
+                  eng.camZ,
+                  DEFAULT_MAP_ZOOM,
+                  CAM_Z_DEFAULT,
+                );
+                const zoomDelta = Math.log2(
+                  next.distance / eng.pinch.distance,
+                );
+                startZoomTween(
+                  camZForMapZoom(targetZoom + zoomDelta),
+                  0,
+                );
+              }
+            }
+            eng.pinch = next;
+            eng.drag = null;
+            pauseAuto(INTERACTION_IDLE_MS);
+            e.preventDefault();
+            return;
+          }
           if (!eng.drag) return;
           const p = "touches" in e ? e.touches[0] : e;
           const dx = p.clientX - eng.drag.x;
           const dy = p.clientY - eng.drag.y;
+          if (eng.drag.samples.length === 0 && Math.hypot(dx, dy) < 3) {
+            return;
+          }
           eng.drag.x = p.clientX;
           eng.drag.y = p.clientY;
           // Geographically-anchored drag (MapLibre parity): rotation-per-pixel
@@ -539,86 +692,150 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           // 0.0016*camZ ran roughly 2x hot, which is what made the globe feel
           // twitchy and quick to "fling". depth ≈ camZ − 1 = the near surface.
           const cam = eng.camera;
-          const depth = Math.max(0.1, eng.camZ - 1);
           const k = cam
-            ? ((2 * Math.tan((cam.fov * DEG) / 2)) / Math.max(1, eng.H)) * depth
+            ? radiansPerPixel(cam.position.z, cam.fov * DEG, eng.H)
             : 0.0016 * eng.camZ;
-          const ky = dx * k;
-          const kx = dy * k;
-          eng.rot.y += ky;
-          eng.rot.x = Math.max(-1.3, Math.min(1.3, eng.rot.x + kx));
+          eng.rot.y += dx * k;
+          eng.rot.x = clamp(eng.rot.x + dy * k, -1.3, 1.3);
           // Low-pass the inertia seed: blend recent motion rather than taking a
           // single frame's delta, so one fast frame can't fling the globe.
-          eng.vel.y = eng.vel.y * 0.6 + ky * 0.4;
-          eng.vel.x = eng.vel.x * 0.6 + kx * 0.4;
+          const now = performance.now();
+          eng.drag.samples.push({ x: dx, y: dy, time: now });
+          eng.drag.samples = trimMotionSamples(eng.drag.samples, now);
           e.preventDefault();
         };
-        const onUp = () => {
+        const onUp = (e?: MouseEvent | TouchEvent) => {
+          if (e && "touches" in e && e.touches.length === 1) {
+            const touch = e.touches[0];
+            eng.pinch = null;
+            eng.drag = {
+              x: touch.clientX,
+              y: touch.clientY,
+              samples: [],
+            };
+            pauseAuto(INTERACTION_IDLE_MS);
+            return;
+          }
           if (eng.drag) {
             // Bound the inertia so a flick can't send the globe spinning —
             // MapLibre's drag inertia is gentle and capped.
-            const cap = 0.045;
-            eng.vel.y = Math.max(-cap, Math.min(cap, eng.vel.y));
-            eng.vel.x = Math.max(-cap, Math.min(cap, eng.vel.x));
+            const inertia = calculatePanInertia(eng.drag.samples);
+            const cam = eng.camera;
+            if (inertia && cam) {
+              const k = radiansPerPixel(
+                cam.position.z,
+                cam.fov * DEG,
+                eng.H,
+              );
+              eng.inertia = {
+                startRot: { ...eng.rot },
+                targetRot: {
+                  x: clamp(eng.rot.x + inertia.y * k, -1.3, 1.3),
+                  y: eng.rot.y + inertia.x * k,
+                },
+                startAt: performance.now(),
+                durationMs: inertia.durationMs,
+              };
+            }
             pauseAuto(INTERACTION_IDLE_MS);
           }
           eng.drag = null;
+          eng.pinch = null;
           dom.style.cursor = "grab";
         };
-        const onWheel = (e: WheelEvent) => {
-          // Exponential (MapLibre-parity) zoom: a constant proportional step per
-          // wheel notch rather than a fixed camera-distance delta. deltaY > 0
-          // (scroll down) zooms out → camZ grows; deltaY < 0 zooms in → shrinks.
-          // Normalize across devices/OS (pixel vs line vs page) and clamp a
-          // single notch so a coarse mouse wheel can't teleport the zoom in big
-          // steps — that uneven jump is the "stepped / jagged" feel.
-          let delta = e.deltaY;
-          if (e.deltaMode === 1) delta *= 40; // DOM_DELTA_LINE → px
-          else if (e.deltaMode === 2) delta *= 800; // DOM_DELTA_PAGE → px
-          delta = Math.max(-100, Math.min(100, delta));
-          const factor = Math.pow(2, delta * WHEEL_ZOOM_RATE);
-          const newCamZ = Math.max(CAM_Z_MIN, Math.min(CAM_Z_MAX, eng.camZ * factor));
-
-          // Cursor-anchored zoom (MapLibre parity): raycast the pointer onto the
-          // sphere and remember the surface point + screen pixel under it. The
-          // animate loop then keeps that point pinned under the cursor while the
-          // camera distance eases, so we zoom toward the pointer — not the centre.
+        const captureWheelAnchor = (e: WheelEvent) => {
           const cam = eng.camera;
           const g = eng.group;
-          if (cam && g && newCamZ !== eng.camZ) {
-            const rect = dom.getBoundingClientRect();
-            NDC2.set(
-              ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
-              -((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1,
+          if (!cam || !g) return;
+          const rect = dom.getBoundingClientRect();
+          NDC2.set(
+            ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+            -((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1,
+          );
+          RAYCASTER.setFromCamera(NDC2, cam);
+          const o = RAYCASTER.ray.origin;
+          const d = RAYCASTER.ray.direction;
+          const ocx = o.x - g.position.x;
+          const ocy = o.y - g.position.y;
+          const ocz = o.z - g.position.z;
+          const b = ocx * d.x + ocy * d.y + ocz * d.z;
+          const c = ocx * ocx + ocy * ocy + ocz * ocz - 1;
+          const disc = b * b - c;
+          const t = disc >= 0 ? -b - Math.sqrt(disc) : -1;
+          if (t > 0) {
+            const hit = new THREE.Vector3(
+              o.x + d.x * t,
+              o.y + d.y * t,
+              o.z + d.z * t,
             );
-            RAYCASTER.setFromCamera(NDC2, cam);
-            const o = RAYCASTER.ray.origin;
-            const d = RAYCASTER.ray.direction;
-            const ocx = o.x - g.position.x;
-            const ocy = o.y - g.position.y;
-            const ocz = o.z - g.position.z;
-            const b = ocx * d.x + ocy * d.y + ocz * d.z;
-            const c = ocx * ocx + ocy * ocy + ocz * ocz - 1; // sphere r = 1
-            const disc = b * b - c;
-            const t = disc >= 0 ? -b - Math.sqrt(disc) : -1;
-            if (t > 0) {
-              const hit = new THREE.Vector3(
-                o.x + d.x * t,
-                o.y + d.y * t,
-                o.z + d.z * t,
-              );
-              eng.zoomAnchor = {
-                local: g.worldToLocal(hit),
-                sx: e.clientX - rect.left,
-                sy: e.clientY - rect.top,
-              };
-            } else {
-              // Pointer is off the globe — fall back to plain centred zoom.
-              eng.zoomAnchor = null;
-            }
+            eng.zoomAnchor = {
+              local: g.worldToLocal(hit),
+              sx: e.clientX - rect.left,
+              sy: e.clientY - rect.top,
+            };
+          } else {
+            eng.zoomAnchor = null;
+          }
+        };
+
+        const queueWheelDelta = (
+          delta: number,
+          type: WheelInputType,
+          eventAt: number,
+        ) => {
+          const wheel = eng.wheelZoom;
+          if (!wheel.active) {
+            const currentDistance = eng.camera?.position.z ?? eng.camZ;
+            const currentZoom = zoomForCameraDistance(
+              currentDistance,
+              DEFAULT_MAP_ZOOM,
+              CAM_Z_DEFAULT,
+            );
+            wheel.active = true;
+            wheel.startZoom = currentZoom;
+            wheel.targetZoom = currentZoom;
+            wheel.ease = null;
+            eng.zoomTween = null;
+          }
+          wheel.type = type;
+          wheel.pendingDelta += delta;
+          wheel.lastEventAt = eventAt;
+        };
+
+        const onWheel = (e: WheelEvent) => {
+          const now = performance.now();
+          const wheel = eng.wheelZoom;
+          const delta = normalizeWheelDelta(e);
+          const timeDelta = now - (wheel.lastEventAt || 0);
+
+          if (!wheel.active && wheel.classificationTimer === null) {
+            captureWheelAnchor(e);
           }
 
-          eng.camZ = newCamZ;
+          const type = classifyWheelInput(delta, timeDelta, wheel.type);
+          wheel.lastEventAt = now;
+
+          if (type === null) {
+            wheel.lastValue = delta;
+            if (wheel.classificationTimer !== null) {
+              window.clearTimeout(wheel.classificationTimer);
+            }
+            wheel.classificationTimer = window.setTimeout(() => {
+              wheel.classificationTimer = null;
+              queueWheelDelta(wheel.lastValue, "wheel", wheel.lastEventAt);
+              wheel.lastValue = 0;
+            }, WHEEL_CLASSIFICATION_DELAY_MS);
+          } else {
+            let resolvedDelta = delta;
+            if (wheel.classificationTimer !== null) {
+              window.clearTimeout(wheel.classificationTimer);
+              wheel.classificationTimer = null;
+              resolvedDelta += wheel.lastValue;
+              wheel.lastValue = 0;
+            }
+            queueWheelDelta(resolvedDelta, type, now);
+          }
+
           pauseAuto(INTERACTION_IDLE_MS);
           e.preventDefault();
         };
@@ -628,6 +845,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         dom.addEventListener("touchstart", onDown, { passive: false });
         window.addEventListener("touchmove", onMove, { passive: false });
         window.addEventListener("touchend", onUp);
+        window.addEventListener("touchcancel", onUp);
         dom.addEventListener("wheel", onWheel, { passive: false });
         eng.cleanup = () => {
           dom.removeEventListener("mousedown", onDown);
@@ -636,7 +854,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           dom.removeEventListener("touchstart", onDown);
           window.removeEventListener("touchmove", onMove);
           window.removeEventListener("touchend", onUp);
+          window.removeEventListener("touchcancel", onUp);
           dom.removeEventListener("wheel", onWheel);
+          stopWheelZoom(eng);
         };
       };
 
@@ -883,10 +1103,78 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         if (eng.disposed) return;
         eng.raf = requestAnimationFrame(animate);
         const now = performance.now();
+        const wheel = eng.wheelZoom;
+
+        if (eng.camera && wheel.active) {
+          if (wheel.pendingDelta !== 0 && wheel.type) {
+            const currentZoom = zoomForCameraDistance(
+              eng.camera.position.z,
+              DEFAULT_MAP_ZOOM,
+              CAM_Z_DEFAULT,
+            );
+            const baseTarget = wheel.targetZoom ?? currentZoom;
+            const targetDistance = camZForMapZoom(
+              baseTarget +
+                wheelDeltaToZoomDelta(wheel.pendingDelta, wheel.type),
+            );
+            wheel.targetZoom = zoomForCameraDistance(
+              targetDistance,
+              DEFAULT_MAP_ZOOM,
+              CAM_Z_DEFAULT,
+            );
+            eng.camZ = targetDistance;
+            wheel.pendingDelta = 0;
+
+            if (wheel.type === "wheel") {
+              wheel.startZoom = currentZoom;
+              wheel.ease = createContinuousWheelEasing(wheel.ease, now);
+            } else {
+              eng.camera.position.z = targetDistance;
+              wheel.startZoom = wheel.targetZoom;
+              wheel.ease = null;
+            }
+          }
+
+          if (
+            wheel.type === "wheel" &&
+            wheel.startZoom !== null &&
+            wheel.targetZoom !== null &&
+            wheel.ease
+          ) {
+            const t = Math.min(
+              1,
+              (now -
+                wheel.lastEventAt +
+                WHEEL_ZOOM_TIME_ADJUSTMENT_MS) /
+                WHEEL_ZOOM_EASE_MS,
+            );
+            const eased = wheel.ease.easing(t);
+            const zoom =
+              wheel.startZoom +
+              (wheel.targetZoom - wheel.startZoom) * eased;
+            eng.camera.position.z = camZForMapZoom(zoom);
+            if (
+              t >= 1 &&
+              now - wheel.lastEventAt >= WHEEL_ZOOM_EASE_MS + 16
+            ) {
+              stopWheelZoom(eng);
+            }
+          } else if (
+            wheel.type === "trackpad" &&
+            now - wheel.lastEventAt >= WHEEL_ZOOM_EASE_MS + 16
+          ) {
+            stopWheelZoom(eng);
+          }
+        }
+
         const renderingSuspended =
           eng.hardPaused &&
           !eng.drag &&
+          !eng.pinch &&
           !eng.framing &&
+          eng.inertia === null &&
+          eng.zoomTween === null &&
+          !eng.wheelZoom.active &&
           eng.zoomAnchor === null;
         if (renderingSuspended) {
           eng.lastAutoAt = null;
@@ -894,7 +1182,11 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         }
         const auto =
           !eng.drag &&
+          !eng.pinch &&
           !eng.framing &&
+          eng.inertia === null &&
+          eng.zoomTween === null &&
+          !eng.wheelZoom.active &&
           !eng.hardPaused &&
           !(
             propsRef.current.activeView === "global" &&
@@ -933,11 +1225,23 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             eng.rot.x = eng.targetRot.x;
             eng.framing = false;
           }
-        } else if (!eng.drag) {
-          eng.rot.y += eng.vel.y;
-          eng.rot.x = Math.max(-1.3, Math.min(1.3, eng.rot.x + eng.vel.x));
-          eng.vel.y *= 0.92;
-          eng.vel.x *= 0.92;
+        } else if (eng.inertia && !eng.drag) {
+          const t = Math.min(
+            1,
+            (now - eng.inertia.startAt) /
+              Math.max(1, eng.inertia.durationMs),
+          );
+          const eased = panInertiaEase(t);
+          eng.rot.y =
+            eng.inertia.startRot.y +
+            (eng.inertia.targetRot.y - eng.inertia.startRot.y) * eased;
+          eng.rot.x =
+            eng.inertia.startRot.x +
+            (eng.inertia.targetRot.x - eng.inertia.startRot.x) * eased;
+          if (t >= 1) {
+            eng.rot = { ...eng.inertia.targetRot };
+            eng.inertia = null;
+          }
         }
 
         if (eng.group) {
@@ -946,10 +1250,22 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           eng.offsetX += (eng.offsetXTarget - eng.offsetX) * 0.1;
           eng.group.position.x = eng.offsetX;
         }
-        if (eng.camera) {
-          // Slightly snappier zoom easing so button / wheel zoom responds with
-          // the same immediacy as the previous globe's 350ms eased zoom.
-          eng.camera.position.z += (eng.camZ - eng.camera.position.z) * 0.12;
+        if (eng.camera && eng.zoomTween) {
+          const t = Math.min(
+            1,
+            (now - eng.zoomTween.startAt) /
+              Math.max(1, eng.zoomTween.durationMs),
+          );
+          const eased = mapEase(t);
+          eng.camera.position.z =
+            eng.zoomTween.startZ +
+            (eng.zoomTween.targetZ - eng.zoomTween.startZ) * eased;
+          if (t >= 1) {
+            eng.camera.position.z = eng.zoomTween.targetZ;
+            eng.zoomTween = null;
+          }
+        } else if (eng.camera && !eng.wheelZoom.active) {
+          eng.camera.position.z = eng.camZ;
         }
 
         // Cursor-anchored zoom correction: nudge the globe each frame so the
@@ -980,7 +1296,9 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           g.rotation.y = eng.rot.y;
           g.rotation.x = eng.rot.x;
           // Done once the camera distance has reached the target.
-          if (Math.abs(cam.position.z - eng.camZ) < 0.004) eng.zoomAnchor = null;
+          if (eng.zoomTween === null && !eng.wheelZoom.active) {
+            eng.zoomAnchor = null;
+          }
         }
 
         eng.renderer!.render(eng.scene!, eng.camera!);
@@ -1009,6 +1327,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         tr.y = nearestAngle(tr.y, eng.rot.y);
         eng.camZ = camZForMapZoom(zoom);
         if (animated) {
+          startZoomTween(eng.camZ, VIEW_TRANSITION_MS);
           startFrame(
             tr,
             VIEW_TRANSITION_MS,
@@ -1268,9 +1587,10 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           const eng = engineRef.current;
           if (!eng) return;
           // camZ *= 2^(-0.75): same proportional step as MapLibre zoomTo(+0.75).
-          eng.camZ = Math.max(
-            CAM_Z_MIN,
-            Math.min(CAM_Z_MAX, eng.camZ * Math.pow(2, -MAP_ZOOM_STEP)),
+          startCameraZoom(
+            eng,
+            eng.camZ * Math.pow(2, -MAP_ZOOM_STEP),
+            BUTTON_ZOOM_ANIM_MS,
           );
           eng.pausedUntil = performance.now() + INTERACTION_IDLE_MS;
           eng.lastAutoAt = null;
@@ -1279,9 +1599,10 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           const eng = engineRef.current;
           if (!eng) return;
           // camZ *= 2^(+0.75): same proportional step as MapLibre zoomTo(-0.75).
-          eng.camZ = Math.max(
-            CAM_Z_MIN,
-            Math.min(CAM_Z_MAX, eng.camZ * Math.pow(2, MAP_ZOOM_STEP)),
+          startCameraZoom(
+            eng,
+            eng.camZ * Math.pow(2, MAP_ZOOM_STEP),
+            BUTTON_ZOOM_ANIM_MS,
           );
           eng.pausedUntil = performance.now() + INTERACTION_IDLE_MS;
           eng.lastAutoAt = null;
@@ -1305,7 +1626,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           if (!eng) return;
           const tr = rotForLatLng(DEFAULT_CENTER[1], DEFAULT_CENTER[0]);
           tr.y = nearestAngle(tr.y, eng.rot.y);
-          eng.camZ = CAM_Z_DEFAULT;
+          startCameraZoom(eng, CAM_Z_DEFAULT, CENTRAL_VIEW_ANIM_MS);
           startRotationFrame(
             eng,
             tr,
