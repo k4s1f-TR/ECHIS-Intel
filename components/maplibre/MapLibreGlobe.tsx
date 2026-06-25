@@ -16,6 +16,7 @@ import {
   OSM_VECTOR_SOURCE_ID,
   USE_ECHIS_OSM_BASEMAP,
 } from "@/components/map/styles/echisOsmGlobeStyle";
+import { GlobeLoadingAnimation } from "@/components/map/GlobeLoadingAnimation";
 import type { RegionKey } from "@/types/event";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,7 @@ interface MapLibreGlobeProps {
   globalMarkers?: MarkerFeature[];
   signalsMarkers?: MarkerFeature[];
   globalMarkersLoading?: boolean;
+  onReady?: () => void;
   /** Called when the user clicks a marker.  `kind` identifies which layer
    *  fired so the parent can route to the correct panel. */
   onMarkerClick?: (
@@ -1210,6 +1212,7 @@ const DEFAULT_VIEW_COUNTRIES = [
 ];
 
 type LoadState = "loading" | "ready" | "error";
+const MAPLIBRE_LOADING_ANIMATION_ENABLED = true;
 
 // ---------------------------------------------------------------------------
 // Dark tone pass — categorises every layer in the loaded style by its id and
@@ -1528,6 +1531,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       globalMarkers,
       signalsMarkers,
       globalMarkersLoading = false,
+      onReady,
       onMarkerClick,
       autoRotatePaused = false,
       onGlobalMarkerRevealStart,
@@ -1572,6 +1576,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     useEffect(() => {
       onGlobalMarkerRevealStartRef.current = onGlobalMarkerRevealStart;
     }, [onGlobalMarkerRevealStart]);
+
+    const onReadyRef = useRef(onReady);
+    useEffect(() => {
+      onReadyRef.current = onReady;
+    }, [onReady]);
 
     useEffect(() => {
       selectedGlobalIdRef.current = selectedGlobalId;
@@ -1821,6 +1830,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         if (resolved) return;
         resolved = true;
         setLoadState("ready");
+        onReadyRef.current?.();
       };
 
       // ── Style load → projection + dark tuning ────────────────────────────
@@ -2393,23 +2403,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           }}
         />
 
-        {loadState === "loading" && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#6b7a90",
-              fontSize: 13,
-              letterSpacing: 0.4,
-              background: ACTIVE_PANEL_BG,
-              pointerEvents: "none",
-            }}
-          >
-            Loading MapLibre globe…
-          </div>
+        {MAPLIBRE_LOADING_ANIMATION_ENABLED && (
+          <GlobeLoadingAnimation visible={loadState === "loading"} />
         )}
 
         {loadState === "error" && (

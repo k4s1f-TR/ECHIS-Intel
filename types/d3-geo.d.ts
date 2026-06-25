@@ -7,6 +7,8 @@ declare module "d3-geo" {
     translate(translate: [number, number]): GeoProjection;
     center(): [number, number];
     center(center: [number, number]): GeoProjection;
+    clipAngle(angle: number): GeoProjection;
+    rotate(rotation: [number, number, number?]): GeoProjection;
     fitExtent(
       extent: [[number, number], [number, number]],
       object: unknown,
@@ -18,4 +20,15 @@ declare module "d3-geo" {
   export function geoEquirectangular(): GeoProjection;
   export function geoMercator(): GeoProjection;
   export function geoNaturalEarth1(): GeoProjection;
+  export function geoOrthographic(): GeoProjection;
+  export function geoGraticule10(): unknown;
+
+  export interface GeoPath {
+    (object: unknown): string | null;
+  }
+
+  export function geoPath(
+    projection: GeoProjection,
+    context: CanvasRenderingContext2D,
+  ): GeoPath;
 }

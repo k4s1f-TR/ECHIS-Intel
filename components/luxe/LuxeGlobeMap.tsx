@@ -883,6 +883,15 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         if (eng.disposed) return;
         eng.raf = requestAnimationFrame(animate);
         const now = performance.now();
+        const renderingSuspended =
+          eng.hardPaused &&
+          !eng.drag &&
+          !eng.framing &&
+          eng.zoomAnchor === null;
+        if (renderingSuspended) {
+          eng.lastAutoAt = null;
+          return;
+        }
         const auto =
           !eng.drag &&
           !eng.framing &&

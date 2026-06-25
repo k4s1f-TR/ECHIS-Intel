@@ -52,6 +52,7 @@ type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
 type MapSystem = "luxe" | "maplibre";
+const DEFAULT_MAP_SYSTEM: MapSystem = "maplibre";
 
 const MAP_SYSTEM_OPTIONS = [
   { key: "luxe", label: "Luxe", title: "Use Luxe globe", icon: Globe2 },
@@ -171,14 +172,19 @@ function filterSourceMarkerItems(
 }
 
 export function AppShell() {
-  const globeMapRef = useRef<MapLibreGlobeHandle | null>(null);
+  const luxeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
+  const mapLibreGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [eventDetailOpen, setEventDetailOpen] = useState(false);
   const [markerPopup, setMarkerPopup] = useState<MarkerPopupState>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);
-  const [mapSystem, setMapSystem] = useState<MapSystem>("luxe");
+  const [mapSystem, setMapSystem] = useState<MapSystem>(DEFAULT_MAP_SYSTEM);
+  const [mapLibreReady, setMapLibreReady] = useState(false);
+  const [shouldMountLuxe, setShouldMountLuxe] = useState(
+    DEFAULT_MAP_SYSTEM === "luxe",
+  );
   const [activeView, setActiveView] = useState<ViewMode>("situation");
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
   const [activeCategory, setActiveCategory] = useState<EventCategory | "all">("all");
@@ -195,6 +201,39 @@ export function AppShell() {
     useState(ALL_SOURCES_FILTER);
   const [monitorCardCollapsed, setMonitorCardCollapsed] = useState(false);
   const [sourceFilterCollapsed, setSourceFilterCollapsed] = useState(false);
+  const getActiveGlobe = useCallback(
+    () =>
+      mapSystem === "luxe"
+        ? luxeGlobeRef.current
+        : mapLibreGlobeRef.current,
+    [mapSystem],
+  );
+
+  useEffect(() => {
+    if (!mapLibreReady || shouldMountLuxe) return;
+
+    let idleId: number | null = null;
+    const delayId = window.setTimeout(() => {
+      const requestIdle = window.requestIdleCallback;
+      if (requestIdle) {
+        idleId = requestIdle(() => setShouldMountLuxe(true), {
+          timeout: 5000,
+        });
+        return;
+      }
+      setShouldMountLuxe(true);
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(delayId);
+      if (idleId !== null) window.cancelIdleCallback?.(idleId);
+    };
+  }, [mapLibreReady, shouldMountLuxe]);
+
+  const handleMapSystemChange = useCallback((next: MapSystem) => {
+    if (next === "luxe") setShouldMountLuxe(true);
+    setMapSystem(next);
+  }, []);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);
 
@@ -293,16 +332,16 @@ export function AppShell() {
     if (!selectedId || activeRailModeRef.current !== "global") return;
     const event = mockEvents.find((e) => e.id === selectedId);
     if (!event?.coordinates) return;
-    globeMapRef.current?.focusMarker(event.coordinates.lng, event.coordinates.lat);
-  }, [selectedId]);
+    getActiveGlobe()?.focusMarker(event.coordinates.lng, event.coordinates.lat);
+  }, [getActiveGlobe, selectedId]);
 
   // When a SOCMINT report is selected, pan to its marker coordinates.
   useEffect(() => {
     if (!selectedSignalId || activeRailModeRef.current !== "signals") return;
     const report = socmintReports.find((r) => r.id === selectedSignalId);
     if (!report?.coordinates) return;
-    globeMapRef.current?.focusMarker(report.coordinates[0], report.coordinates[1]);
-  }, [selectedSignalId]);
+    getActiveGlobe()?.focusMarker(report.coordinates[0], report.coordinates[1]);
+  }, [getActiveGlobe, selectedSignalId]);
 
 
   const displayedSignals = useMemo(
@@ -569,7 +608,7 @@ export function AppShell() {
       if (!currentBelongs) {
         setSelectedSourceItemId(sourceMarker.items[0]?.id ?? null);
       }
-      globeMapRef.current?.focusMarker(sourceMarker.lng, sourceMarker.lat);
+      getActiveGlobe()?.focusMarker(sourceMarker.lng, sourceMarker.lat);
     }
   }
 
@@ -605,7 +644,7 @@ export function AppShell() {
   const getMarkerPopupPosition = useCallback(() => {
     if (markerPopup?.kind === "global" && markerPopupEvent?.coordinates) {
       return (
-        globeMapRef.current?.projectMarker(
+        getActiveGlobe()?.projectMarker(
           markerPopupEvent.coordinates.lng,
           markerPopupEvent.coordinates.lat,
         ) ?? null
@@ -614,7 +653,7 @@ export function AppShell() {
     // Source marker: use pipeline-resolved coordinates directly.
     if (markerPopup?.kind === "global" && markerPopupSourceMarker) {
       return (
-        globeMapRef.current?.projectMarker(
+        getActiveGlobe()?.projectMarker(
           markerPopupSourceMarker.lng,
           markerPopupSourceMarker.lat,
         ) ?? null
@@ -622,14 +661,20 @@ export function AppShell() {
     }
     if (markerPopup?.kind === "signals" && markerPopupSignal?.coordinates) {
       return (
-        globeMapRef.current?.projectMarker(
+        getActiveGlobe()?.projectMarker(
           markerPopupSignal.coordinates[0],
           markerPopupSignal.coordinates[1],
         ) ?? null
       );
     }
     return null;
-  }, [markerPopup, markerPopupEvent, markerPopupSourceMarker, markerPopupSignal]);
+  }, [
+    getActiveGlobe,
+    markerPopup,
+    markerPopupEvent,
+    markerPopupSourceMarker,
+    markerPopupSignal,
+  ]);
 
   return (
     <div
@@ -659,42 +704,66 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            {mapSystem === "luxe" ? (
-              <LuxeGlobeMap
-                ref={globeMapRef}
-                activeView={globeView}
-                activeRegion={globeRegion}
-                activeSignalsRegion={globeSignalsRegion}
-                globalMarkers={globalMarkers}
-                signalsMarkers={signalsMarkers}
-                globalMarkersLoading={globalMarkersLoading}
-                selectedGlobalId={selectedId}
-                selectedSignalsId={selectedSignalId}
-                onMarkerClick={(id, kind) => {
-                  if (kind === "global") handleGlobalMarkerSelect(id);
-                  else if (kind === "signals") handleSignalMarkerSelect(id);
+            {shouldMountLuxe && (
+              <div
+                className="absolute inset-0"
+                aria-hidden={mapSystem !== "luxe"}
+                style={{
+                  zIndex: mapSystem === "luxe" ? 2 : 1,
+                  opacity: mapSystem === "luxe" ? 1 : 0,
+                  pointerEvents: mapSystem === "luxe" ? "auto" : "none",
+                  transition: "opacity 180ms ease",
                 }}
-              />
-            ) : (
-              <MapLibreGlobe
-                ref={globeMapRef}
-                activeView={globeView}
-                activeRegion={globeRegion}
-                activeSignalsRegion={globeSignalsRegion}
-                globalMarkers={globalMarkers}
-                signalsMarkers={signalsMarkers}
-                globalMarkersLoading={globalMarkersLoading}
-                selectedGlobalId={selectedId}
-                selectedSignalsId={selectedSignalId}
-                onMarkerClick={(id, kind) => {
-                  if (kind === "global") handleGlobalMarkerSelect(id);
-                  else if (kind === "signals") handleSignalMarkerSelect(id);
-                }}
-              />
+              >
+                <LuxeGlobeMap
+                  ref={luxeGlobeRef}
+                  activeView={globeView}
+                  activeRegion={globeRegion}
+                  activeSignalsRegion={globeSignalsRegion}
+                  globalMarkers={globalMarkers}
+                  signalsMarkers={signalsMarkers}
+                  globalMarkersLoading={globalMarkersLoading}
+                  autoRotatePaused={mapSystem !== "luxe" || !isMapScreen}
+                  selectedGlobalId={selectedId}
+                  selectedSignalsId={selectedSignalId}
+                  onMarkerClick={(id, kind) => {
+                    if (kind === "global") handleGlobalMarkerSelect(id);
+                    else if (kind === "signals") handleSignalMarkerSelect(id);
+                  }}
+                />
+              </div>
             )}
+            <div
+              className="absolute inset-0"
+              aria-hidden={mapSystem !== "maplibre"}
+              style={{
+                zIndex: mapSystem === "maplibre" ? 2 : 1,
+                opacity: mapSystem === "maplibre" ? 1 : 0,
+                pointerEvents: mapSystem === "maplibre" ? "auto" : "none",
+                transition: "opacity 180ms ease",
+              }}
+            >
+              <MapLibreGlobe
+                ref={mapLibreGlobeRef}
+                activeView={globeView}
+                activeRegion={globeRegion}
+                activeSignalsRegion={globeSignalsRegion}
+                globalMarkers={globalMarkers}
+                signalsMarkers={signalsMarkers}
+                globalMarkersLoading={globalMarkersLoading}
+                autoRotatePaused={mapSystem !== "maplibre" || !isMapScreen}
+                onReady={() => setMapLibreReady(true)}
+                selectedGlobalId={selectedId}
+                selectedSignalsId={selectedSignalId}
+                onMarkerClick={(id, kind) => {
+                  if (kind === "global") handleGlobalMarkerSelect(id);
+                  else if (kind === "signals") handleSignalMarkerSelect(id);
+                }}
+              />
+            </div>
             <MapSystemSwitch
               value={mapSystem}
-              onChange={setMapSystem}
+              onChange={handleMapSystemChange}
               dockedToPanel={activeMapRailMode !== null}
             />
             <div
@@ -764,9 +833,9 @@ export function AppShell() {
               )}
             </div>
             <MapControls
-              onCenterView={() => globeMapRef.current?.centerView()}
-              onZoomIn={() => globeMapRef.current?.zoomIn()}
-              onZoomOut={() => globeMapRef.current?.zoomOut()}
+              onCenterView={() => getActiveGlobe()?.centerView()}
+              onZoomIn={() => getActiveGlobe()?.zoomIn()}
+              onZoomOut={() => getActiveGlobe()?.zoomOut()}
               panelOffset={mapControlPanelOffset}
             />
             {activeMapRailMode !== null && (
@@ -780,6 +849,7 @@ export function AppShell() {
                 right: "14px",
                 bottom: "10px",
                 width: "372px",
+                zIndex: 14,
                 transform:
                   activeMapRailMode === "global"
                     ? "translateX(0)"
@@ -809,7 +879,7 @@ export function AppShell() {
                         setSelectedId(entry.markerId);
                         setEventDetailOpen(false);
                         setMarkerPopup({ kind: "global", id: entry.markerId });
-                        globeMapRef.current?.focusMarker(
+                        getActiveGlobe()?.focusMarker(
                           grouped.lng,
                           grouped.lat,
                         );
@@ -872,6 +942,7 @@ export function AppShell() {
                 right: "14px",
                 bottom: "10px",
                 width: "372px",
+                zIndex: 14,
                 transform: activeMapRailMode === "signals" ? "translateX(0)" : "translateX(calc(100% + 14px))",
                 opacity: activeMapRailMode === "signals" ? 1 : 0,
                 transition: "transform 180ms ease, opacity 120ms ease",
