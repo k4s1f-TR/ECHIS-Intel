@@ -1,21 +1,9 @@
 "use client";
 
-import {
-  Activity,
-  AlertTriangle,
-  Database,
-  ExternalLink,
-  MapPin,
-  Radio,
-  RefreshCw,
-  ShieldCheck,
-} from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSourceIntelligenceStore } from "@/components/source-intelligence/SourceIntelligenceProvider";
-import { sourceRegistry } from "@/data/source-intelligence/sourceRegistry";
 import type {
   CollectionMethod,
-  IntelligenceEventCandidate,
   SourceDefinition,
   SourceStatus,
   SourceType,
@@ -51,47 +39,70 @@ const STATUS_LABELS: Record<SourceStatus, string> = {
   disabled: "Disabled",
 };
 
-const STATUS_STYLES: Record<
-  SourceStatus,
-  { color: string; background: string; border: string }
+// Collection methods in display order (matches METHOD_LABELS key order).
+const METHODS: CollectionMethod[] = [
+  "rss",
+  "api",
+  "aggregator_api",
+  "official_page",
+  "scraping",
+  "script_import",
+  "dataset",
+];
+
+const CONFIGS: SourceStatus[] = ["active", "test", "candidate", "disabled"];
+
+type RuntimeState = "ok" | "warn" | "error" | "idle";
+
+const RUNTIME_STYLES: Record<
+  RuntimeState,
+  { dot: string; bg: string; border: string; text: string; label: string }
 > = {
-  active: {
-    color: "var(--c-elev)",
-    background: "var(--c-elev-bg)",
-    border: "var(--c-elev-border)",
+  ok: {
+    dot: "#34d399",
+    bg: "rgba(52,211,153,0.10)",
+    border: "rgba(52,211,153,0.28)",
+    text: "rgba(52,211,153,0.95)",
+    label: "OK",
   },
-  test: {
-    color: "rgba(251,191,36,0.94)",
-    background: "rgba(113,63,18,0.17)",
-    border: "rgba(251,191,36,0.22)",
+  warn: {
+    dot: "#fbbf24",
+    bg: "rgba(251,191,36,0.10)",
+    border: "rgba(251,191,36,0.28)",
+    text: "rgba(251,191,36,0.95)",
+    label: "WARN",
   },
-  candidate: {
-    color: "var(--c-t3)",
-    background: "rgba(184,190,202,0.07)",
-    border: "rgba(184,190,202,0.18)",
+  error: {
+    dot: "#ff2b3d",
+    bg: "rgba(225,40,52,0.10)",
+    border: "rgba(240,64,76,0.32)",
+    text: "rgba(255,86,96,0.95)",
+    label: "ERROR",
   },
-  disabled: {
-    color: "var(--c-t5)",
-    background: "rgba(255,255,255,0.035)",
-    border: "var(--c-border-1)",
+  idle: {
+    dot: "rgba(176,184,196,0.7)",
+    bg: "rgba(255,255,255,0.03)",
+    border: "rgba(255,255,255,0.08)",
+    text: "rgba(176,184,196,0.82)",
+    label: "IDLE",
   },
 };
+
+// UI uses the app font (Hanken Grotesk via --font-ui); mono cells, eyebrows,
+// counts and timestamps use the app mono font (JetBrains Mono via --font-mono).
+const FONT = {
+  ui: 'var(--font-ui), "Hanken Grotesk", system-ui, sans-serif',
+  mono: 'var(--font-mono), "JetBrains Mono", ui-monospace, monospace',
+};
+
+const ACCENT = "#ff2b3d";
+const ACCENT_TEXT = "rgba(255,86,96,1)";
+const ACCENT_BORDER = "rgba(255,72,84,0.42)";
 
 function labelFor(value: string): string {
   return value
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatCollectedAt(iso?: string): string {
-  if (!iso) return "Not loaded";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "Not loaded";
-  return `${date.toISOString().replace("T", " ").slice(0, 16)} UTC`;
-}
-
-function formatCheckTime(collectedAt?: string, requestedAt?: string): string {
-  return formatCollectedAt(collectedAt ?? requestedAt);
 }
 
 function formatSourceError(error?: string | null): string | null {
@@ -142,551 +153,489 @@ function formatSourceError(error?: string | null): string | null {
   return labelFor(error);
 }
 
-function Pill({
-  children,
-  tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: "neutral" | "blue" | "green" | "amber";
-}) {
-  const styles = {
-    neutral: {
-      color: "var(--c-t3)",
-      background: "var(--bg-surface)",
-      border: "var(--border-primary)",
-    },
-    blue: {
-      color: "var(--accent-blue-text)",
-      background: "var(--accent-blue-bg)",
-      border: "var(--accent-blue-border)",
-    },
-    green: {
-      color: "var(--c-elev)",
-      background: "var(--accent-green-bg)",
-      border: "var(--accent-green-border)",
-    },
-    amber: {
-      color: "rgba(251,191,36,0.9)",
-      background: "rgba(113,63,18,0.14)",
-      border: "rgba(251,191,36,0.2)",
-    },
-  }[tone];
+// HTTP-ish status code parsed out of the runtime error code, when present.
+function statusCodeFor(error?: string | null): string {
+  if (!error) return "—";
+  const match = error.match(/(\d{3})/);
+  return match ? match[1] : "—";
+}
 
+function regionOf(source: SourceDefinition): string {
   return (
-    <span
-      className="inline-flex min-w-0 items-center rounded px-2 py-1 font-semibold uppercase"
-      style={{
-        color: styles.color,
-        background: styles.background,
-        border: `1px solid ${styles.border}`,
-        fontSize: "var(--fs-xs)",
-        letterSpacing: "0.08em",
-        lineHeight: 1,
-      }}
-    >
-      <span className="truncate">{children}</span>
-    </span>
-  );
-}
-
-function StatusPill({ status }: { status: SourceStatus }) {
-  const style = STATUS_STYLES[status];
-  return (
-    <span
-      className="inline-flex items-center rounded px-2 py-1 font-semibold uppercase"
-      style={{
-        color: style.color,
-        background: style.background,
-        border: `1px solid ${style.border}`,
-        fontSize: "var(--fs-xs)",
-        letterSpacing: "0.08em",
-        lineHeight: 1,
-      }}
-    >
-      {STATUS_LABELS[status]}
-    </span>
-  );
-}
-
-function RuntimeStatePill({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: "blue" | "green" | "amber" | "red" | "neutral";
-}) {
-  const styles = {
-    blue: {
-      color: "var(--accent-blue-text)",
-      background: "var(--accent-blue-bg)",
-      border: "var(--accent-blue-border)",
-    },
-    green: {
-      color: "var(--c-elev)",
-      background: "var(--accent-green-bg)",
-      border: "var(--accent-green-border)",
-    },
-    amber: {
-      color: "rgba(251,191,36,0.9)",
-      background: "rgba(113,63,18,0.14)",
-      border: "rgba(251,191,36,0.22)",
-    },
-    red: {
-      color: "rgba(252,165,165,0.9)",
-      background: "rgba(127,29,29,0.12)",
-      border: "rgba(248,113,113,0.18)",
-    },
-    neutral: {
-      color: "var(--c-t4)",
-      background: "var(--bg-surface)",
-      border: "rgba(255,255,255,0.06)",
-    },
-  }[tone];
-
-  return (
-    <span
-      className="inline-flex items-center rounded px-2 py-1 font-semibold uppercase"
-      style={{
-        color: styles.color,
-        background: styles.background,
-        border: `1px solid ${styles.border}`,
-        fontSize: "var(--fs-xs)",
-        letterSpacing: "0.08em",
-        lineHeight: 1,
-      }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function MetricTile({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number | string;
-  tone: string;
-}) {
-  return (
-    <div
-      className="min-w-0 rounded-md px-3 py-2.5"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--c-border-1)",
-        boxShadow: "var(--shadow-inset-highlight)",
-      }}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <span
-          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded"
-          style={{
-            color: tone,
-            background: "var(--bg-surface-hover)",
-            border: "1px solid var(--border-dim)",
-          }}
-        >
-          {icon}
-        </span>
-        <span
-          className="truncate font-semibold uppercase"
-          style={{
-            color: "var(--text-tertiary)",
-            fontSize: "var(--fs-xs)",
-            letterSpacing: "0.08em",
-          }}
-        >
-          {label}
-        </span>
-      </div>
-      <div
-        className="truncate font-semibold"
-        style={{ color: "var(--text-heading)", fontSize: "20px", lineHeight: 1 }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <div
-        className="mb-1 truncate font-semibold uppercase"
-        style={{
-          color: "var(--text-dim)",
-          fontSize: "var(--fs-xs)",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        className="min-w-0 truncate"
-        style={{
-          color: "var(--text-body)",
-          fontSize: "var(--fs-md)",
-          lineHeight: 1.35,
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function compactList(values?: string[]): string | undefined {
-  if (!values || values.length === 0) return undefined;
-  return values.slice(0, 4).join(", ") + (values.length > 4 ? ` +${values.length - 4}` : "");
-}
-
-function NeedsLocationReview({
-  items,
-}: {
-  items: IntelligenceEventCandidate[];
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <section
-      className="flex flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-primary)",
-      }}
-    >
-      <div
-        className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-        style={{ borderBottom: "1px solid var(--border-dim)" }}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <AlertTriangle size={12} style={{ color: "rgba(248,113,113,0.78)" }} />
-          <span
-            className="truncate font-semibold uppercase"
-            style={{
-              color: "var(--text-secondary)",
-              fontSize: "var(--fs-sm)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            Needs Location Review
-          </span>
-        </div>
-        <Pill tone="amber">{items.length} feed-only until resolved</Pill>
-      </div>
-
-      <div className="max-h-[360px] overflow-y-auto">
-        {items.map((item) => {
-          const evidence = item.geoBasis?.evidenceDetails ?? [];
-          const mentioned = compactList(item.item.mentionedCountries);
-          const regions = compactList(item.item.mentionedRegions);
-          const persons = compactList(item.item.persons);
-          const institutions = compactList(item.item.institutions);
-
-          return (
-            <article
-              key={item.id}
-              className="px-4 py-3"
-              style={{ borderTop: "1px solid var(--border-subtle)" }}
-            >
-              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                    <Pill tone="amber">{labelFor(item.primaryDomain)}</Pill>
-                    <Pill>{item.sourceName}</Pill>
-                    <Pill>{labelFor(item.sourceBasis)}</Pill>
-                  </div>
-                  <div
-                    className="line-clamp-2 font-semibold"
-                    style={{
-                      color: "var(--text-heading)",
-                      fontSize: "12.5px",
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {item.title}
-                  </div>
-                </div>
-                {item.url && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded"
-                    title="Open original source"
-                    style={{
-                      color: "var(--text-secondary)",
-                      background: "var(--bg-surface-hover)",
-                      border: "1px solid var(--border-primary)",
-                    }}
-                  >
-                    <ExternalLink size={12} />
-                  </a>
-                )}
-              </div>
-
-              <div className="mt-2 grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4">
-                <Field label="Mentioned Countries">{mentioned ?? "None extracted"}</Field>
-                <Field label="Regions">{regions ?? "None extracted"}</Field>
-                <Field label="Persons">{persons ?? "None extracted"}</Field>
-                <Field label="Institutions">{institutions ?? "None extracted"}</Field>
-              </div>
-
-              <div className="mt-2">
-                <Field label="Geo Decision">
-                  {evidence.length > 0 ? (
-                    <span className="flex min-w-0 flex-wrap gap-1">
-                      {evidence.slice(0, 4).map((entry, index) => (
-                        <Pill
-                          key={`${entry.method}-${entry.evidenceText}-${index}`}
-                          tone={entry.acceptedForMarker ? "green" : "amber"}
-                        >
-                          {labelFor(entry.role)} / {labelFor(entry.method)}
-                          {entry.rejectionReason
-                            ? ` / ${labelFor(entry.rejectionReason)}`
-                            : ""}
-                        </Pill>
-                      ))}
-                      {evidence.length > 4 && <Pill>+{evidence.length - 4}</Pill>}
-                    </span>
-                  ) : (
-                    "No marker-grade geo evidence extracted"
-                  )}
-                </Field>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function SourceRow({
-  source,
-  itemCount,
-  acceptedCount,
-  markerCount,
-  domainLabels,
-  matchedDomainLabels,
-  collectedAt,
-  requestedAt,
-  error,
-  isLoading,
-  onRefresh,
-}: {
-  source: SourceDefinition;
-  itemCount: number;
-  acceptedCount: number;
-  markerCount: number;
-  domainLabels: string[];
-  matchedDomainLabels: string[];
-  collectedAt?: string;
-  requestedAt?: string;
-  error?: string | null;
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  const status = source.sourceStatus ?? "candidate";
-  const readableError = formatSourceError(error);
-  const sourceHref = source.feedUrl ?? source.endpoint;
-  const canLoad = status !== "disabled" && Boolean(source.endpoint);
-  const buttonLabel = isLoading
-    ? "Loading"
-    : itemCount > 0 || collectedAt || readableError
-      ? "Refresh"
-      : "Load";
-  const hasBeenChecked = Boolean(collectedAt || requestedAt || readableError);
-  const runtimeState = isLoading
-    ? { label: "Loading", tone: "blue" as const }
-    : readableError
-      ? { label: "Error", tone: "red" as const }
-      : acceptedCount > 0
-        ? { label: "Accepted", tone: "green" as const }
-        : itemCount > 0
-          ? { label: "Filtered Out", tone: "amber" as const }
-          : hasBeenChecked
-            ? { label: "No Items", tone: "neutral" as const }
-            : { label: "Not Loaded", tone: "neutral" as const };
-  const locationLabel =
     source.institutionLocation?.label ??
     source.institutionLocation?.city ??
     source.countryCode ??
-    "Location pending";
+    ""
+  );
+}
 
+function fmtAgo(mins: number | null): string {
+  if (mins == null) return "—";
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+type SortKey =
+  | "name"
+  | "type"
+  | "method"
+  | "items"
+  | "accepted"
+  | "markers"
+  | "lastCheck"
+  | "runtime";
+type SortDir = "asc" | "desc";
+
+type Tab = "all" | "errors" | "needsLocation" | "test";
+
+type Row = {
+  source: SourceDefinition;
+  status: SourceStatus;
+  region: string;
+  items: number;
+  accepted: number;
+  markers: number;
+  domains: string[];
+  lastCheckMins: number | null;
+  runtime: RuntimeState;
+  errorText: string | null;
+  rawError: string | null;
+  loading: boolean;
+};
+
+const COLS: { key: SortKey; label: string; align: "flex-start" | "flex-end" }[] =
+  [
+    { key: "name", label: "Source", align: "flex-start" },
+    { key: "type", label: "Type", align: "flex-start" },
+    { key: "method", label: "Method", align: "flex-start" },
+    { key: "items", label: "Items", align: "flex-end" },
+    { key: "accepted", label: "Accepted", align: "flex-end" },
+    { key: "markers", label: "Markers", align: "flex-end" },
+    { key: "lastCheck", label: "Last Check", align: "flex-start" },
+    { key: "runtime", label: "Runtime", align: "flex-start" },
+  ];
+
+const GRID_COLS = "34px 2fr 1fr 0.95fr 0.7fr 0.7fr 0.7fr 1fr 1.2fr 86px";
+
+// ─── small components ───
+function KpiTile({
+  label,
+  value,
+  sub,
+  color,
+}: {
+  label: string;
+  value: number | string;
+  sub: string;
+  color: string;
+}) {
   return (
-    <article
-      className="px-4 py-3.5 transition-colors duration-150"
+    <div
       style={{
-        background: "rgba(255,255,255,0.008)",
-        borderTop: "1px solid var(--border-subtle)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        padding: "0 0 0 12px",
+        borderLeft: "1px solid var(--border-dim)",
       }}
     >
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
-            <h2
-              className="min-w-0 truncate font-semibold"
-              style={{ color: "var(--text-heading)", fontSize: "13.5px" }}
-            >
-              {source.name}
-            </h2>
-            <StatusPill status={status} />
-            <RuntimeStatePill
-              label={runtimeState.label}
-              tone={runtimeState.tone}
-            />
-            <Pill tone="blue">{METHOD_LABELS[source.collectionMethod]}</Pill>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Pill>{TYPE_LABELS[source.sourceType]}</Pill>
-            {source.language && <Pill>{source.language.toUpperCase()}</Pill>}
-            <Pill>{source.markerLocationStrategy ?? "none"}</Pill>
-          </div>
-        </div>
+      <span
+        style={{
+          fontFamily: FONT.mono,
+          fontSize: 8.5,
+          letterSpacing: ".16em",
+          textTransform: "uppercase",
+          color: "var(--c-t5)",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{ fontFamily: FONT.mono, fontSize: 21, fontWeight: 600, color, lineHeight: 1.1 }}
+      >
+        {value}
+      </span>
+      <span style={{ fontFamily: FONT.mono, fontSize: 9, color: "var(--c-t4)" }}>{sub}</span>
+    </div>
+  );
+}
 
-        <div className="flex flex-shrink-0 items-center gap-2 sm:justify-end">
-          {sourceHref && (
-            <a
-              aria-label={`Open ${source.name}`}
-              className="flex h-8 w-8 items-center justify-center rounded transition-colors"
-              href={sourceHref}
-              target="_blank"
-              rel="noreferrer"
-              title="Open source endpoint"
-              style={{
-                color: "var(--text-secondary)",
-                background: "var(--bg-surface-hover)",
-                border: "1px solid var(--border-primary)",
-              }}
-            >
-              <ExternalLink size={14} />
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={!canLoad || isLoading}
-            className="inline-flex h-8 w-[104px] items-center justify-center gap-1.5 rounded font-semibold uppercase transition-colors"
-            title={canLoad ? "Load source feed" : "No runtime route"}
-            style={{
-              color:
-                !canLoad || isLoading
-                  ? "rgba(145,155,170,0.62)"
-                  : "var(--c-t1)",
-              background:
-                !canLoad || isLoading
-                  ? "var(--bg-surface)"
-                  : "var(--accent-blue-bg)",
-              border:
-                !canLoad || isLoading
-                  ? "1px solid rgba(255,255,255,0.06)"
-                  : "1px solid var(--accent-blue-border)",
-              cursor: !canLoad || isLoading ? "not-allowed" : "pointer",
-              fontSize: "var(--fs-sm)",
-              letterSpacing: "0.08em",
-            }}
-          >
-            <RefreshCw
-              size={12}
-              className={isLoading ? "animate-spin" : undefined}
-            />
-            {canLoad ? buttonLabel : "No Route"}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2.5 md:grid-cols-4 xl:grid-cols-[1fr_0.9fr_0.85fr_0.85fr_0.9fr_1.2fr]">
-        <Field label="Loaded Items">{itemCount}</Field>
-        <Field label="Accepted Events">{acceptedCount}</Field>
-        <Field label="Markers">{markerCount}</Field>
-        <Field label="Location">
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <MapPin size={11} style={{ color: "rgba(250,86,96,0.68)", flexShrink: 0 }} />
-            <span className="truncate">{locationLabel}</span>
-          </span>
-        </Field>
-        <Field label="Last Check">{formatCheckTime(collectedAt, requestedAt)}</Field>
-        <Field label="Domains">
-          {domainLabels.length > 0 ? (
-            <span className="flex min-w-0 flex-wrap gap-1">
-              {domainLabels.slice(0, 3).map((domain) => (
-                <Pill key={domain} tone="green">
-                  {domain}
-                </Pill>
-              ))}
-              {domainLabels.length > 3 && <Pill>+{domainLabels.length - 3}</Pill>}
-            </span>
-          ) : matchedDomainLabels.length > 0 ? (
-            <span className="flex min-w-0 flex-wrap gap-1">
-              {matchedDomainLabels.slice(0, 2).map((domain) => (
-                <Pill key={domain} tone="amber">
-                  {domain}
-                </Pill>
-              ))}
-              <Pill tone="amber">Below Threshold</Pill>
-            </span>
-          ) : isLoading ? (
-            <span style={{ color: "rgba(250,86,96,0.78)" }}>Loading...</span>
-          ) : readableError ? (
-            <span style={{ color: "rgba(252,165,165,0.84)" }}>Source error</span>
-          ) : itemCount > 0 ? (
-            <span style={{ color: "rgba(251,191,36,0.82)" }}>No accepted domains</span>
-          ) : hasBeenChecked ? (
-            <span style={{ color: "var(--text-tertiary)" }}>No items returned</span>
-          ) : (
-            <span style={{ color: "var(--text-tertiary)" }}>Not loaded</span>
-          )}
-        </Field>
-      </div>
-
-      {readableError && (
-        <div
-          className="mt-3 flex items-start gap-2 rounded px-2.5 py-2"
+function TopTab({
+  active,
+  label,
+  count,
+  dotColor,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  dotColor?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        height: 42,
+        padding: "0 16px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        background: "transparent",
+        border: "none",
+        borderBottom: `2px solid ${active ? ACCENT : "transparent"}`,
+        color: active ? "var(--c-t1)" : "var(--c-t4)",
+        fontFamily: FONT.ui,
+        fontSize: 12,
+        fontWeight: active ? 600 : 500,
+        letterSpacing: ".01em",
+        cursor: "pointer",
+      }}
+    >
+      {dotColor && (
+        <span
           style={{
+            display: "inline-block",
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: dotColor,
+          }}
+        />
+      )}
+      {label}
+      <span
+        style={{
+          fontFamily: FONT.mono,
+          fontSize: 9.5,
+          padding: "1px 6px",
+          borderRadius: 8,
+          background: active ? "rgba(255,43,61,0.14)" : "rgba(255,255,255,0.04)",
+          color: active ? ACCENT_TEXT : "var(--c-t5)",
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function FilterChip({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 9px",
+        borderRadius: 4,
+        fontFamily: FONT.mono,
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: ".06em",
+        textTransform: "uppercase",
+        background: active ? "rgba(255,43,61,0.10)" : "rgba(255,255,255,0.022)",
+        border: `1px solid ${active ? ACCENT_BORDER : "var(--border-primary)"}`,
+        color: active ? ACCENT_TEXT : "var(--c-t3)",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+      <span style={{ fontFamily: FONT.mono, fontSize: 9, color: "rgba(132,142,156,0.6)" }}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function SortHeader({
+  label,
+  columnKey,
+  sortKey,
+  sortDir,
+  onSort,
+  align,
+}: {
+  label: string;
+  columnKey: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+  align: "flex-start" | "flex-end";
+}) {
+  const active = sortKey === columnKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(columnKey)}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        fontFamily: FONT.mono,
+        fontSize: 9.5,
+        letterSpacing: ".14em",
+        textTransform: "uppercase",
+        color: active ? "var(--c-t2)" : "var(--c-t4)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        justifyContent: align,
+        width: "100%",
+        textAlign: align === "flex-end" ? "right" : "left",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+      {active && (
+        <span style={{ color: "rgba(255,86,96,0.95)" }}>
+          {sortDir === "asc" ? "▲" : "▼"}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function MethodChip({ method }: { method: CollectionMethod }) {
+  return (
+    <span
+      style={{
+        fontFamily: FONT.mono,
+        fontSize: 10,
+        letterSpacing: ".08em",
+        textTransform: "uppercase",
+        padding: "2px 7px",
+        borderRadius: 3,
+        background: "rgba(225,40,52,0.10)",
+        border: "1px solid rgba(240,64,76,0.32)",
+        color: "rgba(250,86,96,0.95)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {METHOD_LABELS[method]}
+    </span>
+  );
+}
+
+function RuntimeBadge({ runtime }: { runtime: RuntimeState }) {
+  const s = RUNTIME_STYLES[runtime];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "2.5px 7px",
+        borderRadius: 4,
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        color: s.text,
+        fontFamily: FONT.mono,
+        fontSize: 9.5,
+        fontWeight: 600,
+        letterSpacing: ".1em",
+        textTransform: "uppercase",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-block",
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: s.dot,
+          boxShadow: `0 0 6px ${s.dot}80`,
+        }}
+      />
+      {s.label}
+    </span>
+  );
+}
+
+function ExpandPanel({ row }: { row: Row }) {
+  const { source } = row;
+  const fields: [string, string][] = [
+    ["Route", source.endpoint ?? "—"],
+    ["Runtime Endpoint", source.feedUrl ?? source.endpoint ?? "—"],
+    ["Expected Language", (source.language ?? "").toUpperCase() || "—"],
+    ["Region", row.region || "—"],
+    ["Cadence", "On demand"],
+    ["Status Code", statusCodeFor(row.rawError)],
+    ["Current Items", String(row.items)],
+    ["Accepted Count", String(row.accepted)],
+  ];
+  return (
+    <div
+      style={{
+        padding: "14px 24px 18px 76px",
+        background: "rgba(255,43,61,0.03)",
+        borderBottom: "1px solid var(--border-dim)",
+      }}
+    >
+      {row.errorText && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "9px 12px",
+            borderRadius: 5,
+            background: "rgba(127,29,29,0.12)",
+            border: "1px solid rgba(248,113,113,0.18)",
             color: "rgba(252,165,165,0.9)",
-            background: "rgba(127,29,29,0.11)",
-            border: "1px solid rgba(248,113,113,0.16)",
-            fontSize: "var(--fs-base)",
-            lineHeight: 1.45,
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            display: "flex",
+            gap: 8,
           }}
         >
-          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{readableError}</span>
+          <span style={{ fontWeight: 700 }}>!</span>
+          <span>{row.errorText}</span>
         </div>
       )}
-    </article>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,1fr)",
+          gap: "14px 24px",
+        }}
+      >
+        {fields.map(([label, value]) => (
+          <div
+            key={label}
+            style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}
+          >
+            <span
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: 8.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--c-t5)",
+              }}
+            >
+              {label}
+            </span>
+            <span
+              title={value}
+              style={{
+                fontFamily: FONT.ui,
+                fontSize: 12,
+                color: "var(--c-t2)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div
+        style={{
+          marginTop: 14,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          alignItems: "center",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: FONT.mono,
+            fontSize: 8.5,
+            letterSpacing: ".14em",
+            textTransform: "uppercase",
+            color: "var(--c-t5)",
+            marginRight: 4,
+          }}
+        >
+          Domains
+        </span>
+        {row.domains.length > 0 ? (
+          row.domains.map((d) => (
+            <span
+              key={d}
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: 9.5,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                padding: "3px 8px",
+                borderRadius: 4,
+                background: "rgba(176,184,196,0.07)",
+                border: "1px solid rgba(176,184,196,0.2)",
+                color: "rgba(176,184,196,0.88)",
+              }}
+            >
+              {d}
+            </span>
+          ))
+        ) : (
+          <span
+            style={{
+              fontFamily: FONT.mono,
+              fontSize: 10,
+              color: "var(--c-t4)",
+              fontStyle: "italic",
+            }}
+          >
+            Domain whitelist not configured
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
 export function SourcesScreen() {
   const {
     sources,
-    combinedItems,
     eventCandidates,
     markerCandidates,
     itemsBySourceId,
     collectedAtBySourceId,
     loadingBySourceId,
     errorBySourceId,
-    filterResults,
-    loadState,
     previewSource,
   } = useSourceIntelligenceStore();
+
   const [requestedAtBySourceId, setRequestedAtBySourceId] = useState<
     Record<string, string>
   >({});
+  const [tab, setTab] = useState<Tab>("all");
+  const [methods, setMethods] = useState<Set<CollectionMethod>>(() => new Set());
+  const [configs, setConfigs] = useState<Set<SourceStatus>>(() => new Set());
+  const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("lastCheck");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // "Last check" is relative-to-now; keep a clock value out of render and tick
+  // it once a minute so the relative timestamps stay fresh. (A source refresh
+  // updates collectedAt, which recomputes the rows against the current value.)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(id);
+  }, []);
 
+  // ─── store-derived per-source aggregates ───
   const acceptedBySourceId = useMemo(() => {
     return eventCandidates.reduce<Record<string, number>>((acc, item) => {
       acc[item.sourceId] = (acc[item.sourceId] ?? 0) + 1;
@@ -719,22 +668,21 @@ export function SourcesScreen() {
     ) as Record<string, string[]>;
   }, [eventCandidates]);
 
-  const matchedDomainsBySourceId = useMemo(() => {
-    const domains: Record<string, Set<string>> = {};
-    for (const result of filterResults) {
-      if (result.accepted || result.matches.length === 0) continue;
-      domains[result.item.sourceId] ??= new Set<string>();
-      for (const match of result.matches) {
-        domains[result.item.sourceId].add(labelFor(match.domain));
-      }
-    }
-    return Object.fromEntries(
-      Object.entries(domains).map(([sourceId, values]) => [
-        sourceId,
-        Array.from(values),
-      ]),
-    ) as Record<string, string[]>;
-  }, [filterResults]);
+  // Filter chips are catalog-driven: only render methods / config statuses that
+  // actually occur in the live source set, so there are no structurally-empty
+  // chips. The set is based on the full (unfiltered) catalog so chips stay
+  // stable while filtering — only their counts change.
+  const presentMethods = useMemo(
+    () => METHODS.filter((m) => sources.some((s) => s.collectionMethod === m)),
+    [sources],
+  );
+  const presentConfigs = useMemo(
+    () =>
+      CONFIGS.filter((c) =>
+        sources.some((s) => (s.sourceStatus ?? "candidate") === c),
+      ),
+    [sources],
+  );
 
   const handleRefresh = useCallback(
     (sourceId: string) => {
@@ -747,506 +695,605 @@ export function SourcesScreen() {
     [previewSource],
   );
 
-  const FRANCE24_SOURCE_IDS = useMemo(
-    () =>
-      new Set([
-        "france24-europe",
-        "france24-africa",
-        "france24-middle-east",
-        "france24-americas",
-        "france24-asia-pacific",
-      ]),
-    [],
+  const onSort = useCallback(
+    (key: SortKey) => {
+      if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      else {
+        setSortKey(key);
+        setSortDir(key === "lastCheck" ? "desc" : "asc");
+      }
+    },
+    [sortKey],
   );
 
-  const SKYNEWS_SOURCE_IDS = useMemo(
-    () =>
-      new Set([
-        "skynews-world",
-        "skynews-uk",
-        "skynews-us",
-        "skynews-politics",
-        "skynews-home",
-      ]),
-    [],
-  );
+  const toggleMethod = useCallback((m: CollectionMethod) => {
+    setMethods((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m);
+      else next.add(m);
+      return next;
+    });
+  }, []);
 
-  const ARABNEWS_SOURCE_IDS = useMemo(
-    () => new Set(["arabnews-cat1", "arabnews-cat2"]),
-    [],
-  );
+  const toggleConfig = useCallback((c: SourceStatus) => {
+    setConfigs((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }, []);
 
-  const france24Sources = useMemo(
-    () => sources.filter((s) => FRANCE24_SOURCE_IDS.has(s.id)),
-    [sources, FRANCE24_SOURCE_IDS],
-  );
-  const skynewsSources = useMemo(
-    () => sources.filter((s) => SKYNEWS_SOURCE_IDS.has(s.id)),
-    [sources, SKYNEWS_SOURCE_IDS],
-  );
-  const arabnewsSources = useMemo(
-    () => sources.filter((s) => ARABNEWS_SOURCE_IDS.has(s.id)),
-    [sources, ARABNEWS_SOURCE_IDS],
-  );
-  const otherSources = useMemo(
-    () =>
-      sources.filter(
-        (s) =>
-          !FRANCE24_SOURCE_IDS.has(s.id) &&
-          !SKYNEWS_SOURCE_IDS.has(s.id) &&
-          !ARABNEWS_SOURCE_IDS.has(s.id),
-      ),
-    [sources, FRANCE24_SOURCE_IDS, SKYNEWS_SOURCE_IDS, ARABNEWS_SOURCE_IDS],
-  );
+  const derived = useMemo(() => {
+    const base: Row[] = sources.map((source) => {
+      const status = source.sourceStatus ?? "candidate";
+      const items = itemsBySourceId[source.id]?.length ?? 0;
+      const accepted = acceptedBySourceId[source.id] ?? 0;
+      const markers = markersBySourceId[source.id] ?? 0;
+      const rawError = errorBySourceId[source.id] ?? null;
+      const errorText = formatSourceError(rawError);
+      const loading = loadingBySourceId[source.id] ?? false;
 
-  const isFrance24Loading = france24Sources.some(
-    (s) => loadingBySourceId[s.id] ?? false,
-  );
-  const isSkynewsLoading = skynewsSources.some(
-    (s) => loadingBySourceId[s.id] ?? false,
-  );
-  const isArabnewsLoading = arabnewsSources.some(
-    (s) => loadingBySourceId[s.id] ?? false,
-  );
+      let runtime: RuntimeState;
+      if (errorText) runtime = "error";
+      else if (accepted === 0 && items > 0) runtime = "warn";
+      else if (accepted > 0) runtime = "ok";
+      else runtime = "idle";
 
-  const handleRefreshFrance24 = useCallback(() => {
+      const stamp =
+        collectedAtBySourceId[source.id] ?? requestedAtBySourceId[source.id];
+      const lastCheckMins = stamp
+        ? Math.max(0, Math.floor((now - new Date(stamp).getTime()) / 60000))
+        : null;
+
+      return {
+        source,
+        status,
+        region: regionOf(source),
+        items,
+        accepted,
+        markers,
+        domains: domainsBySourceId[source.id] ?? [],
+        lastCheckMins,
+        runtime,
+        errorText,
+        rawError,
+        loading,
+      };
+    });
+
+    const ql = q.trim().toLowerCase();
+    const matchesQ = (r: Row) =>
+      !ql ||
+      r.source.name.toLowerCase().includes(ql) ||
+      (TYPE_LABELS[r.source.sourceType] || "").toLowerCase().includes(ql) ||
+      (METHOD_LABELS[r.source.collectionMethod] || "").toLowerCase().includes(ql) ||
+      r.region.toLowerCase().includes(ql) ||
+      r.domains.join(" ").toLowerCase().includes(ql);
+    const passesTab = (r: Row) => {
+      if (tab === "all") return true;
+      if (tab === "errors") return r.runtime === "error";
+      if (tab === "needsLocation") return !r.region;
+      if (tab === "test") return r.status === "test" || r.status === "candidate";
+      return true;
+    };
+    const passesMethods = (r: Row) =>
+      methods.size === 0 || methods.has(r.source.collectionMethod);
+    const passesConfigs = (r: Row) =>
+      configs.size === 0 || configs.has(r.status);
+
+    const filtered = base.filter(
+      (r) => passesTab(r) && passesMethods(r) && passesConfigs(r) && matchesQ(r),
+    );
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    const accessors: Record<SortKey, (r: Row) => number | string> = {
+      name: (r) => r.source.name.toLowerCase(),
+      type: (r) => (TYPE_LABELS[r.source.sourceType] || "").toLowerCase(),
+      method: (r) => (METHOD_LABELS[r.source.collectionMethod] || "").toLowerCase(),
+      items: (r) => r.items,
+      accepted: (r) => r.accepted,
+      markers: (r) => r.markers,
+      lastCheck: (r) =>
+        r.lastCheckMins == null ? Number.POSITIVE_INFINITY : r.lastCheckMins,
+      runtime: (r) => ["ok", "warn", "error", "idle"].indexOf(r.runtime),
+    };
+    const acc = accessors[sortKey];
+    const rows = [...filtered].sort((a, b) => {
+      const va = acc(a);
+      const vb = acc(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+
+    // KPIs over the filtered view.
+    const minsList = rows
+      .map((r) => r.lastCheckMins)
+      .filter((v): v is number => v != null);
+    const kpi = {
+      total: rows.length,
+      ok: rows.filter((r) => r.runtime === "ok").length,
+      warn: rows.filter((r) => r.runtime === "warn").length,
+      errors: rows.filter((r) => r.runtime === "error").length,
+      needsLoc: rows.filter((r) => !r.region).length,
+      lastSweep: minsList.length ? Math.min(...minsList) : null,
+    };
+
+    // Chip counts: what selecting that chip alone (with other surfaces) yields.
+    const methodCounts: Record<string, number> = {};
+    for (const m of METHODS) {
+      methodCounts[m] = base.filter(
+        (r) =>
+          r.source.collectionMethod === m &&
+          passesTab(r) &&
+          passesConfigs(r) &&
+          matchesQ(r),
+      ).length;
+    }
+    const configCounts: Record<string, number> = {};
+    for (const c of CONFIGS) {
+      configCounts[c] = base.filter(
+        (r) =>
+          r.status === c && passesTab(r) && passesMethods(r) && matchesQ(r),
+      ).length;
+    }
+
+    const tabBase = base.filter(
+      (r) => passesMethods(r) && passesConfigs(r) && matchesQ(r),
+    );
+    const tabCounts = {
+      all: tabBase.length,
+      errors: tabBase.filter((r) => r.runtime === "error").length,
+      needsLocation: tabBase.filter((r) => !r.region).length,
+      test: tabBase.filter((r) => r.status === "test" || r.status === "candidate")
+        .length,
+    };
+
+    return { rows, kpi, methodCounts, configCounts, tabCounts };
+  }, [
+    now,
+    sources,
+    itemsBySourceId,
+    acceptedBySourceId,
+    markersBySourceId,
+    domainsBySourceId,
+    collectedAtBySourceId,
+    requestedAtBySourceId,
+    errorBySourceId,
+    loadingBySourceId,
+    tab,
+    methods,
+    configs,
+    q,
+    sortKey,
+    sortDir,
+  ]);
+
+  const handleRefreshAll = useCallback(() => {
     const now = new Date().toISOString();
-    const ids = [
-      "france24-europe",
-      "france24-africa",
-      "france24-middle-east",
-      "france24-americas",
-      "france24-asia-pacific",
-    ];
+    const ids = derived.rows.map((r) => r.source.id);
+    if (ids.length === 0) return;
     setRequestedAtBySourceId((prev) => {
       const next = { ...prev };
       for (const id of ids) next[id] = now;
       return next;
     });
     for (const id of ids) void previewSource(id);
-  }, [previewSource]);
-
-  const handleRefreshSkynews = useCallback(() => {
-    const now = new Date().toISOString();
-    const ids = [
-      "skynews-world",
-      "skynews-uk",
-      "skynews-us",
-      "skynews-politics",
-      "skynews-home",
-    ];
-    setRequestedAtBySourceId((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = now;
-      return next;
-    });
-    for (const id of ids) void previewSource(id);
-  }, [previewSource]);
-
-  const handleRefreshArabnews = useCallback(() => {
-    const now = new Date().toISOString();
-    const ids = ["arabnews-cat1", "arabnews-cat2"];
-    setRequestedAtBySourceId((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = now;
-      return next;
-    });
-    for (const id of ids) void previewSource(id);
-  }, [previewSource]);
-
-  const markerReadyEvents = eventCandidates.filter(
-    (item) => item.markerEligibility === "eligible",
-  ).length;
-  const needsLocationItems = useMemo(
-    () =>
-      eventCandidates.filter(
-        (item) => item.markerEligibility === "needs_location",
-      ),
-    [eventCandidates],
-  );
-  const needsLocationEvents = needsLocationItems.length;
-  const failedSources = sources.filter(
-    (source) => (errorBySourceId[source.id] ?? null) !== null,
-  ).length;
+  }, [derived.rows, previewSource]);
 
   return (
     <main
-      className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
-      style={{ background: "var(--c-bg-base)" }}
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+      style={{ background: "var(--c-bg-base)", fontFamily: FONT.ui }}
     >
-      <div className="tm-scrollbar sources-registry-scrollbar flex h-full min-h-0 w-full min-w-0 flex-1 basis-0 flex-col gap-2.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-3 pt-3">
-        <section className="flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-1.5 flex items-center gap-2">
-              <Database size={13} style={{ color: "var(--accent-blue-text)" }} />
-              <span
-                className="font-semibold uppercase"
-                style={{
-                  color: "var(--text-secondary)",
-                  fontSize: "var(--fs-sm)",
-                  letterSpacing: "0.12em",
-                }}
-              >
-                Source Intelligence Registry
-              </span>
-            </div>
-            <h1
-              className="truncate font-semibold"
-              style={{ color: "var(--text-heading)", fontSize: "19px" }}
-            >
-              Runtime Sources
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill tone={loadState === "loaded" ? "green" : loadState === "partial" ? "amber" : "blue"}>
-              {labelFor(loadState)}
-            </Pill>
-            <Pill>{sourceRegistry.length} registered</Pill>
-            <Pill>{failedSources} source errors</Pill>
-          </div>
-        </section>
-
-        <section className="grid flex-shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-          <MetricTile
-            icon={<Database size={12} />}
-            label="Runtime Sources"
-            value={sources.length}
-            tone="var(--accent-blue-text)"
-          />
-          <MetricTile
-            icon={<Radio size={12} />}
-            label="Loaded Items"
-            value={combinedItems.length}
-            tone="var(--accent-blue-text)"
-          />
-          <MetricTile
-            icon={<Activity size={12} />}
-            label="Accepted Events"
-            value={eventCandidates.length}
-            tone="var(--c-elev)"
-          />
-          <MetricTile
-            icon={<MapPin size={12} />}
-            label="Marker Candidates"
-            value={markerCandidates.length}
-            tone="rgba(251,191,36,0.92)"
-          />
-          <MetricTile
-            icon={<ShieldCheck size={12} />}
-            label="Marker Ready"
-            value={markerReadyEvents}
-            tone="var(--accent-green)"
-          />
-          <MetricTile
-            icon={<AlertTriangle size={12} />}
-            label="Needs Location"
-            value={needsLocationEvents}
-            tone="rgba(248,113,113,0.88)"
-          />
-        </section>
-
-        <NeedsLocationReview items={needsLocationItems} />
-
-        <section
-          className="flex min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-[8px]"
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-primary)",
-                  }}
-        >
-          <div
-            className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-            style={{ borderBottom: "1px solid var(--border-dim)" }}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Radio size={12} style={{ color: "rgba(250,86,96,0.72)" }} />
-              <span
-                className="truncate font-semibold uppercase"
-                style={{
-                  color: "var(--text-secondary)",
-                  fontSize: "var(--fs-sm)",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                Active Source Adapters
-              </span>
-            </div>
+      {/* TITLE + KPI STRIP */}
+      <div
+        style={{
+          flex: "none",
+          padding: "18px 24px 14px 24px",
+          borderBottom: "1px solid var(--border-dim)",
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 24,
+        }}
+      >
+        <div style={{ minWidth: 230 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <span
-              className="hidden font-semibold uppercase sm:inline"
               style={{
-                color: "var(--text-dim)",
-                fontSize: "var(--fs-xs)",
-                letterSpacing: "0.1em",
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: ACCENT,
+                boxShadow: "0 0 10px rgba(255,43,61,0.7)",
+                animation: "pulseDot 2.4s ease-in-out infinite",
+              }}
+            />
+            <span
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: 9.5,
+                letterSpacing: ".18em",
+                textTransform: "uppercase",
+                color: "var(--c-t4)",
               }}
             >
-              Feed + Map Pipeline
+              Source Intelligence Registry
             </span>
           </div>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontWeight: 600,
+              color: "var(--c-t1)",
+              letterSpacing: "-0.005em",
+            }}
+          >
+            Runtime Sources
+          </h1>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns: "repeat(6,1fr)",
+            gap: 14,
+          }}
+        >
+          <KpiTile label="Total" value={derived.kpi.total} sub="in view" color="var(--c-t1)" />
+          <KpiTile label="OK Now" value={derived.kpi.ok} sub="runtime" color="rgba(176,184,196,0.82)" />
+          <KpiTile label="Warn" value={derived.kpi.warn} sub="filtered" color="rgba(251,191,36,0.95)" />
+          <KpiTile label="Errors" value={derived.kpi.errors} sub="need fix" color="rgba(252,165,165,0.95)" />
+          <KpiTile label="Needs Location" value={derived.kpi.needsLoc} sub="no region" color="rgba(251,191,36,0.95)" />
+          <KpiTile
+            label="Last Sweep"
+            value={derived.kpi.lastSweep == null ? "—" : `${derived.kpi.lastSweep}m`}
+            sub="most recent"
+            color="rgba(214,219,226,0.92)"
+          />
+        </div>
+      </div>
 
-          <div className="flex flex-col">
-            {otherSources.map((source) => (
-              <SourceRow
-                key={source.id}
-                source={source}
-                itemCount={itemsBySourceId[source.id]?.length ?? 0}
-                acceptedCount={acceptedBySourceId[source.id] ?? 0}
-                markerCount={markersBySourceId[source.id] ?? 0}
-                domainLabels={domainsBySourceId[source.id] ?? []}
-                matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
-                collectedAt={collectedAtBySourceId[source.id]}
-                requestedAt={requestedAtBySourceId[source.id]}
-                error={errorBySourceId[source.id]}
-                isLoading={loadingBySourceId[source.id] ?? false}
-                onRefresh={() => handleRefresh(source.id)}
-              />
-            ))}
-
-            {/* ── France 24 group ─────────────────────────────────────────── */}
-            {france24Sources.length > 0 && (
-              <>
-                {/* Group header with collective refresh button */}
-                <div
-                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-                  style={{
-                    borderTop: "1px solid var(--border-dim)",
-                    background: "var(--bg-surface)",
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <Radio size={12} style={{ color: "rgba(251,191,36,0.72)", flexShrink: 0 }} />
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-body)",
-                        fontSize: "var(--fs-sm)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      France 24
-                    </span>
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-dim)",
-                        fontSize: "var(--fs-xs)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {france24Sources.length} regional feeds
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRefreshFrance24}
-                    disabled={isFrance24Loading}
-                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
-                    title="Refresh all France 24 feeds"
-                    style={{
-                      color: isFrance24Loading
-                        ? "rgba(145,155,170,0.62)"
-                        : "var(--c-t1)",
-                      background: isFrance24Loading
-                        ? "var(--bg-surface)"
-                        : "rgba(251,191,36,0.09)",
-                      border: isFrance24Loading
-                        ? "1px solid rgba(255,255,255,0.06)"
-                        : "1px solid rgba(251,191,36,0.22)",
-                      cursor: isFrance24Loading ? "not-allowed" : "pointer",
-                      fontSize: "var(--fs-sm)",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    <RefreshCw
-                      size={12}
-                      className={isFrance24Loading ? "animate-spin" : undefined}
-                    />
-                    {isFrance24Loading ? "Loading…" : "Refresh France 24"}
-                  </button>
-                </div>
-
-                {france24Sources.map((source) => (
-                  <SourceRow
-                    key={source.id}
-                    source={source}
-                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
-                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
-                    markerCount={markersBySourceId[source.id] ?? 0}
-                    domainLabels={domainsBySourceId[source.id] ?? []}
-                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
-                    collectedAt={collectedAtBySourceId[source.id]}
-                    requestedAt={requestedAtBySourceId[source.id]}
-                    error={errorBySourceId[source.id]}
-                    isLoading={loadingBySourceId[source.id] ?? false}
-                    onRefresh={() => handleRefresh(source.id)}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* ── Arab News group ──────────────────────────────────────────── */}
-            {arabnewsSources.length > 0 && (
-              <>
-                <div
-                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-                  style={{
-                    borderTop: "1px solid var(--border-dim)",
-                    background: "var(--bg-surface)",
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <Radio size={12} style={{ color: "rgba(251,146,60,0.72)", flexShrink: 0 }} />
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-body)",
-                        fontSize: "var(--fs-sm)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      Arab News
-                    </span>
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-dim)",
-                        fontSize: "var(--fs-xs)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {arabnewsSources.length} feeds
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRefreshArabnews}
-                    disabled={isArabnewsLoading}
-                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
-                    title="Refresh all Arab News feeds"
-                    style={{
-                      color: isArabnewsLoading
-                        ? "rgba(145,155,170,0.62)"
-                        : "var(--c-t1)",
-                      background: isArabnewsLoading
-                        ? "var(--bg-surface)"
-                        : "rgba(251,146,60,0.09)",
-                      border: isArabnewsLoading
-                        ? "1px solid rgba(255,255,255,0.06)"
-                        : "1px solid rgba(251,146,60,0.22)",
-                      cursor: isArabnewsLoading ? "not-allowed" : "pointer",
-                      fontSize: "var(--fs-sm)",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    <RefreshCw
-                      size={12}
-                      className={isArabnewsLoading ? "animate-spin" : undefined}
-                    />
-                    {isArabnewsLoading ? "Loading…" : "Refresh Arab News"}
-                  </button>
-                </div>
-
-                {arabnewsSources.map((source) => (
-                  <SourceRow
-                    key={source.id}
-                    source={source}
-                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
-                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
-                    markerCount={markersBySourceId[source.id] ?? 0}
-                    domainLabels={domainsBySourceId[source.id] ?? []}
-                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
-                    collectedAt={collectedAtBySourceId[source.id]}
-                    requestedAt={requestedAtBySourceId[source.id]}
-                    error={errorBySourceId[source.id]}
-                    isLoading={loadingBySourceId[source.id] ?? false}
-                    onRefresh={() => handleRefresh(source.id)}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* ── Sky News group ───────────────────────────────────────────── */}
-            {skynewsSources.length > 0 && (
-              <>
-                <div
-                  className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2.5"
-                  style={{
-                    borderTop: "1px solid var(--border-dim)",
-                    background: "var(--bg-surface)",
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <Radio size={12} style={{ color: "rgba(250,86,96,0.72)", flexShrink: 0 }} />
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-body)",
-                        fontSize: "var(--fs-sm)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      Sky News
-                    </span>
-                    <span
-                      className="font-semibold uppercase"
-                      style={{
-                        color: "var(--text-dim)",
-                        fontSize: "var(--fs-xs)",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {skynewsSources.length} feeds
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRefreshSkynews}
-                    disabled={isSkynewsLoading}
-                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 font-semibold uppercase transition-colors"
-                    title="Refresh all Sky News feeds"
-                    style={{
-                      color: isSkynewsLoading
-                        ? "rgba(145,155,170,0.62)"
-                        : "var(--c-t1)",
-                      background: isSkynewsLoading
-                        ? "var(--bg-surface)"
-                        : "var(--accent-blue-bg)",
-                      border: isSkynewsLoading
-                        ? "1px solid rgba(255,255,255,0.06)"
-                        : "1px solid var(--accent-blue-border)",
-                      cursor: isSkynewsLoading ? "not-allowed" : "pointer",
-                      fontSize: "var(--fs-sm)",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    <RefreshCw
-                      size={12}
-                      className={isSkynewsLoading ? "animate-spin" : undefined}
-                    />
-                    {isSkynewsLoading ? "Loading…" : "Refresh Sky News"}
-                  </button>
-                </div>
-
-                {skynewsSources.map((source) => (
-                  <SourceRow
-                    key={source.id}
-                    source={source}
-                    itemCount={itemsBySourceId[source.id]?.length ?? 0}
-                    acceptedCount={acceptedBySourceId[source.id] ?? 0}
-                    markerCount={markersBySourceId[source.id] ?? 0}
-                    domainLabels={domainsBySourceId[source.id] ?? []}
-                    matchedDomainLabels={matchedDomainsBySourceId[source.id] ?? []}
-                    collectedAt={collectedAtBySourceId[source.id]}
-                    requestedAt={requestedAtBySourceId[source.id]}
-                    error={errorBySourceId[source.id]}
-                    isLoading={loadingBySourceId[source.id] ?? false}
-                    onRefresh={() => handleRefresh(source.id)}
-                  />
-                ))}
-              </>
-            )}
+      {/* TAB BAR */}
+      <div
+        style={{
+          flex: "none",
+          height: 42,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 24px",
+          borderBottom: "1px solid var(--border-dim)",
+          background: "linear-gradient(180deg,rgba(20,16,18,0.18),rgba(7,5,7,0.3))",
+        }}
+      >
+        <TopTab active={tab === "all"} label="All Sources" count={derived.tabCounts.all} onClick={() => setTab("all")} />
+        <TopTab active={tab === "errors"} label="Errors" count={derived.tabCounts.errors} dotColor="#ff2b3d" onClick={() => setTab("errors")} />
+        <TopTab active={tab === "needsLocation"} label="Needs Location" count={derived.tabCounts.needsLocation} dotColor="rgba(251,191,36,0.9)" onClick={() => setTab("needsLocation")} />
+        <TopTab active={tab === "test"} label="Test" count={derived.tabCounts.test} dotColor="rgba(176,184,196,0.7)" onClick={() => setTab("test")} />
+        <span style={{ flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ position: "relative", width: 240 }}>
+            <span
+              style={{
+                position: "absolute",
+                left: 11,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 12,
+                color: "var(--c-t5)",
+              }}
+            >
+              ⌕
+            </span>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={`Search ${sources.length} sources…`}
+              style={{
+                width: "100%",
+                height: 28,
+                padding: "0 12px 0 28px",
+                background: "rgba(255,255,255,0.022)",
+                border: "1px solid var(--border-primary)",
+                borderRadius: 14,
+                color: "var(--c-t2)",
+                fontFamily: FONT.ui,
+                fontSize: 11.5,
+                outline: "none",
+              }}
+            />
           </div>
-        </section>
+          <button
+            type="button"
+            onClick={handleRefreshAll}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: `1px solid ${ACCENT_BORDER}`,
+              background: "linear-gradient(90deg,rgba(179,18,31,0.24),rgba(255,43,61,0.18))",
+              color: ACCENT_TEXT,
+              fontFamily: FONT.ui,
+              fontSize: 10.5,
+              fontWeight: 600,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            Refresh All
+          </button>
+        </div>
+      </div>
+
+      {/* METHOD + CONFIG FILTER ROW */}
+      <div
+        style={{
+          flex: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 24px",
+          borderBottom: "1px solid var(--border-dim)",
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: FONT.mono,
+            fontSize: 9,
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            color: "var(--c-t5)",
+          }}
+        >
+          Method
+        </span>
+        {presentMethods.map((m) => (
+          <FilterChip
+            key={m}
+            label={METHOD_LABELS[m]}
+            count={derived.methodCounts[m]}
+            active={methods.has(m)}
+            onClick={() => toggleMethod(m)}
+          />
+        ))}
+        <span style={{ width: 1, height: 14, background: "var(--border-dim)", margin: "0 6px" }} />
+        <span
+          style={{
+            fontFamily: FONT.mono,
+            fontSize: 9,
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            color: "var(--c-t5)",
+          }}
+        >
+          Config
+        </span>
+        {presentConfigs.map((c) => (
+          <FilterChip
+            key={c}
+            label={STATUS_LABELS[c]}
+            count={derived.configCounts[c]}
+            active={configs.has(c)}
+            onClick={() => toggleConfig(c)}
+          />
+        ))}
+      </div>
+
+      {/* TABLE */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {/* Header */}
+        <div
+          style={{
+            flex: "none",
+            display: "grid",
+            gridTemplateColumns: GRID_COLS,
+            alignItems: "center",
+            padding: "0 24px",
+            height: 34,
+            background: "rgba(255,255,255,0.012)",
+            borderBottom: "1px solid var(--border-primary)",
+          }}
+        >
+          <span />
+          {COLS.map((c) => (
+            <div key={c.key} style={{ paddingRight: c.align === "flex-end" ? 14 : 0 }}>
+              <SortHeader
+                label={c.label}
+                columnKey={c.key}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={onSort}
+                align={c.align}
+              />
+            </div>
+          ))}
+          <span />
+        </div>
+
+        {/* Body */}
+        <div className="tm-scrollbar" style={{ flex: 1, overflowY: "auto" }}>
+          {derived.rows.map((r) => {
+            const expanded = expandedId === r.source.id;
+            const rs = RUNTIME_STYLES[r.runtime];
+            const href = r.source.feedUrl ?? r.source.endpoint;
+            return (
+              <Fragment key={r.source.id}>
+                <div
+                  onClick={() => setExpandedId(expanded ? null : r.source.id)}
+                  className={expanded ? undefined : "sources-v2-row"}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: GRID_COLS,
+                    alignItems: "center",
+                    padding: "0 24px",
+                    minHeight: 44,
+                    borderBottom: "1px solid rgba(255,255,255,0.025)",
+                    cursor: "pointer",
+                    background: expanded ? "rgba(255,43,61,0.04)" : "transparent",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 18,
+                      height: 18,
+                      color: "rgba(132,142,156,0.6)",
+                      fontSize: 9,
+                      fontFamily: FONT.mono,
+                    }}
+                  >
+                    {expanded ? "▾" : "▸"}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: rs.dot,
+                        boxShadow: `0 0 6px ${rs.dot}80`,
+                        flex: "none",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        color: "var(--c-t1)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.source.name}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: FONT.mono,
+                      fontSize: 10.5,
+                      color: "var(--c-t3)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {TYPE_LABELS[r.source.sourceType]}
+                  </span>
+                  <span>
+                    <MethodChip method={r.source.collectionMethod} />
+                  </span>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 12, color: "var(--c-t2)", textAlign: "right", paddingRight: 14 }}>
+                    {r.items}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: FONT.mono,
+                      fontSize: 12,
+                      color: r.accepted > 0 ? "rgba(255,86,96,0.95)" : "var(--c-t5)",
+                      textAlign: "right",
+                      paddingRight: 14,
+                    }}
+                  >
+                    {r.accepted}
+                  </span>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 12, color: "var(--c-t3)", textAlign: "right", paddingRight: 14 }}>
+                    {r.markers}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: FONT.mono,
+                      fontSize: 10.5,
+                      color: "var(--c-t4)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fmtAgo(r.lastCheckMins)}
+                  </span>
+                  <span>
+                    <RuntimeBadge runtime={r.runtime} />
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRefresh(r.source.id);
+                      }}
+                      title="Refresh source"
+                      className="sources-v2-iconbtn"
+                      style={{
+                        width: 26,
+                        height: 26,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 5,
+                        border: "1px solid var(--border-primary)",
+                        background: "rgba(255,255,255,0.016)",
+                        color: "var(--c-t3)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span className={r.loading ? "animate-spin" : undefined} style={{ display: "inline-flex" }}>
+                        ↻
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (href) window.open(href, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={!href}
+                      title={href ? "Open source" : "No source URL"}
+                      className="sources-v2-iconbtn"
+                      style={{
+                        width: 26,
+                        height: 26,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 5,
+                        border: "1px solid var(--border-primary)",
+                        background: "rgba(255,255,255,0.016)",
+                        color: "var(--c-t3)",
+                        cursor: href ? "pointer" : "not-allowed",
+                        opacity: href ? 1 : 0.45,
+                      }}
+                    >
+                      ↗
+                    </button>
+                  </span>
+                </div>
+
+                {expanded && <ExpandPanel row={r} />}
+              </Fragment>
+            );
+          })}
+          {derived.rows.length === 0 && (
+            <div
+              style={{
+                padding: "40px 24px",
+                textAlign: "center",
+                color: "var(--c-t4)",
+                fontFamily: FONT.mono,
+                fontSize: 11,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+              }}
+            >
+              No sources match the current filter.
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );

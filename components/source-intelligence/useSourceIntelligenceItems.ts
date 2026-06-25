@@ -10,6 +10,7 @@ export function useSourceIntelligenceItems() {
     filterResults: store.filterResults,
     markers: store.markerCandidates,
     loadState: store.loadState,
+    pipelineBusy: store.pipelineBusy,
     loadingBySourceId: store.loadingBySourceId,
     errorBySourceId: store.errorBySourceId,
     previewSource: store.previewSource,

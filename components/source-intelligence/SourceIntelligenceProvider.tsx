@@ -49,6 +49,7 @@ export interface SourceIntelligenceStore {
   eventCandidates: IntelligenceEventCandidate[];
   markerCandidates: SourceMarkerFeature[];
   loadState: SourceIntelligenceLoadState;
+  pipelineBusy: boolean;
   previewSource: (sourceId: string) => Promise<void>;
 }
 
@@ -120,6 +121,7 @@ export function SourceIntelligenceProvider({
   const [errorBySourceId, setErrorBySourceId] = useState<
     Record<string, string | null>
   >({});
+  const [pipelineBusy, setPipelineBusy] = useState(false);
 
   const [filterResults, setFilterResults] = useState<
     SourceFilterResult<NormalizedSourceItem>[]
@@ -254,7 +256,10 @@ export function SourceIntelligenceProvider({
 
   const processQueue = useCallback(() => {
     if (processingBatchRef.current) return;
-    if (pendingItemsRef.current.length === 0) return;
+    if (pendingItemsRef.current.length === 0) {
+      setPipelineBusy(false);
+      return;
+    }
     if (USE_PIPELINE_WORKER && !workerReadyRef.current) return;
 
     const batch = pendingItemsRef.current.splice(0, PIPELINE_BATCH_SIZE);
@@ -319,6 +324,7 @@ export function SourceIntelligenceProvider({
       }
 
       pendingItemsRef.current.push(...newItems);
+      setPipelineBusy(true);
       logSourceIntelProfile(`progressive enqueue ${sourceId}`, {
         itemCount: seenItemKeysRef.current.size,
         batchItemCount: newItems.length,
@@ -486,6 +492,7 @@ export function SourceIntelligenceProvider({
     batchIdRef.current = 0;
     pendingItemsRef.current = [];
     processingBatchRef.current = false;
+    setPipelineBusy(false);
     seenItemKeysRef.current.clear();
     sourceItemKeysBySourceRef.current.clear();
     filterResultMapRef.current.clear();
@@ -549,6 +556,7 @@ export function SourceIntelligenceProvider({
       eventCandidates,
       markerCandidates,
       loadState,
+      pipelineBusy,
       previewSource,
     }),
     [
@@ -561,6 +569,7 @@ export function SourceIntelligenceProvider({
       loadState,
       loadingBySourceId,
       markerCandidates,
+      pipelineBusy,
       previewSource,
     ],
   );

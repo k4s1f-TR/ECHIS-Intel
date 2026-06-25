@@ -25,7 +25,7 @@ interface Props {
 
 const LABEL_STYLE = {
   fontSize: "8.5px",
-  color: "var(--c-t5)",
+  color: "var(--c-silver-dim)",
   fontWeight: 600,
 } as const;
 
@@ -43,8 +43,11 @@ function itemStyle(active: boolean) {
     textAlign: "left" as const,
     padding: "7px 12px",
     fontSize: "12px",
-    color: active ? "var(--accent-blue-text)" : "var(--c-t4)",
-    background: active ? "var(--accent-blue-bg)" : "transparent",
+    color: active ? "var(--c-accent-text)" : "var(--c-silver-dim)",
+    background: active ? "var(--c-accent-grad-soft)" : "transparent",
+    border: active
+      ? "1px solid var(--c-accent-border)"
+      : "1px solid transparent",
     cursor: "pointer",
   };
 }
@@ -106,8 +109,8 @@ export function FloatingMonitoringCard({
             "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}
       >
-        <Globe2 size={10} style={{ color: "var(--c-t5)" }} />
-        <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--c-t3)", letterSpacing: "0.08em" }}>
+        <Globe2 size={10} style={{ color: "var(--c-silver-dim)" }} />
+        <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--c-silver)", letterSpacing: "0.08em" }}>
           Monitor
         </span>
         <ChevronRight
@@ -169,7 +172,7 @@ export function FloatingMonitoringCard({
         >
           <span
             className="font-semibold"
-            style={{ fontSize: "14px", color: "var(--c-t2)" }}
+            style={{ fontSize: "14px", color: "var(--c-silver)" }}
           >
             {monitoringTitle}
           </span>
@@ -184,7 +187,7 @@ export function FloatingMonitoringCard({
         </button>
         <span
           className="block mt-0.5"
-          style={{ fontSize: "10.5px", color: "var(--c-t5)" }}
+          style={{ fontSize: "10.5px", color: "var(--c-silver-dim)" }}
         >
           {monitoringSubtitle}
         </span>
@@ -264,7 +267,7 @@ export function FloatingMonitoringCard({
             setRegionOpen(false);
           }}
         >
-          <span style={{ fontSize: "12.5px", color: "var(--c-t3)" }}>
+          <span style={{ fontSize: "12.5px", color: "var(--c-silver)" }}>
             {categoryLabel}
           </span>
           <ChevronDown

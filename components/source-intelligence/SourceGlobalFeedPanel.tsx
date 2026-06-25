@@ -608,19 +608,19 @@ export function SourceFilterList({
             "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}
       >
-        <Radio size={10} style={{ color: "var(--c-t5)" }} />
+        <Radio size={10} style={{ color: "var(--c-silver-dim)" }} />
         <span
           style={{
             fontSize: "10px",
             fontWeight: 700,
-            color: "var(--c-t3)",
+            color: "var(--c-silver)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
           }}
         >
           Sources
         </span>
-        <ChevronRight size={12} style={{ color: "var(--c-t5)" }} />
+        <ChevronRight size={12} style={{ color: "var(--c-silver-dim)" }} />
       </button>
     );
   }
@@ -648,7 +648,7 @@ export function SourceFilterList({
         <span
           className="uppercase"
           style={{
-            color: "var(--c-t5)",
+            color: "var(--c-silver-dim)",
             fontSize: 8.5,
             fontWeight: 800,
             letterSpacing: "0.11em",
@@ -694,9 +694,9 @@ export function SourceFilterList({
           onClick={() => onSelectSource(ALL_SOURCES_FILTER)}
           className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left transition-colors duration-150"
           style={{
-            background: allSelected ? "var(--accent-blue-bg)" : "rgba(255,255,255,0.026)",
-            border: `1px solid ${allSelected ? "var(--accent-blue-border)" : "rgba(255,255,255,0.055)"}`,
-            color: allSelected ? "var(--accent-blue-text)" : "var(--c-silver-dim)",
+            background: allSelected ? "var(--c-accent-grad-soft)" : "rgba(255,255,255,0.026)",
+            border: `1px solid ${allSelected ? "var(--c-accent-border)" : "rgba(255,255,255,0.055)"}`,
+            color: allSelected ? "var(--c-accent-text)" : "var(--c-silver-dim)",
           }}
         >
           <span
@@ -730,9 +730,9 @@ export function SourceFilterList({
               onClick={() => onSelectSource(source.id)}
               className="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150"
               style={{
-                background: selected ? "var(--accent-blue-bg)" : "transparent",
-                border: `1px solid ${selected ? "var(--accent-blue-border)" : "rgba(255,255,255,0.035)"}`,
-                color: selected ? "var(--accent-blue-text)" : "var(--c-t4)",
+                background: selected ? "var(--c-accent-grad-soft)" : "transparent",
+                border: `1px solid ${selected ? "var(--c-accent-border)" : "rgba(255,255,255,0.035)"}`,
+                color: selected ? "var(--c-accent-text)" : "var(--c-silver-dim)",
               }}
             >
               <span
@@ -749,8 +749,8 @@ export function SourceFilterList({
                   borderRadius: 4,
                   padding: "2px 5px",
                   textAlign: "center",
-                  background: selected ? "var(--accent-blue-bg)" : "rgba(255,255,255,0.035)",
-                  color: selected ? "var(--accent-blue-text)" : "var(--c-t5)",
+                  background: selected ? "var(--c-accent-bg-soft)" : "rgba(255,255,255,0.035)",
+                  color: selected ? "var(--c-accent-text)" : "var(--c-t5)",
                   fontSize: 9,
                   fontWeight: 760,
                   fontVariantNumeric: "tabular-nums",
@@ -915,7 +915,7 @@ export function SourceGlobalFeedPanel({
             <Radio size={10} style={{ color: "rgba(250,86,96,0.45)" }} />
             <span
               className="font-semibold uppercase tracking-widest"
-              style={{ fontSize: "10px", color: "var(--c-t4)" }}
+              style={{ fontSize: "10px", color: "var(--c-silver)" }}
             >
               Source Intelligence
             </span>

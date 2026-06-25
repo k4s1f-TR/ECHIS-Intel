@@ -64,7 +64,7 @@ const INTERACTION_IDLE_MS = 15_000;
 const VIEW_TRANSITION_MS = 1_400;
 const CENTRAL_VIEW_ANIM_MS = 1_200;
 const CENTRAL_VIEW_IDLE_DELAY_MS = 3_000;
-const FOCUS_MARKER_ANIM_MS = 850;
+const FOCUS_MARKER_ANIM_MS = 1_500;
 const AUTO_ROTATE_DEG_PER_SEC = 1.5;
 const AUTO_ROTATE_MAX_DT_S = 0.05;
 
@@ -182,6 +182,12 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
+function easeInOutCubic(t: number): number {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 function markerItemCount(feature: MarkerFeature): number {
   const groupedItems = (feature as MarkerFeature & { items?: unknown[] }).items;
   return Math.max(
@@ -196,6 +202,7 @@ interface LuxeGlobeMapProps {
   activeSignalsRegion?: RegionKey;
   globalMarkers?: MarkerFeature[];
   signalsMarkers?: MarkerFeature[];
+  globalMarkersLoading?: boolean;
   onMarkerClick?: (id: string, kind: MarkerKind, point?: { x: number; y: number }) => void;
   autoRotatePaused?: boolean;
   onGlobalMarkerRevealStart?: () => void;
@@ -251,6 +258,7 @@ interface Engine {
   frameStartRot: { x: number; y: number };
   frameStartAt: number;
   frameDurationMs: number;
+  frameEasing: (t: number) => number;
   pausedUntil: number;
   lastAutoAt: number | null;
   hardPaused: boolean;
@@ -272,11 +280,13 @@ function startRotationFrame(
   target: { x: number; y: number },
   durationMs: number,
   pauseMs: number,
+  easing: (t: number) => number = easeOutCubic,
 ) {
   eng.frameStartRot = { ...eng.rot };
   eng.targetRot = target;
   eng.frameStartAt = performance.now();
   eng.frameDurationMs = durationMs;
+  eng.frameEasing = easing;
   eng.framing = true;
   eng.vel = { x: 0, y: 0 };
   eng.zoomAnchor = null;
@@ -350,6 +360,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         frameStartRot: { ...rotForLatLng(DEFAULT_CENTER[1], DEFAULT_CENTER[0]) },
         frameStartAt: 0,
         frameDurationMs: VIEW_TRANSITION_MS,
+        frameEasing: easeOutCubic,
         pausedUntil: 0,
         lastAutoAt: null,
         hardPaused: false,
@@ -873,7 +884,14 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         eng.raf = requestAnimationFrame(animate);
         const now = performance.now();
         const auto =
-          !eng.drag && !eng.framing && !eng.hardPaused && now > eng.pausedUntil;
+          !eng.drag &&
+          !eng.framing &&
+          !eng.hardPaused &&
+          !(
+            propsRef.current.activeView === "global" &&
+            propsRef.current.globalMarkersLoading
+          ) &&
+          now > eng.pausedUntil;
         if (!auto) {
           eng.lastAutoAt = null;
         } else if (eng.lastAutoAt === null) {
@@ -894,7 +912,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             1,
             (now - eng.frameStartAt) / Math.max(1, eng.frameDurationMs),
           );
-          const eased = easeOutCubic(t);
+          const eased = eng.frameEasing(t);
           eng.rot.y =
             eng.frameStartRot.y +
             (eng.targetRot.y - eng.frameStartRot.y) * eased;
@@ -1291,7 +1309,13 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           if (!eng) return;
           const tr = rotForLatLng(lat, lng);
           tr.y = nearestAngle(tr.y, eng.rot.y);
-          startRotationFrame(eng, tr, FOCUS_MARKER_ANIM_MS, INTERACTION_IDLE_MS);
+          startRotationFrame(
+            eng,
+            tr,
+            FOCUS_MARKER_ANIM_MS,
+            INTERACTION_IDLE_MS,
+            easeInOutCubic,
+          );
         },
       }),
       [],

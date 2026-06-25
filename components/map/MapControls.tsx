@@ -47,11 +47,11 @@ export function MapControls({
             background: "var(--bg-panel)",
             border: "1px solid var(--c-border-1)",
             backdropFilter: "blur(10px)",
-            color: "var(--c-t5)",
+            color: "var(--c-silver-dim)",
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.color =
-              "rgba(190,190,190,0.9)";
+              "var(--c-silver)";
             (e.currentTarget as HTMLElement).style.background =
               "var(--accent-blue-bg)";
             (e.currentTarget as HTMLElement).style.borderColor =
@@ -59,7 +59,7 @@ export function MapControls({
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.color =
-              "var(--c-t5)";
+              "var(--c-silver-dim)";
             (e.currentTarget as HTMLElement).style.background =
               "var(--bg-panel)";
             (e.currentTarget as HTMLElement).style.borderColor =

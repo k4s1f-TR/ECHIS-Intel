@@ -11,7 +11,7 @@ export function LiveStatusPill({ panelOffset = 0 }: LiveStatusPillProps) {
       style={{
         padding: "5px 10px",
         background: "var(--bg-panel)",
-        border: "1px solid var(--c-border-1)",
+        border: "1px solid var(--c-silver-border)",
         boxShadow: "var(--shadow-inset-highlight)",
         backdropFilter: "blur(10px)",
         transform: `translateX(-${panelOffset}px)`,

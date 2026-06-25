@@ -77,12 +77,13 @@ function MapSystemSwitch({
         zIndex: 18,
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: 4,
-        borderRadius: 10,
+        gap: 3,
+        padding: 3,
+        borderRadius: 9,
         background: "rgba(7,8,10,0.72)",
-        border: "1px solid rgba(255,255,255,0.09)",
-        boxShadow: "0 14px 36px rgba(0,0,0,0.42), 0 1px 0 rgba(255,255,255,0.04) inset",
+        border: "1px solid var(--accent-blue-border)",
+        boxShadow:
+          "0 14px 36px rgba(0,0,0,0.42), 0 0 18px rgba(255,43,61,0.10), 0 1px 0 rgba(255,255,255,0.04) inset",
         backdropFilter: "blur(14px)",
         transition: "right 180ms ease, opacity 120ms ease",
       }}
@@ -95,7 +96,7 @@ function MapSystemSwitch({
           right: 8,
           top: 0,
           height: 1,
-          background: "linear-gradient(90deg, #b3121f 0%, #ff2b3d 100%)",
+          background: "var(--accent-grad)",
           opacity: 0.92,
         }}
       />
@@ -108,33 +109,32 @@ function MapSystemSwitch({
             title={title}
             aria-pressed={selected}
             onClick={() => onChange(key)}
+            className="map-system-switch__btn"
             style={{
-              height: 28,
-              minWidth: key === "maplibre" ? 94 : 72,
+              height: 24,
+              minWidth: key === "maplibre" ? 82 : 62,
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 6,
-              borderRadius: 7,
-              padding: "0 10px",
+              gap: 5,
+              borderRadius: 6,
+              padding: "0 8px",
               border: selected
-                ? "1px solid rgba(255,255,255,0.16)"
+                ? "1px solid var(--c-accent-border)"
                 : "1px solid transparent",
-              background: selected
-                ? "linear-gradient(90deg, #b3121f 0%, #ff2b3d 100%)"
-                : "transparent",
-              color: selected ? "#fff4f4" : "var(--c-t5)",
-              fontSize: 10,
+              background: selected ? "var(--c-accent-grad-soft)" : "transparent",
+              color: selected ? "#fff4f4" : "var(--c-t4)",
+              fontSize: 9,
               fontWeight: 800,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
               lineHeight: 1,
               cursor: "pointer",
-              transition: "background 140ms ease, color 140ms ease, border-color 140ms ease",
+              transition: "background 150ms ease, color 140ms ease, border-color 150ms ease",
               whiteSpace: "nowrap",
             }}
           >
-            <Icon size={12} strokeWidth={1.7} />
+            <Icon size={11} strokeWidth={1.7} />
             {label}
           </button>
         );
@@ -203,7 +203,14 @@ export function AppShell() {
     items: sourceItems,
     markers: sourceMarkers,
     loadState: sourceLoadState,
+    pipelineBusy: sourcePipelineBusy,
+    loadingBySourceId,
   } = useSourceIntelligenceItems();
+
+  const globalMarkersLoading =
+    sourceLoadState === "loading" ||
+    sourcePipelineBusy ||
+    Object.values(loadingBySourceId).some(Boolean);
 
   const sourceCategoryOptions = useMemo<MonitorCategoryOption[]>(() => {
     const counts = new Map<SourceFilterDomain, number>();
@@ -660,6 +667,7 @@ export function AppShell() {
                 activeSignalsRegion={globeSignalsRegion}
                 globalMarkers={globalMarkers}
                 signalsMarkers={signalsMarkers}
+                globalMarkersLoading={globalMarkersLoading}
                 selectedGlobalId={selectedId}
                 selectedSignalsId={selectedSignalId}
                 onMarkerClick={(id, kind) => {
@@ -675,6 +683,7 @@ export function AppShell() {
                 activeSignalsRegion={globeSignalsRegion}
                 globalMarkers={globalMarkers}
                 signalsMarkers={signalsMarkers}
+                globalMarkersLoading={globalMarkersLoading}
                 selectedGlobalId={selectedId}
                 selectedSignalsId={selectedSignalId}
                 onMarkerClick={(id, kind) => {

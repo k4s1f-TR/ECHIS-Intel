@@ -66,6 +66,7 @@ interface MapLibreGlobeProps {
   activeSignalsRegion?: RegionKey;
   globalMarkers?: MarkerFeature[];
   signalsMarkers?: MarkerFeature[];
+  globalMarkersLoading?: boolean;
   /** Called when the user clicks a marker.  `kind` identifies which layer
    *  fired so the parent can route to the correct panel. */
   onMarkerClick?: (
@@ -957,6 +958,14 @@ const CENTRAL_VIEW_IDLE_DELAY_MS = 3_000;
 const INTERACTION_IDLE_DELAY_MS = 15_000;
 // Duration of the Central View easeTo (kept in sync with applyDefaultGlobeView).
 const CENTRAL_VIEW_ANIM_MS = 1200;
+const FOCUS_MARKER_ANIM_MS = 1500;
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 // Cap on per-frame delta so a tab-throttle or long task can't make the
 // globe leap forward; ~50ms ≈ one slow frame's worth.
 const AUTO_ROTATE_MAX_DT_S = 0.05;
@@ -1518,6 +1527,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       activeSignalsRegion,
       globalMarkers,
       signalsMarkers,
+      globalMarkersLoading = false,
       onMarkerClick,
       autoRotatePaused = false,
       onGlobalMarkerRevealStart,
@@ -1533,6 +1543,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     const globalMarkerRevealFrameRef = useRef<number | null>(null);
     const globalMarkerRenderedIdsRef = useRef<Set<string>>(new Set());
     const globalMarkerTargetSignatureRef = useRef("");
+    const globalMarkerSyncPendingRef = useRef(
+      markerDataSignature(globalMarkers ?? []) !== "",
+    );
+    const globalMarkersLoadingRef = useRef(globalMarkersLoading);
+    const activeViewRef = useRef(activeView);
     const signalsMarkerTargetSignatureRef = useRef("");
     const globalMarkerVisibleCountRef = useRef(0);
     const selectedGlobalIdRef = useRef<string | null | undefined>(selectedGlobalId);
@@ -1570,6 +1585,17 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       autoRotatePausedPropRef.current = autoRotatePaused;
       setAutoRotatePausedRef.current(autoRotatePaused);
     }, [autoRotatePaused]);
+
+    useEffect(() => {
+      activeViewRef.current = activeView;
+    }, [activeView]);
+
+    useEffect(() => {
+      globalMarkersLoadingRef.current = globalMarkersLoading;
+      globalMarkerSyncPendingRef.current =
+        markerDataSignature(globalMarkers ?? []) !==
+        globalMarkerTargetSignatureRef.current;
+    }, [globalMarkers, globalMarkersLoading]);
 
     const [loadState, setLoadState] = useState<LoadState>("loading");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -1647,8 +1673,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             m.easeTo({
               center: [lng, lat],
               padding,
-              duration: 850,
-              easing: (t) => 1 - Math.pow(1 - t, 3),
+              duration: FOCUS_MARKER_ANIM_MS,
+              easing: easeInOutCubic,
             });
           } catch {
             /* map mid-teardown — ignore */
@@ -1962,6 +1988,11 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         viewReadyRef.current &&
         !mapErrored &&
         !overlayPaused &&
+        !(
+          activeViewRef.current === "global" &&
+          (globalMarkersLoadingRef.current ||
+            globalMarkerSyncPendingRef.current)
+        ) &&
         !userInteracting &&
         !disposed;
 
@@ -2222,7 +2253,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         if (!latestMap) return;
         const latestMarkers = pendingGlobalMarkersRef.current;
         const nextSignature = markerDataSignature(latestMarkers);
-        if (nextSignature === globalMarkerTargetSignatureRef.current) return;
+        if (nextSignature === globalMarkerTargetSignatureRef.current) {
+          globalMarkerSyncPendingRef.current = false;
+          return;
+        }
         globalMarkerTargetSignatureRef.current = nextSignature;
 
         if (globalMarkerRevealFrameRef.current !== null) {
@@ -2246,6 +2280,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Count-only updates must not replay a full-layer reveal; keep the
         // marker layer visible while the GeoJSON badge data refreshes.
         setGlobalMarkerLayerOpacity(latestMap, 1, 0);
+        globalMarkerSyncPendingRef.current = false;
         if (hasEntering) {
           globalMarkerRevealFrameRef.current = window.requestAnimationFrame(() => {
             globalMarkerRevealFrameRef.current = null;
@@ -2268,6 +2303,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         pendingGlobalMarkersRef.current = [];
         globalMarkerRenderedIdsRef.current = new Set();
         globalMarkerTargetSignatureRef.current = "";
+        globalMarkerSyncPendingRef.current = false;
         signalsMarkerTargetSignatureRef.current = "";
         globalMarkerVisibleCountRef.current = 0;
       };

@@ -205,6 +205,22 @@ body {
   --scrollbar-accent: rgba(255, 255, 255, 0.05);
   --scrollbar-accent-hover: rgba(255, 255, 255, 0.1);
 }
+
+/* Luxe / MapLibre map-system switch — crimson hover for the unselected option. */
+.map-system-switch__btn[aria-pressed="false"]:hover {
+  background: var(--accent-blue-bg) !important;
+  color: var(--accent-blue-text) !important;
+  border-color: var(--accent-blue-border) !important;
+}
+
+/* Sources V2 "Density Matrix" table — flush row + ghost icon-button hovers. */
+.sources-v2-row:hover {
+  background: rgba(255, 255, 255, 0.018) !important;
+}
+.sources-v2-iconbtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(238, 240, 244, 0.96) !important;
+}
 .cyber-scrollbar {
   --scrollbar-accent: rgba(255, 255, 255, 0.05);
   --scrollbar-accent-hover: rgba(255, 255, 255, 0.1);
@@ -297,6 +313,13 @@ body {
   --c-accent-bg-soft: rgba(255, 43, 61, 0.06);
   --c-accent-border: rgba(255, 72, 84, 0.42);
   --c-accent-glow: rgba(255, 43, 61, 0.42);
+  /* Vertical "red click" gradient — crimson fading down into the dark surface.
+     Shared by the map-system switch, filter chips, and selected feed cards. */
+  --c-accent-grad-soft: linear-gradient(
+    180deg,
+    rgba(255, 43, 61, 0.17) 0%,
+    rgba(255, 43, 61, 0.05) 100%
+  );
 
   /* ── Severity (UI badges, red family) ──────────────────── */
   --c-crit: rgba(255, 72, 82, 0.98);
