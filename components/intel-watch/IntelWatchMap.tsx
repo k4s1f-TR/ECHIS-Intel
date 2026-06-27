@@ -25,16 +25,18 @@ import {
   Warehouse,
   Waves,
 } from "lucide-react";
-import type {
-  CSSProperties,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
+import maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker as MapLibreMarker } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  ECHIS_VIEW,
+  addGraticule,
+  buildEchisCommandStyle,
+} from "./echisCommandBasemap";
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 14;
 const PANEL_WIDTH = 318;
 
 type Tool = "select" | "pin" | "line" | "area";
@@ -42,7 +44,6 @@ type Tab = "layers" | "detail";
 type Severity = "critical" | "high" | "medium" | "low";
 type PinType = "naval" | "airdef" | "logistics" | "sigint" | "facility" | "incident";
 type LngLat = [number, number];
-type Transform = { k: number; tx: number; ty: number };
 
 type Layer = {
   id: string;
@@ -73,15 +74,6 @@ type Annotation = {
   color: string;
   coordinates: LngLat[];
 };
-
-type PointerDrag = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-  moved: boolean;
-} | null;
 
 const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
   critical: { label: "KRİTİK", color: "#ff2b3d" },
@@ -191,30 +183,6 @@ const INITIAL_PINS: Pin[] = [
   },
 ];
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function constrainTransform(
-  transform: Transform,
-  size: { width: number; height: number },
-) {
-  const k = clamp(transform.k, MIN_ZOOM, MAX_ZOOM);
-
-  if (k <= MIN_ZOOM || size.width <= 0 || size.height <= 0) {
-    return { k: MIN_ZOOM, tx: 0, ty: 0 };
-  }
-
-  const maxOffsetX = size.width * (k - MIN_ZOOM);
-  const maxOffsetY = size.height * (k - MIN_ZOOM);
-
-  return {
-    k,
-    tx: clamp(transform.tx, -maxOffsetX, maxOffsetX),
-    ty: clamp(transform.ty, -maxOffsetY, maxOffsetY),
-  };
-}
-
 function makeId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -227,9 +195,35 @@ function formatCoordinate(lat: number, lng: number) {
   )}°${lngHemisphere}`;
 }
 
-function toolCursor(tool: Tool, isPanning: boolean) {
-  if (tool !== "select") return "crosshair";
-  return isPanning ? "grabbing" : "grab";
+function toolCursor(tool: Tool) {
+  return tool === "select" ? "grab" : "crosshair";
+}
+
+const ECHIS_MARKER_PULSE_CSS = `
+@keyframes iwEchisPulse {
+  0%   { transform: scale(0.45); opacity: 0.55; }
+  70%  { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}`;
+
+/**
+ * Build the HTML element for an event pin — a pulsing ring + solid core,
+ * coloured by its layer hue (colour = data, per the basemap brief).
+ */
+function createEventMarkerElement(color: string) {
+  const el = document.createElement("div");
+  el.style.cssText = "position:relative;width:14px;height:14px;cursor:pointer";
+  const ring = document.createElement("div");
+  ring.style.cssText =
+    "position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;" +
+    `border-radius:50%;background:${color};animation:iwEchisPulse 2.6s ease-out infinite`;
+  const core = document.createElement("div");
+  core.style.cssText =
+    "position:relative;width:14px;height:14px;border-radius:50%;" +
+    `background:${color};box-shadow:0 0 0 3px ${color}33, 0 0 10px ${color}88;` +
+    "border:1.5px solid rgba(255,255,255,0.85)";
+  el.append(ring, core);
+  return el;
 }
 
 function safeLayerCount(counts: Record<string, number>, id: string) {
@@ -295,8 +289,10 @@ function MarkerGlyph({ type }: { type: PinType }) {
 }
 
 export function IntelWatchMap() {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<PointerDrag>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef(new Map<string, MapLibreMarker>());
+  const [mapReady, setMapReady] = useState(false);
   const [tool, setTool] = useState<Tool>("select");
   const [tab, setTab] = useState<Tab>("layers");
   const [layers, setLayers] = useState<Layer[]>(DEFAULT_LAYERS);
@@ -312,10 +308,8 @@ export function IntelWatchMap() {
     low: true,
   });
   const [searchQuery, setSearchQuery] = useState("");
-  const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
-  const [view, setView] = useState<Transform>({ k: 1, tx: 0, ty: 0 });
-  const [cursorCoordinate, setCursorCoordinate] = useState<LngLat>([35.88, 34.9]);
-  const [isPanning, setIsPanning] = useState(false);
+  const [zoom, setZoom] = useState(ECHIS_VIEW.zoom);
+  const [cursorCoordinate, setCursorCoordinate] = useState<LngLat>(ECHIS_VIEW.center);
 
   const layerMap = useMemo(() => {
     const map = new Map<string, Layer>();
@@ -350,15 +344,6 @@ export function IntelWatchMap() {
   const totalPins = pins.length;
   const criticalPins = pins.filter((pin) => pin.severity === "critical").length;
 
-  const clientToLngLat = useCallback(
-    (clientX: number, clientY: number): LngLat | null => {
-      void clientX;
-      void clientY;
-      return null;
-    },
-    [],
-  );
-
   const getWritableLayer = useCallback(() => {
     return (
       layers.find((layer) => layer.id === activeLayer && !layer.locked) ??
@@ -367,23 +352,48 @@ export function IntelWatchMap() {
     );
   }, [activeLayer, layers]);
 
+  // Create the MapLibre command basemap once and own the camera/render state.
   useEffect(() => {
-    const node = mapRef.current;
-    if (!node) return;
+    const container = mapContainerRef.current;
+    if (!container) return;
 
-    const resizeObserver = new ResizeObserver(([entry]) => {
-      const rect = entry.contentRect;
-      const nextSize = {
-        width: Math.max(1, Math.floor(rect.width)),
-        height: Math.max(1, Math.floor(rect.height)),
-      };
-      setMapSize(nextSize);
-      setView((current) => constrainTransform(current, nextSize));
+    const map = new maplibregl.Map({
+      container,
+      style: buildEchisCommandStyle(),
+      center: ECHIS_VIEW.center,
+      zoom: ECHIS_VIEW.zoom,
+      minZoom: ECHIS_VIEW.minZoom,
+      maxZoom: ECHIS_VIEW.maxZoom,
+      maxBounds: ECHIS_VIEW.maxBounds,
+      renderWorldCopies: false,
+      attributionControl: false,
+      dragRotate: false,
+      pitchWithRotate: false,
     });
+    map.touchZoomRotate.disableRotation();
+    mapRef.current = map;
 
-    resizeObserver.observe(node);
+    map.on("load", () => {
+      addGraticule(map);
+      setMapReady(true);
+    });
+    map.on("zoom", () => setZoom(map.getZoom()));
+    map.on("mousemove", (event) =>
+      setCursorCoordinate([event.lngLat.lng, event.lngLat.lat]),
+    );
 
-    return () => resizeObserver.disconnect();
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
+
+    const markers = markersRef.current;
+    return () => {
+      resizeObserver.disconnect();
+      markers.forEach((marker) => marker.remove());
+      markers.clear();
+      map.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    };
   }, []);
 
   const cancelDraft = useCallback(() => {
@@ -450,127 +460,74 @@ export function IntelWatchMap() {
     if (nextTool !== "line" && nextTool !== "area") setDraft([]);
   }
 
-  function updateCursorCoordinate(clientX: number, clientY: number) {
-    const nextCoordinate = clientToLngLat(clientX, clientY);
-    if (nextCoordinate) setCursorCoordinate(nextCoordinate);
-  }
+  // Place a point for the active drawing tool at a clicked map coordinate.
+  const handleMapPlace = useCallback(
+    (coordinate: LngLat) => {
+      if (tool === "pin") {
+        const layer = getWritableLayer();
+        if (!layer) return;
+        const nextPin: Pin = {
+          id: makeId("pin"),
+          lng: coordinate[0],
+          lat: coordinate[1],
+          type: "facility",
+          severity: "medium",
+          layer: layer.id,
+          title: "Yeni İşaret",
+          source: "Analist girdisi",
+          updated: "Şimdi",
+          note: "Harita üzerine eklenen kullanıcı işareti. Kaynak ve not alanları detay panelinden izlenebilir.",
+        };
+        setActiveLayer(layer.id);
+        setLayers((currentLayers) =>
+          currentLayers.map((item) =>
+            item.id === layer.id ? { ...item, visible: true } : item,
+          ),
+        );
+        setPins((current) => [...current, nextPin]);
+        setSelectedPinId(nextPin.id);
+        setTab("detail");
+        return;
+      }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || tool !== "select") return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      moved: false,
+      if (tool === "line" || tool === "area") {
+        setDraft((current) => [...current, coordinate]);
+      }
+    },
+    [tool, getWritableLayer],
+  );
+
+  // Bind map click (place) + dbl-click (finish) to the current handlers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const onClick = (event: maplibregl.MapMouseEvent) => {
+      if (event.originalEvent.detail > 1) return; // ignore the dbl-click pair
+      handleMapPlace([event.lngLat.lng, event.lngLat.lat]);
     };
-    setIsPanning(true);
-  }
-
-  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    updateCursorCoordinate(event.clientX, event.clientY);
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const dx = event.clientX - drag.lastX;
-    const dy = event.clientY - drag.lastY;
-    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-    dragRef.current = {
-      ...drag,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      moved: drag.moved || distance > 4,
+    const onDblClick = (event: maplibregl.MapMouseEvent) => {
+      event.preventDefault();
+      finishDraft();
     };
 
-    setView((current) =>
-      constrainTransform(
-        {
-          ...current,
-          tx: current.tx + dx,
-          ty: current.ty + dy,
-        },
-        mapSize,
-      ),
-    );
-  }
+    map.on("click", onClick);
+    map.on("dblclick", onDblClick);
+    return () => {
+      map.off("click", onClick);
+      map.off("dblclick", onDblClick);
+    };
+  }, [handleMapPlace, finishDraft, mapReady]);
 
-  function handlePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (drag && drag.pointerId === event.pointerId) {
-      dragRef.current = null;
-      setIsPanning(false);
-      if (!drag.moved && tool === "select") setSelectedPinId(null);
-    }
-  }
-
-  function zoomToward(nextZoom: number, origin: { x: number; y: number }) {
-    setView((current) => {
-      const k = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
-      const ratio = k / current.k;
-      return constrainTransform(
-        {
-          k,
-          tx: origin.x - (origin.x - current.tx) * ratio,
-          ty: origin.y - (origin.y - current.ty) * ratio,
-        },
-        mapSize,
-      );
-    });
-  }
-
-  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const origin = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    const factor = Math.exp(-event.deltaY * 0.0016);
-    zoomToward(view.k * factor, origin);
-  }
-
-  function handleMapClick(event: ReactMouseEvent<HTMLDivElement>) {
-    if (dragRef.current?.moved) return;
-    const coordinate = clientToLngLat(event.clientX, event.clientY);
-    if (!coordinate) return;
-
-    if (tool === "pin") {
-      if (event.detail > 1) return;
-      const layer = getWritableLayer();
-      if (!layer) return;
-      const nextPin: Pin = {
-        id: makeId("pin"),
-        lng: coordinate[0],
-        lat: coordinate[1],
-        type: "facility",
-        severity: "medium",
-        layer: layer.id,
-        title: "Yeni İşaret",
-        source: "Analist girdisi",
-        updated: "Şimdi",
-        note: "Harita üzerine eklenen kullanıcı işareti. Kaynak ve not alanları detay panelinden izlenebilir.",
-      };
-      setActiveLayer(layer.id);
-      setLayers((currentLayers) =>
-        currentLayers.map((item) =>
-          item.id === layer.id ? { ...item, visible: true } : item,
-        ),
-      );
-      setPins((current) => [...current, nextPin]);
-      setSelectedPinId(nextPin.id);
-      setTab("detail");
-      return;
-    }
-
-    if (tool === "line" || tool === "area") {
-      setDraft((current) => [...current, coordinate]);
-    }
-  }
-
-  function handleDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
-    if (tool !== "line" && tool !== "area") return;
-    event.preventDefault();
-    finishDraft();
-  }
+  // Set the map cursor for the active tool and suppress MapLibre's
+  // double-click zoom while drawing (so dbl-click can finish a line/area).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (tool === "line" || tool === "area") map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+    map.getCanvas().style.cursor = toolCursor(tool);
+  }, [tool, mapReady]);
 
   function handleUndo() {
     if ((tool === "line" || tool === "area") && draft.length > 0) {
@@ -647,7 +604,11 @@ export function IntelWatchMap() {
 
   function handleFocusPin(pin: Pin) {
     setSelectedPinId(pin.id);
-    setView({ k: 1, tx: 0, ty: 0 });
+    mapRef.current?.flyTo({
+      center: [pin.lng, pin.lat],
+      zoom: Math.max(mapRef.current.getZoom(), 6.5),
+      duration: 900,
+    });
   }
 
   function handleDeletePin(pinId: string) {
@@ -656,13 +617,141 @@ export function IntelWatchMap() {
   }
 
   function handleButtonZoom(direction: "in" | "out") {
-    const origin = { x: mapSize.width / 2, y: mapSize.height / 2 };
-    zoomToward(view.k * (direction === "in" ? 1.5 : 1 / 1.5), origin);
+    if (direction === "in") mapRef.current?.zoomIn();
+    else mapRef.current?.zoomOut();
   }
 
   function handleRecenter() {
-    setView({ k: 1, tx: 0, ty: 0 });
+    mapRef.current?.flyTo({
+      center: ECHIS_VIEW.center,
+      zoom: ECHIS_VIEW.zoom,
+      duration: 900,
+    });
   }
+
+  // Sync event pins to MapLibre HTML markers (visible layers + severity filter).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = markersRef.current;
+    const seen = new Set<string>();
+
+    pins.forEach((pin) => {
+      const layer = layerMap.get(pin.layer);
+      const visible = (layer?.visible ?? true) && filters[pin.severity];
+      if (!visible) return;
+      seen.add(pin.id);
+
+      const existing = markers.get(pin.id);
+      if (existing) {
+        existing.setLngLat([pin.lng, pin.lat]);
+        return;
+      }
+
+      const element = createEventMarkerElement(layer?.hue ?? "#c4ccd6");
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setSelectedPinId(pin.id);
+        setTab("detail");
+      });
+      const marker = new maplibregl.Marker({ element, anchor: "center" })
+        .setLngLat([pin.lng, pin.lat])
+        .addTo(map);
+      markers.set(pin.id, marker);
+    });
+
+    markers.forEach((marker, id) => {
+      if (!seen.has(id)) {
+        marker.remove();
+        markers.delete(id);
+      }
+    });
+  }, [pins, layerMap, filters, mapReady]);
+
+  // Render committed annotations + the in-progress draft as GeoJSON layers.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const annotationData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: annotations
+        .filter((annotation) => layerMap.get(annotation.layer)?.visible ?? true)
+        .map((annotation) => ({
+          type: "Feature",
+          properties: { color: annotation.color },
+          geometry:
+            annotation.kind === "area"
+              ? {
+                  type: "Polygon",
+                  coordinates: [
+                    [...annotation.coordinates, annotation.coordinates[0]],
+                  ],
+                }
+              : { type: "LineString", coordinates: annotation.coordinates },
+        })),
+    };
+
+    const draftData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features:
+        draft.length > 1
+          ? [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: draft },
+              },
+            ]
+          : [],
+    };
+
+    const annoSource = map.getSource("iw-annotations");
+    if (annoSource) {
+      (annoSource as maplibregl.GeoJSONSource).setData(annotationData);
+    } else {
+      map.addSource("iw-annotations", { type: "geojson", data: annotationData });
+      map.addLayer({
+        id: "iw-annotations-fill",
+        type: "fill",
+        source: "iw-annotations",
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.12 },
+      });
+      map.addLayer({
+        id: "iw-annotations-line",
+        type: "line",
+        source: "iw-annotations",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 2,
+          "line-opacity": 0.9,
+        },
+      });
+    }
+
+    const draftSource = map.getSource("iw-draft");
+    if (draftSource) {
+      (draftSource as maplibregl.GeoJSONSource).setData(draftData);
+    } else {
+      map.addSource("iw-draft", { type: "geojson", data: draftData });
+      map.addLayer({
+        id: "iw-draft-line",
+        type: "line",
+        source: "iw-draft",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#c4ccd6",
+          "line-width": 1.6,
+          "line-dasharray": [2, 2],
+          "line-opacity": 0.85,
+        },
+      });
+    }
+  }, [annotations, draft, layerMap, mapReady]);
 
   const mapReadout = formatCoordinate(cursorCoordinate[1], cursorCoordinate[0]);
 
@@ -906,11 +995,15 @@ export function IntelWatchMap() {
           background: #030203;
         }
 
-        .iw-map-blank {
+        .iw-map-canvas {
           position: absolute;
           inset: 0;
           z-index: 1;
-          background: #030203;
+          background: #13161b;
+        }
+
+        .iw-map-canvas .maplibregl-canvas {
+          outline: none;
         }
 
         .iw-glass {
@@ -1634,6 +1727,7 @@ export function IntelWatchMap() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.28; }
         }
+        ${ECHIS_MARKER_PULSE_CSS}
 
         @media (max-width: 1020px) {
           .iw-topbar {
@@ -1661,18 +1755,8 @@ export function IntelWatchMap() {
         }
       `}</style>
 
-      <div
-        ref={mapRef}
-        className="iw-map-area"
-        style={{ cursor: toolCursor(tool, isPanning) }}
-        onClick={handleMapClick}
-        onDoubleClick={handleDoubleClick}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-      >
-        <div className="iw-map-blank" aria-hidden="true" />
+      <div className="iw-map-area">
+        <div ref={mapContainerRef} className="iw-map-canvas" />
 
         <aside className="iw-glass iw-tool-rail" aria-label="Map tools">
           <div className="iw-rail-label">ARAÇ</div>
@@ -1729,7 +1813,7 @@ export function IntelWatchMap() {
         <aside className="iw-glass iw-legend" aria-label="Map legend">
           <div className="iw-legend-head">
             <div className="iw-legend-title">GÖSTERGE · TÜR</div>
-            <div className="iw-zoom-readout">Z {view.k.toFixed(1)}</div>
+            <div className="iw-zoom-readout">Z {zoom.toFixed(1)}</div>
           </div>
           <div className="iw-legend-grid">
             {(Object.keys(TYPE_META) as PinType[]).map((type) => {
