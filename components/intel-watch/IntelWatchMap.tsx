@@ -13,6 +13,7 @@ import {
   Minus,
   MousePointer2,
   Pentagon,
+  Plane,
   Plus,
   Route,
   Satellite,
@@ -29,13 +30,14 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import maplibregl from "maplibre-gl";
-import type { Map as MapLibreMap, Marker as MapLibreMarker } from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   ECHIS_VIEW,
   addGraticule,
   buildEchisCommandStyle,
 } from "./echisCommandBasemap";
+import IntelMapLoader from "./IntelMapLoader";
 
 const PANEL_WIDTH = 318;
 
@@ -81,8 +83,6 @@ const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
   medium: { label: "ORTA", color: "#ffd23d" },
   low: { label: "DÜŞÜK", color: "#4fd1c5" },
 };
-
-const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
 
 const TYPE_META: Record<PinType, { label: string; Icon: LucideIcon }> = {
   naval: { label: "Deniz", Icon: Waves },
@@ -199,31 +199,63 @@ function toolCursor(tool: Tool) {
   return tool === "select" ? "grab" : "crosshair";
 }
 
-const ECHIS_MARKER_PULSE_CSS = `
-@keyframes iwEchisPulse {
-  0%   { transform: scale(0.45); opacity: 0.55; }
-  70%  { transform: scale(1.5); opacity: 0; }
-  100% { transform: scale(1.5); opacity: 0; }
-}`;
+/* ----------------------------------------------------------------------- */
+/* Airbases overlay (public/data/airbases.geojson) — popup helpers.         */
+/* ----------------------------------------------------------------------- */
+const AIRBASES_SOURCE = "airbases";
+const AIRBASES_LAYER = "airbases-dot";
+const AIRBASES_DATA_URL = "/data/airbases.geojson";
 
 /**
- * Build the HTML element for an event pin — a pulsing ring + solid core,
- * coloured by its layer hue (colour = data, per the basemap brief).
+ * Toggleable map data overlays shown in the left "VERİ KATMANLARI" panel.
+ * Add a new entry here (id + label + dot colour + its MapLibre layer id) to
+ * expose another dataset toggle — the panel renders from this list.
  */
-function createEventMarkerElement(color: string) {
-  const el = document.createElement("div");
-  el.style.cssText = "position:relative;width:14px;height:14px;cursor:pointer";
-  const ring = document.createElement("div");
-  ring.style.cssText =
-    "position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;" +
-    `border-radius:50%;background:${color};animation:iwEchisPulse 2.6s ease-out infinite`;
-  const core = document.createElement("div");
-  core.style.cssText =
-    "position:relative;width:14px;height:14px;border-radius:50%;" +
-    `background:${color};box-shadow:0 0 0 3px ${color}33, 0 0 10px ${color}88;` +
-    "border:1.5px solid rgba(255,255,255,0.85)";
-  el.append(ring, core);
-  return el;
+type MapOverlay = {
+  id: string;
+  label: string;
+  color: string;
+  layerId: string;
+  Icon: LucideIcon;
+};
+const MAP_OVERLAYS: MapOverlay[] = [
+  { id: "airbases", label: "Üsler", color: "#e0a82e", layerId: AIRBASES_LAYER, Icon: Plane },
+];
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function airbaseRow(label: string, value: unknown) {
+  if (!value) return "";
+  return `<div class="iw-ab-row"><span>${label}</span><b>${escapeHtml(value)}</b></div>`;
+}
+
+function buildAirbasePopup(p: Record<string, unknown>) {
+  const codes = [p.icao, p.iata].filter(Boolean).map(escapeHtml).join(" · ");
+  const country = p.operating_country || p.location || "";
+  const sub = [country, p.status].filter(Boolean).map(escapeHtml).join(" · ");
+  return (
+    `<div class="iw-ab">` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Hava Üssü")}</div>` +
+    (sub ? `<div class="iw-ab-sub">${sub}</div>` : "") +
+    `<div class="iw-ab-meta">` +
+    airbaseRow("Kullanım", p.usage) +
+    airbaseRow("Kuruluş", p.operating_organization) +
+    (codes ? `<div class="iw-ab-row"><span>Kod</span><b>${codes}</b></div>` : "") +
+    airbaseRow("Yıl", p.year_built) +
+    airbaseRow("İrtifa", p.elevation) +
+    airbaseRow("Pist", p.runways) +
+    `</div>` +
+    (p.url
+      ? `<a class="iw-ab-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">Kaynak ↗</a>`
+      : "") +
+    `</div>`
+  );
 }
 
 function safeLayerCount(counts: Record<string, number>, id: string) {
@@ -291,8 +323,11 @@ function MarkerGlyph({ type }: { type: PinType }) {
 export function IntelWatchMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markersRef = useRef(new Map<string, MapLibreMarker>());
+  const toolRef = useRef<Tool>("select");
   const [mapReady, setMapReady] = useState(false);
+  // Loader overlay: closes when the map's first full render lands (`idle`).
+  const [mapFullyLoaded, setMapFullyLoaded] = useState(false);
+  const [loaderGone, setLoaderGone] = useState(false);
   const [tool, setTool] = useState<Tool>("select");
   const [tab, setTab] = useState<Tab>("layers");
   const [layers, setLayers] = useState<Layer[]>(DEFAULT_LAYERS);
@@ -301,14 +336,10 @@ export function IntelWatchMap() {
   const [draft, setDraft] = useState<LngLat[]>([]);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [activeLayer, setActiveLayer] = useState("annot");
-  const [filters, setFilters] = useState<Record<Severity, boolean>>({
-    critical: true,
-    high: true,
-    medium: true,
-    low: true,
-  });
   const [searchQuery, setSearchQuery] = useState("");
-  const [zoom, setZoom] = useState(ECHIS_VIEW.zoom);
+  const [overlayVisibility, setOverlayVisibility] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(MAP_OVERLAYS.map((overlay) => [overlay.id, true])),
+  );
   const [cursorCoordinate, setCursorCoordinate] = useState<LngLat>(ECHIS_VIEW.center);
 
   const layerMap = useMemo(() => {
@@ -377,19 +408,21 @@ export function IntelWatchMap() {
       addGraticule(map);
       setMapReady(true);
     });
-    map.on("zoom", () => setZoom(map.getZoom()));
+    // First full render (all visible tiles painted) → dismiss the loader.
+    map.once("idle", () => setMapFullyLoaded(true));
     map.on("mousemove", (event) =>
       setCursorCoordinate([event.lngLat.lng, event.lngLat.lat]),
     );
 
+    // Watchdog: never let the loader hang if tiles stall / never settle.
+    const loaderWatchdog = window.setTimeout(() => setMapFullyLoaded(true), 12000);
+
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(container);
 
-    const markers = markersRef.current;
     return () => {
+      window.clearTimeout(loaderWatchdog);
       resizeObserver.disconnect();
-      markers.forEach((marker) => marker.remove());
-      markers.clear();
       map.remove();
       mapRef.current = null;
       setMapReady(false);
@@ -522,12 +555,98 @@ export function IntelWatchMap() {
   // Set the map cursor for the active tool and suppress MapLibre's
   // double-click zoom while drawing (so dbl-click can finish a line/area).
   useEffect(() => {
+    toolRef.current = tool;
     const map = mapRef.current;
     if (!map || !mapReady) return;
     if (tool === "line" || tool === "area") map.doubleClickZoom.disable();
     else map.doubleClickZoom.enable();
     map.getCanvas().style.cursor = toolCursor(tool);
   }, [tool, mapReady]);
+
+  // Airbases overlay — 1240 military airbases as a data-driven circle layer
+  // (GeoJSON streamed from /public; click opens a detail popup).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!map.getSource(AIRBASES_SOURCE)) {
+      map.addSource(AIRBASES_SOURCE, { type: "geojson", data: AIRBASES_DATA_URL });
+      map.addLayer({
+        id: AIRBASES_LAYER,
+        type: "circle",
+        source: AIRBASES_SOURCE,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 2, 6, 3.4, 10, 5],
+          "circle-color": [
+            "match",
+            ["get", "status"],
+            "Active",
+            "#e0a82e",
+            ["Closed", "Inactive"],
+            "#7a6a52",
+            "#9aa1ab",
+          ],
+          "circle-opacity": ["match", ["get", "status"], "Active", 0.95, 0.6],
+          "circle-stroke-color": "#05070b",
+          "circle-stroke-width": 1,
+        },
+      });
+    }
+
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: "264px",
+      className: "iw-airbase-popup",
+    });
+
+    const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
+      popup
+        .setLngLat(coords)
+        .setHTML(buildAirbasePopup(feature.properties ?? {}))
+        .addTo(map);
+    };
+    const handleEnter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const handleLeave = () => {
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+
+    map.on("click", AIRBASES_LAYER, handleClick);
+    map.on("mouseenter", AIRBASES_LAYER, handleEnter);
+    map.on("mouseleave", AIRBASES_LAYER, handleLeave);
+
+    return () => {
+      map.off("click", AIRBASES_LAYER, handleClick);
+      map.off("mouseenter", AIRBASES_LAYER, handleEnter);
+      map.off("mouseleave", AIRBASES_LAYER, handleLeave);
+      popup.remove();
+    };
+  }, [mapReady]);
+
+  // Apply the left-panel overlay toggles to their MapLibre layers.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+    for (const overlay of MAP_OVERLAYS) {
+      if (!map.getLayer(overlay.layerId)) continue;
+      map.setLayoutProperty(
+        overlay.layerId,
+        "visibility",
+        overlayVisibility[overlay.id] ? "visible" : "none",
+      );
+    }
+  }, [overlayVisibility, mapReady]);
+
+  function toggleOverlay(id: string) {
+    setOverlayVisibility((current) => ({ ...current, [id]: !current[id] }));
+  }
 
   function handleUndo() {
     if ((tool === "line" || tool === "area") && draft.length > 0) {
@@ -598,10 +717,6 @@ export function IntelWatchMap() {
     if (selectedPin?.layer === layerId) setSelectedPinId(null);
   }
 
-  function handleToggleSeverity(severity: Severity) {
-    setFilters((current) => ({ ...current, [severity]: !current[severity] }));
-  }
-
   function handleFocusPin(pin: Pin) {
     setSelectedPinId(pin.id);
     mapRef.current?.flyTo({
@@ -628,46 +743,6 @@ export function IntelWatchMap() {
       duration: 900,
     });
   }
-
-  // Sync event pins to MapLibre HTML markers (visible layers + severity filter).
-  useEffect(() => {
-    if (!mapReady) return;
-    const map = mapRef.current;
-    if (!map) return;
-    const markers = markersRef.current;
-    const seen = new Set<string>();
-
-    pins.forEach((pin) => {
-      const layer = layerMap.get(pin.layer);
-      const visible = (layer?.visible ?? true) && filters[pin.severity];
-      if (!visible) return;
-      seen.add(pin.id);
-
-      const existing = markers.get(pin.id);
-      if (existing) {
-        existing.setLngLat([pin.lng, pin.lat]);
-        return;
-      }
-
-      const element = createEventMarkerElement(layer?.hue ?? "#c4ccd6");
-      element.addEventListener("click", (event) => {
-        event.stopPropagation();
-        setSelectedPinId(pin.id);
-        setTab("detail");
-      });
-      const marker = new maplibregl.Marker({ element, anchor: "center" })
-        .setLngLat([pin.lng, pin.lat])
-        .addTo(map);
-      markers.set(pin.id, marker);
-    });
-
-    markers.forEach((marker, id) => {
-      if (!seen.has(id)) {
-        marker.remove();
-        markers.delete(id);
-      }
-    });
-  }, [pins, layerMap, filters, mapReady]);
 
   // Render committed annotations + the in-progress draft as GeoJSON layers.
   useEffect(() => {
@@ -766,7 +841,7 @@ export function IntelWatchMap() {
           min-width: 0;
           flex: 1 1 auto;
           overflow: hidden;
-          background: #060305;
+          background: var(--c-bg-base);
           color: #c4ccd6;
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
         }
@@ -786,8 +861,8 @@ export function IntelWatchMap() {
           align-items: center;
           gap: 12px;
           padding: 0 14px;
-          background: linear-gradient(180deg, #08070c, #05040980);
-          border-bottom: 1px solid rgba(158, 167, 184, 0.10);
+          background: linear-gradient(180deg, var(--c-panel-bg), #05040980);
+          border-bottom: 1px solid var(--c-border-1);
         }
 
         .iw-top-left,
@@ -819,7 +894,7 @@ export function IntelWatchMap() {
           border-radius: 6px;
           background: linear-gradient(150deg, #ff2b3d, #b3121f);
           box-shadow: 0 0 16px rgba(255, 43, 61, 0.45);
-          color: #050406;
+          color: var(--c-panel-bg);
         }
 
         .iw-wordmark {
@@ -827,19 +902,19 @@ export function IntelWatchMap() {
           font-size: 15px;
           font-weight: 700;
           letter-spacing: 0.16em;
-          color: #eef1f5;
+          color: var(--c-t1);
         }
 
         .iw-divider {
           width: 1px;
           height: 18px;
           flex: 0 0 auto;
-          background: rgba(158, 167, 184, 0.16);
+          background: var(--c-border-1);
         }
 
         .iw-kicker {
           overflow: hidden;
-          color: #8b95a3;
+          color: var(--c-t4);
           font-family: var(--font-display), "Space Grotesk", sans-serif;
           font-size: 11.5px;
           font-weight: 500;
@@ -882,7 +957,7 @@ export function IntelWatchMap() {
         .iw-search svg {
           position: absolute;
           left: 12px;
-          color: #5b6471;
+          color: var(--c-t5);
           pointer-events: none;
         }
 
@@ -890,17 +965,17 @@ export function IntelWatchMap() {
           width: 100%;
           height: 30px;
           padding: 0 12px 0 34px;
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           border-radius: 8px;
           outline: none;
           background: rgba(255, 255, 255, 0.03);
-          color: #eef1f5;
+          color: var(--c-t1);
           font-size: 11.5px;
           transition: background 140ms ease, border-color 140ms ease;
         }
 
         .iw-search input::placeholder {
-          color: #4a525d;
+          color: var(--c-t6);
         }
 
         .iw-search input:focus {
@@ -911,17 +986,17 @@ export function IntelWatchMap() {
         .iw-panel-search {
           width: auto;
           max-width: none;
-          height: 29px;
-          margin: 9px 12px 8px;
+          height: 27px;
+          margin: 8px 11px 7px;
           flex: 0 0 auto;
           justify-self: stretch;
         }
 
         .iw-panel-search input {
-          height: 29px;
+          height: 27px;
           border-radius: 7px;
           background: rgba(255, 255, 255, 0.025);
-          font-size: 10.5px;
+          font-size: 10px;
         }
 
         .iw-top-right {
@@ -938,7 +1013,7 @@ export function IntelWatchMap() {
         }
 
         .iw-clock strong {
-          color: #eef1f5;
+          color: var(--c-t1);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
           font-size: 11.5px;
           font-weight: 500;
@@ -946,7 +1021,7 @@ export function IntelWatchMap() {
         }
 
         .iw-caption {
-          color: #5b6471;
+          color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
           font-size: 8.5px;
           font-weight: 500;
@@ -967,7 +1042,7 @@ export function IntelWatchMap() {
           display: grid;
           flex: 0 0 auto;
           place-items: center;
-          border: 1px solid rgba(158, 167, 184, 0.14);
+          border: 1px solid var(--c-border-1);
           border-radius: 7px;
           background: linear-gradient(150deg, #141319, #1e1d28);
           color: #c4ccd6;
@@ -992,7 +1067,7 @@ export function IntelWatchMap() {
           right: ${PANEL_WIDTH}px;
           bottom: 0;
           overflow: hidden;
-          background: #030203;
+          background: var(--c-bg-deep);
         }
 
         .iw-map-canvas {
@@ -1006,18 +1081,114 @@ export function IntelWatchMap() {
           outline: none;
         }
 
+        .iw-airbase-popup .maplibregl-popup-content {
+          padding: 0;
+          overflow: hidden;
+          border: 1px solid var(--c-border-1);
+          border-radius: 10px;
+          background: var(--c-panel-bg);
+          box-shadow: 0 14px 44px rgba(0, 0, 0, 0.62);
+          color: var(--c-t3);
+          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
+        }
+
+        .iw-airbase-popup .maplibregl-popup-tip {
+          border-top-color: var(--c-panel-bg);
+          border-bottom-color: var(--c-panel-bg);
+        }
+
+        .iw-airbase-popup .maplibregl-popup-close-button {
+          width: 20px;
+          height: 20px;
+          color: var(--c-t5);
+          font-size: 15px;
+          line-height: 1;
+        }
+
+        .iw-airbase-popup .maplibregl-popup-close-button:hover {
+          background: transparent;
+          color: var(--c-t1);
+        }
+
+        .iw-ab {
+          padding: 10px 12px 11px;
+        }
+
+        .iw-ab-title {
+          padding-right: 14px;
+          color: var(--c-t1);
+          font-family: var(--font-display), "Space Grotesk", sans-serif;
+          font-size: 11.5px;
+          font-weight: 600;
+          line-height: 1.25;
+        }
+
+        .iw-ab-sub {
+          margin-top: 4px;
+          color: #e0a82e;
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 8.6px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .iw-ab-meta {
+          display: grid;
+          gap: 4px;
+          margin-top: 9px;
+        }
+
+        .iw-ab-row {
+          display: flex;
+          justify-content: space-between;
+          gap: 14px;
+          font-size: 9.4px;
+        }
+
+        .iw-ab-row span {
+          flex: 0 0 auto;
+          color: var(--c-t5);
+        }
+
+        .iw-ab-row b {
+          color: var(--c-t2);
+          font-weight: 600;
+          text-align: right;
+        }
+
+        .iw-ab-link {
+          display: inline-block;
+          margin-top: 10px;
+          color: var(--c-accent-text);
+          font-size: 9.4px;
+          font-weight: 600;
+          text-decoration: none;
+        }
+
+        .iw-ab-link:hover {
+          text-decoration: underline;
+        }
+
         .iw-glass {
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           background: rgba(8, 8, 12, 0.78);
           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
           backdrop-filter: blur(14px);
         }
 
-        .iw-tool-rail {
+        .iw-left-stack {
           position: absolute;
           top: 14px;
           left: 14px;
           z-index: 20;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+
+        .iw-tool-rail {
           width: 56px;
           border-radius: 13px;
           padding: 9px 8px 10px;
@@ -1025,7 +1196,7 @@ export function IntelWatchMap() {
 
         .iw-rail-label,
         .iw-section-label {
-          color: #5b6471;
+          color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
           font-size: 7.5px;
           font-weight: 700;
@@ -1055,7 +1226,7 @@ export function IntelWatchMap() {
 
         .iw-tool-item span {
           max-width: 46px;
-          color: #8b95a3;
+          color: var(--c-t4);
           font-size: 7.8px;
           font-weight: 600;
           line-height: 1.05;
@@ -1068,10 +1239,10 @@ export function IntelWatchMap() {
           height: 36px;
           display: grid;
           place-items: center;
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           border-radius: 9px;
           background: rgba(13, 13, 18, 0.5);
-          color: #8b95a3;
+          color: var(--c-t4);
           cursor: pointer;
           transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
         }
@@ -1096,7 +1267,7 @@ export function IntelWatchMap() {
         .iw-tool-divider {
           width: 36px;
           height: 1px;
-          background: rgba(158, 167, 184, 0.12);
+          background: var(--c-border-1);
         }
 
         .iw-draw-hint {
@@ -1115,20 +1286,6 @@ export function IntelWatchMap() {
           white-space: nowrap;
         }
 
-        .iw-legend {
-          position: absolute;
-          left: 16px;
-          bottom: 16px;
-          z-index: 20;
-          width: 194px;
-          border-radius: 11px;
-          padding: 9px;
-          background: rgba(8, 8, 12, 0.70);
-          box-shadow: 0 12px 34px rgba(0,0,0,0.48);
-          backdrop-filter: blur(12px);
-        }
-
-        .iw-legend-head,
         .iw-panel-header,
         .iw-panel-stats,
         .iw-layer-top,
@@ -1138,52 +1295,6 @@ export function IntelWatchMap() {
         .iw-layer-ref {
           display: flex;
           align-items: center;
-        }
-
-        .iw-legend-head {
-          justify-content: space-between;
-          margin-bottom: 8px;
-        }
-
-        .iw-legend-title {
-          color: #8b95a3;
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7.8px;
-          font-weight: 700;
-          letter-spacing: 0.16em;
-        }
-
-        .iw-zoom-readout {
-          color: #5b6471;
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7.8px;
-        }
-
-        .iw-legend-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 6px 7px;
-        }
-
-        .iw-legend-item {
-          display: flex;
-          align-items: center;
-          min-width: 0;
-          gap: 5px;
-          color: #8b95a3;
-          font-size: 8.8px;
-        }
-
-        .iw-type-chip-icon {
-          width: 15px;
-          height: 15px;
-          display: grid;
-          flex: 0 0 auto;
-          place-items: center;
-          border: 1px solid rgba(158, 167, 184, 0.12);
-          border-radius: 5px;
-          background: rgba(255, 255, 255, 0.04);
-          color: #c4ccd6;
         }
 
         .iw-coordinates {
@@ -1196,7 +1307,7 @@ export function IntelWatchMap() {
           gap: 7px;
           padding: 7px 11px;
           border-radius: 999px;
-          color: #8b95a3;
+          color: var(--c-t4);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
           font-size: 10px;
           pointer-events: none;
@@ -1225,7 +1336,7 @@ export function IntelWatchMap() {
           display: grid;
           place-items: center;
           border: 0;
-          border-bottom: 1px solid rgba(158, 167, 184, 0.10);
+          border-bottom: 1px solid var(--c-border-1);
           background: transparent;
           color: #c4ccd6;
           cursor: pointer;
@@ -1242,7 +1353,7 @@ export function IntelWatchMap() {
         }
 
         .iw-control-single {
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           border-radius: 11px;
         }
 
@@ -1255,22 +1366,22 @@ export function IntelWatchMap() {
           width: ${PANEL_WIDTH}px;
           display: flex;
           flex-direction: column;
-          border-left: 1px solid rgba(158, 167, 184, 0.10);
-          background: linear-gradient(180deg, #08070c, #050407);
+          border-left: 1px solid var(--c-border-1);
+          background: linear-gradient(180deg, var(--c-panel-bg), var(--c-panel-bg));
         }
 
         .iw-panel-header {
           justify-content: space-between;
           flex: 0 0 auto;
           gap: 8px;
-          padding: 9px 12px 8px;
-          border-bottom: 1px solid rgba(158, 167, 184, 0.08);
+          padding: 8px 11px 7px;
+          border-bottom: 1px solid var(--c-border-2);
         }
 
         .iw-panel-title {
-          color: #eef1f5;
+          color: var(--c-t1);
           font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 11.5px;
+          font-size: 10.5px;
           font-weight: 600;
           letter-spacing: 0.06em;
         }
@@ -1284,15 +1395,15 @@ export function IntelWatchMap() {
           min-width: 40px;
           gap: 2px;
           padding: 4px 6px;
-          border: 1px solid rgba(158, 167, 184, 0.08);
+          border: 1px solid var(--c-border-2);
           border-radius: 8px;
           background: rgba(255,255,255,0.02);
         }
 
         .iw-stat-chip strong {
-          color: #eef1f5;
+          color: var(--c-t1);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 10.5px;
+          font-size: 9.5px;
           font-weight: 700;
           line-height: 1;
         }
@@ -1302,9 +1413,9 @@ export function IntelWatchMap() {
         }
 
         .iw-stat-chip span {
-          color: #5b6471;
+          color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7.4px;
+          font-size: 7px;
           font-weight: 700;
           letter-spacing: 0.10em;
           line-height: 1;
@@ -1314,8 +1425,8 @@ export function IntelWatchMap() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           flex: 0 0 auto;
-          height: 36px;
-          border-bottom: 1px solid rgba(158, 167, 184, 0.08);
+          height: 30px;
+          border-bottom: 1px solid var(--c-border-2);
         }
 
         .iw-tab {
@@ -1326,9 +1437,9 @@ export function IntelWatchMap() {
           border: 0;
           border-bottom: 2px solid transparent;
           background: transparent;
-          color: #5b6471;
+          color: var(--c-t5);
           cursor: pointer;
-          font-size: 9.3px;
+          font-size: 7.8px;
           font-weight: 600;
           letter-spacing: 0.10em;
           text-transform: uppercase;
@@ -1337,7 +1448,7 @@ export function IntelWatchMap() {
 
         .iw-tab[aria-selected="true"] {
           border-bottom-color: #ff2b3d;
-          color: #eef1f5;
+          color: var(--c-t1);
         }
 
         .iw-panel-body {
@@ -1347,7 +1458,7 @@ export function IntelWatchMap() {
         }
 
         .iw-layers-body {
-          padding: 12px 12px 16px;
+          padding: 10px 11px 14px;
         }
 
         .iw-layer-top {
@@ -1363,7 +1474,7 @@ export function IntelWatchMap() {
           background: rgba(255, 43, 61, 0.08);
           color: #ff6470;
           cursor: pointer;
-          font-size: 8.8px;
+          font-size: 7.6px;
           font-weight: 700;
           transition: background 140ms ease;
         }
@@ -1373,15 +1484,15 @@ export function IntelWatchMap() {
         }
 
         .iw-caption-copy {
-          margin: 8px 0 10px;
-          color: #5b6471;
-          font-size: 9.4px;
+          margin: 6px 0 8px;
+          color: var(--c-t5);
+          font-size: 8px;
           line-height: 1.4;
         }
 
         .iw-layer-list {
           display: grid;
-          gap: 5px;
+          gap: 4px;
         }
 
         .iw-layer-row {
@@ -1389,9 +1500,9 @@ export function IntelWatchMap() {
           grid-template-columns: minmax(0, 1fr) auto;
           align-items: center;
           gap: 6px;
-          padding: 7px 7px 7px 9px;
-          border: 1px solid rgba(158, 167, 184, 0.06);
-          border-radius: 10px;
+          padding: 5px 6px 5px 7px;
+          border: 1px solid var(--c-border-3);
+          border-radius: 8px;
           background: rgba(255, 255, 255, 0.012);
         }
 
@@ -1419,8 +1530,8 @@ export function IntelWatchMap() {
         }
 
         .iw-hue {
-          width: 9px;
-          height: 9px;
+          width: 8px;
+          height: 8px;
           border-radius: 2px;
           background: var(--layer-hue);
           box-shadow: 0 0 8px var(--layer-hue);
@@ -1433,7 +1544,7 @@ export function IntelWatchMap() {
         .iw-layer-name {
           overflow: hidden;
           color: #c4ccd6;
-          font-size: 10.8px;
+          font-size: 9.2px;
           font-weight: 500;
           line-height: 1.15;
           text-overflow: ellipsis;
@@ -1441,14 +1552,14 @@ export function IntelWatchMap() {
         }
 
         .iw-layer-row[data-visible="false"] .iw-layer-name {
-          color: #5b6471;
+          color: var(--c-t5);
         }
 
         .iw-layer-meta {
-          margin-top: 4px;
-          color: #5b6471;
+          margin-top: 3px;
+          color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8px;
+          font-size: 7px;
           line-height: 1;
         }
 
@@ -1466,14 +1577,14 @@ export function IntelWatchMap() {
         }
 
         .iw-icon-button {
-          width: 24px;
-          height: 24px;
+          width: 22px;
+          height: 22px;
           display: grid;
           place-items: center;
           border: 0;
           border-radius: 7px;
           background: transparent;
-          color: #5b6471;
+          color: var(--c-t5);
           cursor: pointer;
           transition: background 140ms ease, color 140ms ease;
         }
@@ -1483,59 +1594,20 @@ export function IntelWatchMap() {
           color: #c4ccd6;
         }
 
-        .iw-severity-section {
-          margin-top: 18px;
-        }
-
-        .iw-severity-chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
-          margin-top: 8px;
-        }
-
-        .iw-severity-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 7px;
-          border: 1px solid rgba(158, 167, 184, 0.12);
-          border-radius: 7px;
-          background: rgba(255, 255, 255, 0.02);
-          color: #5b6471;
-          cursor: pointer;
-          font-size: 8.6px;
-          font-weight: 700;
-          letter-spacing: 0.06em;
-        }
-
-        .iw-severity-chip[data-active="true"] {
-          border-color: color-mix(in srgb, var(--severity-color) 40%, transparent);
-          background: color-mix(in srgb, var(--severity-color) 10%, transparent);
-          color: #eef1f5;
-        }
-
-        .iw-severity-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: var(--severity-color);
-        }
-
         .iw-help-card {
           display: grid;
-          gap: 7px;
-          margin-top: 18px;
-          padding: 10px;
-          border: 1px solid rgba(158, 167, 184, 0.08);
+          gap: 5px;
+          margin-top: 14px;
+          padding: 8px;
+          border: 1px solid var(--c-border-2);
           border-radius: 10px;
           background: rgba(255, 255, 255, 0.02);
         }
 
         .iw-help-card p {
           margin: 0;
-          color: #8b95a3;
-          font-size: 9.6px;
+          color: var(--c-t4);
+          font-size: 8.2px;
           line-height: 1.42;
         }
 
@@ -1549,47 +1621,47 @@ export function IntelWatchMap() {
         }
 
         .iw-detail-body {
-          padding: 12px 12px 16px;
+          padding: 10px 11px 14px;
         }
 
         .iw-type-chip {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 3px 9px;
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          gap: 5px;
+          padding: 2px 7px;
+          border: 1px solid var(--c-border-1);
           border-radius: 6px;
           background: rgba(255, 255, 255, 0.04);
-          color: #8b95a3;
+          color: var(--c-t4);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8.5px;
+          font-size: 7.5px;
         }
 
         .iw-detail-title {
-          margin: 12px 0 8px;
-          color: #eef1f5;
+          margin: 9px 0 6px;
+          color: var(--c-t1);
           font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 15px;
+          font-size: 12px;
           font-weight: 600;
           line-height: 1.25;
           text-wrap: pretty;
         }
 
         .iw-detail-coord {
-          color: #8b95a3;
+          color: var(--c-t4);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 10px;
+          font-size: 8.8px;
         }
 
         .iw-detail-section {
-          margin-top: 18px;
+          margin-top: 13px;
         }
 
         .iw-detail-label {
-          margin-bottom: 8px;
-          color: #5b6471;
+          margin-bottom: 6px;
+          color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8px;
+          font-size: 7px;
           font-weight: 700;
           letter-spacing: 0.12em;
           text-transform: uppercase;
@@ -1598,33 +1670,33 @@ export function IntelWatchMap() {
         .iw-meta-row {
           justify-content: space-between;
           gap: 12px;
-          padding: 11px 12px;
-          border: 1px solid rgba(158, 167, 184, 0.08);
+          padding: 8px 10px;
+          border: 1px solid var(--c-border-2);
           border-radius: 9px;
           background: rgba(255, 255, 255, 0.02);
         }
 
         .iw-meta-row span {
           color: #c4ccd6;
-          font-size: 10.2px;
+          font-size: 9px;
           font-weight: 600;
         }
 
         .iw-note-card {
-          padding: 12px;
-          border: 1px solid rgba(158, 167, 184, 0.08);
+          padding: 9px;
+          border: 1px solid var(--c-border-2);
           border-left: 2px solid var(--severity-color);
           border-radius: 9px;
           background: rgba(255, 255, 255, 0.02);
-          color: #a9b2bd;
-          font-size: 10.8px;
+          color: var(--c-t3);
+          font-size: 9.3px;
           line-height: 1.5;
         }
 
         .iw-layer-ref {
           gap: 7px;
-          color: #8b95a3;
-          font-size: 11px;
+          color: var(--c-t4);
+          font-size: 9.4px;
         }
 
         .iw-layer-ref strong {
@@ -1633,25 +1705,25 @@ export function IntelWatchMap() {
         }
 
         .iw-source-row {
-          gap: 9px;
-          min-height: 34px;
-          padding: 9px 10px;
-          border: 1px solid rgba(158, 167, 184, 0.08);
+          gap: 8px;
+          min-height: 30px;
+          padding: 7px 9px;
+          border: 1px solid var(--c-border-2);
           border-radius: 9px;
           background: rgba(255, 255, 255, 0.02);
-          color: #a9b2bd;
+          color: var(--c-t3);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 10.5px;
+          font-size: 9.2px;
           line-height: 1.35;
         }
 
         .iw-detail-actions {
-          gap: 9px;
-          margin-top: 20px;
+          gap: 8px;
+          margin-top: 14px;
         }
 
         .iw-primary-action {
-          height: 36px;
+          height: 30px;
           flex: 1 1 auto;
           border: 0;
           border-radius: 9px;
@@ -1659,7 +1731,7 @@ export function IntelWatchMap() {
           box-shadow: 0 4px 16px rgba(255, 43, 61, 0.30);
           color: white;
           cursor: pointer;
-          font-size: 11px;
+          font-size: 9.6px;
           font-weight: 700;
           transition: filter 140ms ease;
         }
@@ -1669,14 +1741,14 @@ export function IntelWatchMap() {
         }
 
         .iw-delete-action {
-          width: 36px;
-          height: 36px;
+          width: 30px;
+          height: 30px;
           display: grid;
           place-items: center;
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           border-radius: 9px;
           background: rgba(255,255,255,0.02);
-          color: #8b95a3;
+          color: var(--c-t4);
           cursor: pointer;
           transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
         }
@@ -1701,25 +1773,25 @@ export function IntelWatchMap() {
           display: grid;
           place-items: center;
           margin: 0 auto 12px;
-          border: 1px solid rgba(158, 167, 184, 0.12);
+          border: 1px solid var(--c-border-1);
           border-radius: 11px;
           background: rgba(255, 255, 255, 0.03);
-          color: #5b6471;
+          color: var(--c-t5);
         }
 
         .iw-empty-detail strong {
           display: block;
-          color: #8b95a3;
+          color: var(--c-t4);
           font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 12.5px;
+          font-size: 10.5px;
           font-weight: 600;
         }
 
         .iw-empty-detail p {
           max-width: 240px;
           margin: 7px auto 0;
-          color: #5b6471;
-          font-size: 11px;
+          color: var(--c-t5);
+          font-size: 9.4px;
           line-height: 1.45;
         }
 
@@ -1727,7 +1799,6 @@ export function IntelWatchMap() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.28; }
         }
-        ${ECHIS_MARKER_PULSE_CSS}
 
         @media (max-width: 1020px) {
           .iw-topbar {
@@ -1758,6 +1829,15 @@ export function IntelWatchMap() {
       <div className="iw-map-area">
         <div ref={mapContainerRef} className="iw-map-canvas" />
 
+        {!loaderGone && (
+          <IntelMapLoader
+            ready={mapFullyLoaded}
+            accent="#ff2b3d"
+            onDone={() => setLoaderGone(true)}
+          />
+        )}
+
+        <div className="iw-left-stack">
         <aside className="iw-glass iw-tool-rail" aria-label="Map tools">
           <div className="iw-rail-label">ARAÇ</div>
           <div className="iw-tool-stack">
@@ -1801,6 +1881,21 @@ export function IntelWatchMap() {
           </div>
         </aside>
 
+        <aside className="iw-glass iw-tool-rail" aria-label="Map data layers">
+          <div className="iw-tool-stack">
+            {MAP_OVERLAYS.map((overlay) => (
+              <ToolButton
+                key={overlay.id}
+                active={overlayVisibility[overlay.id] ?? false}
+                icon={overlay.Icon}
+                label={overlay.label}
+                onClick={() => toggleOverlay(overlay.id)}
+              />
+            ))}
+          </div>
+        </aside>
+        </div>
+
         {(tool === "line" || tool === "area") && (
           <div className="iw-glass iw-draw-hint">
             <span className="iw-dot" aria-hidden="true" />
@@ -1810,25 +1905,6 @@ export function IntelWatchMap() {
           </div>
         )}
 
-        <aside className="iw-glass iw-legend" aria-label="Map legend">
-          <div className="iw-legend-head">
-            <div className="iw-legend-title">GÖSTERGE · TÜR</div>
-            <div className="iw-zoom-readout">Z {zoom.toFixed(1)}</div>
-          </div>
-          <div className="iw-legend-grid">
-            {(Object.keys(TYPE_META) as PinType[]).map((type) => {
-              const Icon = TYPE_META[type].Icon;
-              return (
-                <div className="iw-legend-item" key={type}>
-                  <span className="iw-type-chip-icon">
-                    <Icon size={12} strokeWidth={2} />
-                  </span>
-                  <span>{TYPE_META[type].label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
 
         <div className="iw-glass iw-coordinates">
           <MapPin size={12} strokeWidth={1.8} />
@@ -2002,25 +2078,6 @@ export function IntelWatchMap() {
                     </div>
                   );
                 })}
-              </div>
-
-              <div className="iw-severity-section">
-                <div className="iw-section-label">ÖNEM FİLTRESİ</div>
-                <div className="iw-severity-chips">
-                  {SEVERITY_ORDER.map((severity) => (
-                    <button
-                      key={severity}
-                      className="iw-severity-chip"
-                      data-active={filters[severity]}
-                      style={{ "--severity-color": SEVERITY_META[severity].color } as CSSProperties}
-                      type="button"
-                      onClick={() => handleToggleSeverity(severity)}
-                    >
-                      <span className="iw-severity-dot" />
-                      {SEVERITY_META[severity].label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="iw-help-card">
