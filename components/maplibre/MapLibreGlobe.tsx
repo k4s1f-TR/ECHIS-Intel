@@ -335,6 +335,13 @@ const DEFAULT_GLOBE_VIEW = {
 } as const;
 const ZOOM_STEP = 0.75;
 
+// Deepest zoom-in the globe allows. Capped at ~city-boundary level so the
+// globe stays a strategic/overview surface — the user can zoom to a city's
+// extent but not into street/building clutter (that detail lives in Intel
+// Watch). Layers that would only appear past this never render, which also
+// keeps the globe visually clean.
+const GLOBE_MAX_ZOOM = 9.5;
+
 // ---------------------------------------------------------------------------
 // GLOBE_SCREEN_FRAMING — screen-space padding per view mode.
 //
@@ -1004,7 +1011,10 @@ const LUXE_LAND_OVERLAY = "#0d0e10";
 const LUXE_WATER_FILL = "#040405";
 const LUXE_WATERWAY_FILL = "rgba(120, 130, 146, 0.30)";
 const LUXE_BORDER_COUNTRY = "rgba(255, 43, 61, 0.78)";
-const LUXE_BORDER_ADMIN = "rgba(255, 43, 61, 0.30)";
+// Intra-country (state/province) borders. Kept clearly visible but still
+// subordinate to the solid national border — dashed crimson at a higher
+// alpha so provinces read on the dark globe.
+const LUXE_BORDER_ADMIN = "rgba(255, 43, 61, 0.52)";
 
 // Luxe outline source/layer — each country's polygon rings are converted into
 // independent line pieces. This avoids a topology mesh that "walks" around the
@@ -1735,6 +1745,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
                   borderCountry: LUXE_BORDER_COUNTRY,
                   borderAdmin: LUXE_BORDER_ADMIN,
                   showBoundaries: false,
+                  // National border comes from the luxe outline; turn the OSM
+                  // sub-national (state/province) admin lines back on so
+                  // intra-country borders are visible on the globe.
+                  showAdminBoundaries: true,
                   labelHalo: LABEL_HALO,
                 },
               )
@@ -1743,6 +1757,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           zoom: DEFAULT_GLOBE_VIEW.zoom,
           bearing: DEFAULT_GLOBE_VIEW.bearing,
           pitch: DEFAULT_GLOBE_VIEW.pitch,
+          maxZoom: GLOBE_MAX_ZOOM,
           attributionControl: false,
           renderWorldCopies: false,
           fadeDuration: 200,

@@ -10,12 +10,17 @@ import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
  * recreated precisely so geography stays readable but recedes.
  *
  * Cartographic intent (do not "improve" without reason):
- *   1. Geography is RECESSED — it must never compete with data.
- *   2. Progressive disclosure by zoom (continents+countries -> +cities -> +roads).
+ *   1. Geography stays RECESSED at overview zooms — it must never compete
+ *      with data. But Intel Watch is now a zoom-in surface too: from the
+ *      street zooms it discloses a clean, full OSM picture (buildings, the
+ *      whole road network, street names) so an analyst can read the ground.
+ *   2. Progressive disclosure by zoom (continents+countries -> +cities ->
+ *      +arterials -> +buildings/minor roads/street names).
  *   3. Typographic hierarchy: country = upper-case tracked grey; city = dot+name;
  *      water = italic, dimmest. Dark halo on all, none glowing.
  *   4. Country border = thin solid grey; admin border = dashed + dimmer.
  *   5. COLOURLESS geography — colour means data only (handled by the markers).
+ *      Buildings/roads are greyscale, kept just above the land tone.
  */
 
 /* Palette — the only colours geography is allowed to use. */
@@ -25,7 +30,11 @@ export const ECHIS_COLORS = {
   waterway: "#0b0e13",
   borderCountry: "#3b424c",
   borderAdmin: "#2a2f37",
-  road: "#22272e",
+  road: "#2b313a", // arterials (motorway/trunk/primary)
+  roadMinor: "#20252c", // secondary/tertiary/residential/service
+  building: "#191d24", // footprint fill — a hair above land, never glowing
+  buildingOutline: "#23282f",
+  textStreet: "#6b727c", // street-name labels, dim
   halo: "#05070b",
   textCountry: "#7d838d",
   textCity: "#9aa1ab",
@@ -41,7 +50,7 @@ export const ECHIS_VIEW = {
   center: [35.88, 34.9] as [number, number], // [lng, lat]
   zoom: 5.4,
   minZoom: 1.7,
-  maxZoom: 13,
+  maxZoom: 17,
   // Excludes polar regions. NOTE: a FULL-longitude bound (-180..180) combined
   // with renderWorldCopies:false breaks MapLibre's camera constraint solver —
   // keep longitude slightly inset (-179..179).
@@ -137,7 +146,59 @@ export function buildEchisCommandStyle(
         },
       },
 
-      // Major roads — high zoom only, very dim.
+      // Building footprints — fade in at street zoom, greyscale, under roads.
+      {
+        id: "buildings",
+        type: "fill",
+        source: src,
+        "source-layer": "building",
+        minzoom: 13,
+        paint: {
+          "fill-color": c.building,
+          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14.5, 0.85],
+        },
+      },
+
+      // Building outlines — only once they are large enough to read.
+      {
+        id: "buildings-outline",
+        type: "line",
+        source: src,
+        "source-layer": "building",
+        minzoom: 15,
+        paint: {
+          "line-color": c.buildingOutline,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.2, 18, 0.7],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 16, 0.6],
+        },
+      },
+
+      // Minor roads — secondary/tertiary first, then residential/service as
+      // you zoom further in. Dim grey so the network reads without shouting.
+      {
+        id: "roads-minor",
+        type: "line",
+        source: src,
+        "source-layer": "transportation",
+        minzoom: 10,
+        filter: [
+          "in",
+          ["get", "class"],
+          ["literal", [
+            "secondary", "tertiary", "minor", "residential",
+            "service", "living_street", "unclassified",
+          ]],
+        ],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": c.roadMinor,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.2, 14, 1.1, 17, 3.2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0, 12, 0.55, 15, 0.85],
+        },
+      },
+
+      // Major roads — arterials. Now carry through to street zoom so the
+      // skeleton of a city stays legible at full zoom-in.
       {
         id: "roads-major",
         type: "line",
@@ -148,8 +209,33 @@ export function buildEchisCommandStyle(
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": c.road,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 12, 1.4],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.6],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 12, 1.6, 17, 5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.7],
+        },
+      },
+
+      // Street-name labels — only at street zoom, dim and along the line.
+      {
+        id: "label-street",
+        type: "symbol",
+        source: src,
+        "source-layer": "transportation_name",
+        minzoom: 14,
+        layout: {
+          "symbol-placement": "line",
+          "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 9, 17, 11.5],
+          "text-letter-spacing": 0.02,
+          "text-max-width": 8,
+          "text-padding": 4,
+        },
+        paint: {
+          "text-color": c.textStreet,
+          "text-halo-color": c.halo,
+          "text-halo-width": 1.1,
+          "text-halo-blur": 0.5,
+          "text-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 0.85],
         },
       },
 

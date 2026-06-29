@@ -834,6 +834,9 @@ export function IntelWatchMap() {
     <section className="iw-shell" aria-label="ECHIS Intel Watch workbench">
       <style>{`
         .iw-shell {
+          /* Single black used by every panel/dark surface in Intel Watch.
+             Pure neutral tone — no anthracite/blue tint. */
+          --iw-black: #040404;
           position: relative;
           width: 100%;
           height: 100%;
@@ -841,7 +844,7 @@ export function IntelWatchMap() {
           min-width: 0;
           flex: 1 1 auto;
           overflow: hidden;
-          background: var(--c-bg-base);
+          background: var(--iw-black);
           color: #c4ccd6;
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
         }
@@ -861,7 +864,7 @@ export function IntelWatchMap() {
           align-items: center;
           gap: 12px;
           padding: 0 14px;
-          background: linear-gradient(180deg, var(--c-panel-bg), #05040980);
+          background: var(--iw-black);
           border-bottom: 1px solid var(--c-border-1);
         }
 
@@ -1044,7 +1047,7 @@ export function IntelWatchMap() {
           place-items: center;
           border: 1px solid var(--c-border-1);
           border-radius: 7px;
-          background: linear-gradient(150deg, #141319, #1e1d28);
+          background: var(--iw-black);
           color: #c4ccd6;
           font-family: var(--font-display), "Space Grotesk", sans-serif;
           font-size: 10.5px;
@@ -1067,14 +1070,14 @@ export function IntelWatchMap() {
           right: ${PANEL_WIDTH}px;
           bottom: 0;
           overflow: hidden;
-          background: var(--c-bg-deep);
+          background: var(--iw-black);
         }
 
         .iw-map-canvas {
           position: absolute;
           inset: 0;
           z-index: 1;
-          background: #13161b;
+          background: var(--iw-black);
         }
 
         .iw-map-canvas .maplibregl-canvas {
@@ -1086,15 +1089,15 @@ export function IntelWatchMap() {
           overflow: hidden;
           border: 1px solid var(--c-border-1);
           border-radius: 10px;
-          background: var(--c-panel-bg);
+          background: var(--iw-black);
           box-shadow: 0 14px 44px rgba(0, 0, 0, 0.62);
           color: var(--c-t3);
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
         }
 
         .iw-airbase-popup .maplibregl-popup-tip {
-          border-top-color: var(--c-panel-bg);
-          border-bottom-color: var(--c-panel-bg);
+          border-top-color: var(--iw-black);
+          border-bottom-color: var(--iw-black);
         }
 
         .iw-airbase-popup .maplibregl-popup-close-button {
@@ -1172,7 +1175,7 @@ export function IntelWatchMap() {
 
         .iw-glass {
           border: 1px solid var(--c-border-1);
-          background: rgba(8, 8, 12, 0.78);
+          background: rgba(4, 4, 4, 0.78);
           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
           backdrop-filter: blur(14px);
         }
@@ -1241,7 +1244,7 @@ export function IntelWatchMap() {
           place-items: center;
           border: 1px solid var(--c-border-1);
           border-radius: 9px;
-          background: rgba(13, 13, 18, 0.5);
+          background: rgba(4, 4, 4, 0.5);
           color: var(--c-t4);
           cursor: pointer;
           transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
@@ -1256,7 +1259,6 @@ export function IntelWatchMap() {
           border-color: rgba(255, 43, 61, 0.55);
           background: linear-gradient(180deg, rgba(255, 43, 61, 0.24), rgba(179, 18, 31, 0.10));
           color: #ff6470;
-          box-shadow: 0 0 16px rgba(255, 43, 61, 0.30);
         }
 
         .iw-tool-button:disabled {
@@ -1367,7 +1369,7 @@ export function IntelWatchMap() {
           display: flex;
           flex-direction: column;
           border-left: 1px solid var(--c-border-1);
-          background: linear-gradient(180deg, var(--c-panel-bg), var(--c-panel-bg));
+          background: var(--iw-black);
         }
 
         .iw-panel-header {

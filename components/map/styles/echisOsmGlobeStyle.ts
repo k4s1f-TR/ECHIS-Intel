@@ -33,6 +33,12 @@ export type EchisOsmGlobeStylePalette = {
   // line systems do not overlap.
   borderAdmin?: string;
   showBoundaries?: boolean;
+  // Sub-national (state/province/district) borders, controlled independently
+  // of `showBoundaries`. The luxe variant hides OSM's coastline/country/road
+  // lines (showBoundaries:false) because it draws its own country outline, but
+  // still wants the intra-country admin lines — so this defaults to follow
+  // `showBoundaries` yet can be switched on on its own.
+  showAdminBoundaries?: boolean;
 };
 
 export function createEchisOsmGlobeStyle({
@@ -44,7 +50,9 @@ export function createEchisOsmGlobeStyle({
   labelHalo,
   borderAdmin = OSM_ADMIN_BOUNDARY,
   showBoundaries = true,
+  showAdminBoundaries = showBoundaries,
 }: EchisOsmGlobeStylePalette): StyleSpecification {
+  const adminVisibility = showAdminBoundaries ? "visible" : "none";
   const sourceLayer = (name: string) => ({
     source: OSM_VECTOR_SOURCE_ID,
     "source-layer": name,
@@ -108,8 +116,8 @@ export function createEchisOsmGlobeStyle({
         id: "boundary_regional_admin",
         type: "line",
         ...sourceLayer("boundary"),
-        minzoom: 3.2,
-        layout: { visibility: showBoundaries ? "visible" : "none" },
+        minzoom: 2.4,
+        layout: { visibility: adminVisibility },
         filter: [
           "all",
           [">=", ["to-number", ["get", "admin_level"], 99], 3],
@@ -121,8 +129,8 @@ export function createEchisOsmGlobeStyle({
         ],
         paint: {
           "line-color": borderAdmin,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 3.2, 0.3, 5.5, 0.5, 8, 0.7],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.2, 0, 4.2, 0.48, 7, 0.72],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2.4, 0.35, 5.5, 0.6, 9, 0.95],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 2.4, 0, 3.2, 0.55, 5, 0.78],
           // Sub-national borders use a dashed pattern (vs. the solid national
           // border) — the standard political-map convention.  This also makes
           // any segment crossing a lake (e.g. provinces meeting inside Van
@@ -135,8 +143,8 @@ export function createEchisOsmGlobeStyle({
         id: "boundary_local_admin",
         type: "line",
         ...sourceLayer("boundary"),
-        minzoom: 5.4,
-        layout: { visibility: showBoundaries ? "visible" : "none" },
+        minzoom: 4.2,
+        layout: { visibility: adminVisibility },
         filter: [
           "all",
           [">=", ["to-number", ["get", "admin_level"], 99], 7],
@@ -147,8 +155,8 @@ export function createEchisOsmGlobeStyle({
         ],
         paint: {
           "line-color": borderAdmin,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 5.4, 0.28, 8, 0.55, 11, 0.75],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5.4, 0, 6.4, 0.34, 10, 0.58],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 4.2, 0.28, 8, 0.55, 11, 0.75],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4.2, 0, 5, 0.4, 8, 0.62],
           // Dashed to match the regional admin line and the national-solid /
           // internal-dashed convention (see boundary_regional_admin).
           "line-dasharray": [2.2, 1.8],
