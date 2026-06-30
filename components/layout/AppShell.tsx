@@ -37,6 +37,7 @@ import { PolicyDossierScreen } from "@/components/policy/PolicyDossierScreen";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
 import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
 import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
+import { ContactScreen } from "@/components/contact/ContactScreen";
 import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
 import type { EventCategory, RegionKey } from "@/types/event";
@@ -47,7 +48,7 @@ import type { SourceMarkerFeature } from "@/data/source-intelligence/markers/sou
 
 export type ViewMode = "situation" | "global" | "signals";
 type ActiveSection = "dashboard" | "sources" | "bookmarks";
-type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
+type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources" | "contact";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
@@ -570,7 +571,7 @@ export function AppShell() {
       return;
     }
 
-    if (tab === "intel" || tab === "cyber" || tab === "defense") {
+    if (tab === "intel" || tab === "cyber" || tab === "defense" || tab === "contact") {
       setActiveSection("dashboard");
       setActiveTopTab(tab);
       setActiveRailMode(null);
@@ -1011,6 +1012,11 @@ export function AppShell() {
           {activeSection === "dashboard" && activeTopTab === "defense" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
               <DefenseIndustryPanel />
+            </div>
+          )}
+          {activeSection === "dashboard" && activeTopTab === "contact" && (
+            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+              <ContactScreen />
             </div>
           )}
         </div>

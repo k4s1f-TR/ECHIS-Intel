@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
-import { Newspaper } from "lucide-react";
-import { cyberNewsItems, type CyberNewsItem } from "@/data/cyberMockData";
+import { useState, type MouseEvent } from "react";
+import { ExternalLink, Newspaper } from "lucide-react";
+import type { CyberNewsItem } from "@/types/cyberNews";
 
 /* Severity → UI badge token map (red-dominant family; low folds into Elevated/silver) */
 const SEV_BADGE: Record<string, { text: string; bg: string; border: string }> = {
@@ -14,6 +14,12 @@ const SEV_BADGE: Record<string, { text: string; bg: string; border: string }> = 
 function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelected: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
   const sev = SEV_BADGE[item.severityLevel] ?? SEV_BADGE.low;
+  const openItem = item.url
+    ? (event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        window.open(item.url, "_blank", "noopener,noreferrer");
+      }
+    : undefined;
 
   return (
     <div
@@ -40,12 +46,37 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
       }}
     >
       {/* Title */}
-      <p
-        className="c-disp"
-        style={{ fontSize: "var(--c-fs-md)", fontWeight: 500, lineHeight: 1.36, color: "var(--c-t1)", marginBottom: 7 }}
-      >
-        {item.headline}
-      </p>
+      <div className="flex items-start gap-2" style={{ marginBottom: 7 }}>
+        <p
+          className="c-disp min-w-0 flex-1"
+          style={{ fontSize: "var(--c-fs-md)", fontWeight: 500, lineHeight: 1.36, color: "var(--c-t1)" }}
+        >
+          {item.headline}
+        </p>
+        {openItem && (
+          <button
+            type="button"
+            onClick={openItem}
+            title="Open source"
+            aria-label="Open source"
+            style={{
+              width: 24,
+              height: 24,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flex: "0 0 auto",
+              borderRadius: "var(--c-radius-xs)",
+              border: "1px solid var(--c-border-3)",
+              background: "rgba(255,255,255,0.025)",
+              color: "var(--c-t4)",
+              cursor: "pointer",
+            }}
+          >
+            <ExternalLink size={12} />
+          </button>
+        )}
+      </div>
 
       {/* Meta */}
       <div className="flex items-center gap-[7px]" style={{ marginBottom: 8 }}>
@@ -104,7 +135,21 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
   );
 }
 
-export function CyberNewsPanel({ selectedNewsId, onSelectNews }: { selectedNewsId: string; onSelectNews: (id: string) => void }) {
+export function CyberNewsPanel({
+  selectedNewsId,
+  onSelectNews,
+  items = [],
+  isLoading = false,
+  isLive = false,
+  error,
+}: {
+  selectedNewsId: string;
+  onSelectNews: (id: string) => void;
+  items?: CyberNewsItem[];
+  isLoading?: boolean;
+  isLive?: boolean;
+  error?: string | null;
+}) {
   return (
     <div className="cyber-panel h-full">
       {/* Header */}
@@ -113,11 +158,32 @@ export function CyberNewsPanel({ selectedNewsId, onSelectNews }: { selectedNewsI
           <Newspaper size={15} style={{ color: "var(--c-silver-dim)" }} />
           <span className="cyber-panel-title">Cyber Security News</span>
         </div>
+        <span
+          className="cyber-live-pill"
+          style={{ color: isLive ? "var(--c-accent-text)" : "var(--c-silver-dim)" }}
+        >
+          {isLoading ? "SYNC" : isLive ? "LIVE RSS" : "FALLBACK"}
+        </span>
       </div>
 
       {/* Feed */}
       <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col gap-2" style={{ padding: 9 }}>
-        {cyberNewsItems.map((item) => (
+        {(error || (!isLoading && items.length === 0)) && !isLive && (
+          <div
+            className="c-mono"
+            style={{
+              padding: "8px 10px",
+              borderRadius: "var(--c-radius-sm)",
+              border: "1px solid var(--c-border-3)",
+              background: "rgba(255,43,61,0.05)",
+              color: "var(--c-t4)",
+              fontSize: "var(--c-fs-xs)",
+            }}
+          >
+            {error ? "RSS source unavailable." : "No RSS items received."}
+          </div>
+        )}
+        {items.map((item) => (
           <NewsCard
             key={item.id}
             item={item}

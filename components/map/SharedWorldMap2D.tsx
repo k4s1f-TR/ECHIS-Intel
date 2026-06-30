@@ -171,6 +171,7 @@ const countryPaths = renderedFeatures
   .map((featureItem) => ({
     id: String(featureItem.id ?? countryName(featureItem)),
     name: displayCountryName(featureItem),
+    nameKey: countryName(featureItem),
     path: collectRings(featureItem.geometry)
       .map((ring) => {
         const { ring: unwrappedRing, crossesDateLine } =
@@ -196,6 +197,14 @@ export type SharedWorldMap2DTheme = {
   graticule?: string;
   background?: string;
 };
+
+/**
+ * Optional per-country region fill. Keyed by the lowercased country name
+ * (same key as `properties.name`). When omitted, the map renders exactly as
+ * before — this is a purely additive, opt-in highlight layer.
+ */
+export type SharedWorldMap2DCountryFill = { fill: string; stroke?: string };
+export type SharedWorldMap2DCountryFills = Record<string, SharedWorldMap2DCountryFill>;
 
 /* Static crimson graticule (drawn under land, so only the ocean grid shows).
    Built once; only rendered when a theme supplies a graticule color. */
@@ -232,10 +241,12 @@ export function SharedWorldMap2D({
   ariaLabel,
   markerLayer,
   theme,
+  countryFills,
 }: {
   ariaLabel: string;
   markerLayer?: (project: ProjectMarker) => ReactNode;
   theme?: SharedWorldMap2DTheme;
+  countryFills?: SharedWorldMap2DCountryFills;
 }) {
   const themed = true;
   const land = theme?.land ?? "#221a1e";
@@ -321,14 +332,22 @@ export function SharedWorldMap2D({
             vectorEffect: "non-scaling-stroke",
           }}
         >
-          {countryPaths.map(({ id, name, path }) => (
-            <path
-              key={id}
-              aria-label={name}
-              className="shared-world-country"
-              d={path}
-            />
-          ))}
+          {countryPaths.map(({ id, name, nameKey, path }) => {
+            const highlight = countryFills?.[nameKey];
+            return (
+              <path
+                key={id}
+                aria-label={name}
+                className="shared-world-country"
+                d={path}
+                style={
+                  highlight
+                    ? { fill: highlight.fill, stroke: highlight.stroke ?? countryStroke }
+                    : undefined
+                }
+              />
+            );
+          })}
         </g>
         {markerLayer ? <g>{markerLayer(projectMarker)}</g> : null}
       </svg>

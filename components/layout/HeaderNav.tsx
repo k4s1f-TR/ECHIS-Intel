@@ -3,7 +3,7 @@ import { Sun } from "lucide-react";
 import { GeoLiveClock } from "@/components/ui/GeoLiveClock";
 import type { ReactNode } from "react";
 
-type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources";
+type TopNavTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources" | "contact";
 
 const NAV_TABS: { label: string; key?: TopNavTab }[] = [
   { label: "Monitor", key: "situation" },
@@ -12,6 +12,7 @@ const NAV_TABS: { label: string; key?: TopNavTab }[] = [
   { label: "Defense Industry", key: "defense" },
   { label: "Policy", key: "politics" },
   { label: "Sources", key: "sources" },
+  { label: "Contact", key: "contact" },
 ];
 
 function IconBtn({

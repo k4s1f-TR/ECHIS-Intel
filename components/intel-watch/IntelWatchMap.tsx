@@ -183,6 +183,53 @@ const INITIAL_PINS: Pin[] = [
   },
 ];
 
+const PIN_DETAIL_OVERRIDES: Record<
+  string,
+  Partial<Pick<Pin, "title" | "updated" | "note">>
+> = {
+  "pin-tartus": {
+    title: "Tartus port activity monitoring note",
+    updated: "12 min ago",
+    note:
+      "Open-source maritime advisories and regional reporting indicate increased attention around routing, port activity, and diplomatic messaging near Tartus. The signal is derived from public notices and media coverage, not from closed-source collection. Current reporting supports continued monitoring but does not confirm a discrete operational incident.",
+  },
+  "pin-kyiv": {
+    title: "Kyiv air-defense statements intensify",
+    updated: "18 min ago",
+    note:
+      "Public statements and open-source reporting show sustained emphasis on air-defense capacity, partner assistance, and civilian infrastructure protection around Kyiv. The item reflects a convergence of official messaging and media references. It should be treated as a public-source threat context note rather than a confirmed tactical update.",
+  },
+  "pin-suez": {
+    title: "Suez transit flow logistics watch",
+    updated: "31 min ago",
+    note:
+      "Port authority notices and trade-press references point to measurable attention around transit scheduling, insurance commentary, and logistics continuity through Suez. The available public material does not indicate a confirmed disruption. It does justify tracking because small routing changes can have downstream commercial impact.",
+  },
+  "pin-taipei": {
+    title: "Taiwan public signal density increase",
+    updated: "44 min ago",
+    note:
+      "Public cyber advisories, media-monitoring references, and official statements show increased mention density connected to Taiwan-related regional tension. The signal is informational and should not be read as evidence of a specific intrusion campaign. It provides context for tracking cyber and strategic communications activity in the area.",
+  },
+  "pin-ankara": {
+    title: "Ankara diplomatic contact hub",
+    updated: "1 hr ago",
+    note:
+      "Government calendars and regional media references indicate elevated diplomatic engagement in Ankara across defense, energy, and border-security topics. The available sources describe scheduling and public messaging rather than a single crisis event. The marker is useful as a context anchor for monitoring follow-on statements and partner reactions.",
+  },
+  "pin-bab": {
+    title: "Bab el-Mandeb maritime caution advisory",
+    updated: "1 hr 24 min ago",
+    note:
+      "Public maritime advisories recommend caution for transit lanes around Bab el-Mandeb, while open reporting has not confirmed a major routing change. The note reflects a watch condition based on public safety guidance and shipping-sector commentary. Continued monitoring is warranted because advisory language can shift quickly if threat reporting changes.",
+  },
+};
+
+const INITIAL_DISPLAY_PINS = INITIAL_PINS.map((pin) => ({
+  ...pin,
+  ...PIN_DETAIL_OVERRIDES[pin.id],
+}));
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -331,7 +378,7 @@ export function IntelWatchMap() {
   const [tool, setTool] = useState<Tool>("select");
   const [tab, setTab] = useState<Tab>("layers");
   const [layers, setLayers] = useState<Layer[]>(DEFAULT_LAYERS);
-  const [pins, setPins] = useState<Pin[]>(INITIAL_PINS);
+  const [pins, setPins] = useState<Pin[]>(INITIAL_DISPLAY_PINS);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [draft, setDraft] = useState<LngLat[]>([]);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -1691,8 +1738,9 @@ export function IntelWatchMap() {
           border-radius: 9px;
           background: rgba(255, 255, 255, 0.02);
           color: var(--c-t3);
-          font-size: 9.3px;
-          line-height: 1.5;
+          font-size: 10px;
+          line-height: 1.58;
+          white-space: pre-line;
         }
 
         .iw-layer-ref {
@@ -2118,7 +2166,7 @@ export function IntelWatchMap() {
                 </div>
 
                 <div className="iw-detail-section">
-                  <div className="iw-detail-label">ANALİST NOTU</div>
+                  <div className="iw-detail-label">THREAT CONTEXT SUMMARY</div>
                   <div className="iw-note-card">{selectedPin.note}</div>
                 </div>
 

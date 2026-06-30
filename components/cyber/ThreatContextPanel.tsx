@@ -1,6 +1,6 @@
 "use client";
 import { Crosshair, Landmark, Building2, ShieldAlert, Zap, Users, Target, Building, FileText } from "lucide-react";
-import { cyberNewsItems } from "@/data/cyberMockData";
+import type { CyberNewsItem } from "@/types/cyberNews";
 
 function CtxRow({ icon: Icon, label, value, body }: { icon: React.ElementType; label: string; value: string; body?: boolean }) {
   return (
@@ -53,8 +53,42 @@ function CtxPair({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ThreatContextPanel({ selectedNewsId }: { selectedNewsId?: string }) {
-  const selectedNews = cyberNewsItems.find((n) => n.id === selectedNewsId) || cyberNewsItems[0];
+export function ThreatContextPanel({
+  selectedNewsId,
+  items = [],
+}: {
+  selectedNewsId?: string;
+  items?: CyberNewsItem[];
+}) {
+  const selectedNews = items.find((n) => n.id === selectedNewsId) || items[0];
+
+  if (!selectedNews) {
+    return (
+      <div className="cyber-panel h-full">
+        <div className="cyber-panel-head">
+          <div className="flex items-center gap-[9px]">
+            <Crosshair size={15} style={{ color: "var(--c-silver-dim)" }} />
+            <span className="cyber-panel-title">Threat Context</span>
+          </div>
+          <span className="cyber-live-pill" style={{ color: "var(--c-silver-dim)" }}>
+            RSS
+          </span>
+        </div>
+        <div
+          className="c-mono flex flex-1 items-center justify-center px-4 text-center"
+          style={{
+            color: "var(--c-t4)",
+            fontSize: "var(--c-fs-xs)",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          No live RSS item selected.
+        </div>
+      </div>
+    );
+  }
+
   const ctx = selectedNews.context;
 
   return (

@@ -16,7 +16,6 @@ const MAX_PREVIEW_ITEMS = RSS_PREVIEW_ITEMS_PER_SOURCE;
 const MAX_BLOCK_SCAN = 200;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_TITLE_LENGTH = 240;
-const MAX_SUMMARY_LENGTH = 320;
 const RSS_DIAGNOSTIC_BODY_CHARS = 500;
 
 export type RssPreviewDiagnosticCategory =
@@ -435,9 +434,14 @@ export function parseRssPreviewItemsFromXml(
         "encoded",
         "content",
       ]);
-      const summary = clamp(stripHtml(summaryRaw), MAX_SUMMARY_LENGTH);
+      const summary = stripHtml(summaryRaw);
 
-      if (!isEditorialRssItem(title, summary)) continue;
+      if (
+        !source.targetScreens.includes("cyber_news") &&
+        !isEditorialRssItem(title, summary)
+      ) {
+        continue;
+      }
 
       const dateRaw = takeFirstTag(block, [
         "pubDate",

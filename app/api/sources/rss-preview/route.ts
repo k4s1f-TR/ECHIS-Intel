@@ -20,6 +20,8 @@ export const dynamic = "force-dynamic";
 const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   // ── Humanitarian / defense ──────────────────────────────────────────────
   "reliefweb-crises",
+  // Cyber security
+  "the-hacker-news",
   "defense-news-global",
   "dod-news",
   // ── Turkish sources ─────────────────────────────────────────────────────

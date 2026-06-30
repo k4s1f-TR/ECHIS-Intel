@@ -1,29 +1,36 @@
 "use client";
+
 import { Activity } from "lucide-react";
+import type { SectorMetric } from "@/lib/cyber";
 
-type Sector = { label: string; pct: number; tag: string; cls: "crit" | "high" | "elev" };
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div
+      className="c-mono flex flex-1 items-center justify-center px-4 text-center"
+      style={{
+        color: "var(--c-t4)",
+        fontSize: "var(--c-fs-xs)",
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
 
-const SECTORS: Sector[] = [
-  { label: "Energy", pct: 92, tag: "Critical", cls: "crit" },
-  { label: "Telecommunications", pct: 84, tag: "High", cls: "high" },
-  { label: "Finance", pct: 76, tag: "High", cls: "high" },
-  { label: "Government", pct: 63, tag: "Elevated", cls: "elev" },
-  { label: "Manufacturing", pct: 58, tag: "Elevated", cls: "elev" },
-];
+export function AffectedSectorsPanel({
+  sectors = [],
+  isLoading = false,
+  hasError = false,
+}: {
+  sectors?: SectorMetric[];
+  isLoading?: boolean;
+  hasError?: boolean;
+}) {
+  const top = sectors.slice(0, 7);
+  const maxShare = top.reduce((m, s) => Math.max(m, s.share), 0) || 1;
 
-const FILL: Record<Sector["cls"], string> = {
-  crit: "linear-gradient(90deg, var(--c-accent-2), var(--c-crit))",
-  high: "linear-gradient(90deg, var(--c-accent-2), var(--c-high))",
-  elev: "linear-gradient(90deg, rgba(150,160,172,0.3), var(--c-elev))",
-};
-
-const TAG_COLOR: Record<Sector["cls"], string> = {
-  crit: "var(--c-crit)",
-  high: "var(--c-high)",
-  elev: "var(--c-elev)",
-};
-
-export function AffectedSectorsPanel() {
   return (
     <div className="cyber-panel h-full">
       <div className="cyber-panel-head">
@@ -31,26 +38,78 @@ export function AffectedSectorsPanel() {
           <Activity size={15} style={{ color: "var(--c-silver-dim)" }} />
           <span className="cyber-panel-title">Affected Sectors</span>
         </div>
+        <span className="cyber-live-pill" style={{ color: "var(--c-silver-dim)" }}>
+          Inferred
+        </span>
       </div>
 
-      <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col gap-[13px]" style={{ padding: "13px 16px" }}>
-        {SECTORS.map((s) => (
-          <div key={s.label} className="flex flex-col">
-            <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-              <span style={{ fontSize: "var(--c-fs-base)", fontWeight: 500, color: "var(--c-t3)" }}>{s.label}</span>
-              <div className="flex items-center gap-[9px]">
-                <span className="c-disp" style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: TAG_COLOR[s.cls] }}>
-                  {s.tag}
-                </span>
-                <span className="c-mono" style={{ fontSize: "var(--c-fs-md)", fontWeight: 600, color: "var(--c-t2)" }}>{s.pct}%</span>
+      {isLoading && top.length === 0 ? (
+        <EmptyState message="Syncing sector data…" />
+      ) : hasError && top.length === 0 ? (
+        <EmptyState message="Source unavailable." />
+      ) : top.length === 0 ? (
+        <EmptyState message="No live sector data." />
+      ) : (
+        <div
+          className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col"
+          style={{ padding: "10px 14px", gap: 9 }}
+        >
+          {top.map((sector) => {
+            const pct = Math.round(sector.share * 100);
+            const width = `${Math.max(6, Math.round((sector.share / maxShare) * 100))}%`;
+            return (
+              <div key={sector.sectorId} className="flex flex-col" style={{ gap: 5 }}>
+                <div className="flex items-baseline justify-between" style={{ gap: 8 }}>
+                  <span
+                    className="truncate"
+                    style={{
+                      fontSize: "var(--c-fs-sm)",
+                      fontWeight: 600,
+                      color: "var(--c-t2)",
+                      letterSpacing: "0.01em",
+                    }}
+                    title={sector.sampleTerms.join(", ")}
+                  >
+                    {sector.label}
+                  </span>
+                  <div className="flex flex-shrink-0 items-center" style={{ gap: 7 }}>
+                    <span
+                      className="c-mono"
+                      style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: "var(--c-accent-text)" }}
+                    >
+                      {pct}%
+                    </span>
+                    <span
+                      className="c-mono"
+                      style={{ fontSize: "var(--c-fs-2xs)", fontWeight: 500, color: "var(--c-t4)" }}
+                    >
+                      {sector.itemCount}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    height: 5,
+                    borderRadius: 3,
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width,
+                      height: "100%",
+                      borderRadius: 3,
+                      background: "var(--c-accent)",
+                      opacity: 0.82,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-            <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.045)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${s.pct}%`, borderRadius: 999, background: FILL[s.cls] }} />
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

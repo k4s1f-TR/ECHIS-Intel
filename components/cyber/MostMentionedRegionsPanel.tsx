@@ -1,71 +1,50 @@
 "use client";
-import { useEffect, useMemo, useRef } from "react";
+
 import { Globe } from "lucide-react";
-import { cyberRegionMentions, type CyberRegionMention } from "@/data/cyberMockData";
+import type { GeoRole, RegionMetric } from "@/lib/cyber";
 
-function RegionRow({ item, index, maxCount }: { item: CyberRegionMention; index: number; maxCount: number }) {
-  const valueRef = useRef<HTMLSpanElement>(null);
-  const pct = (item.count / maxCount) * 100;
-  const positive = item.change >= 0;
+/** Role shown on the chip: "mixed" when an item set has both attacker + victim. */
+function displayRole(metric: RegionMetric): GeoRole | "mixed" {
+  const { origin, target } = metric.roleBreakdown;
+  if (origin > 0 && target > 0) return "mixed";
+  return metric.dominantRole;
+}
 
-  // Count-up on load (~1s ease-out cubic). Base render already holds the final
-  // value (SSR-correct); the effect only animates when motion is allowed.
-  useEffect(() => {
-    const node = valueRef.current;
-    if (!node) return;
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+const ROLE_STYLE: Record<GeoRole | "mixed", { label: string; color: string; bar: string }> = {
+  target: { label: "Target", color: "var(--c-crit)", bar: "var(--c-crit)" },
+  origin: { label: "Origin", color: "var(--c-silver)", bar: "var(--c-silver)" },
+  mixed: { label: "Mixed", color: "var(--c-accent-text)", bar: "var(--c-accent)" },
+  neutral: { label: "Mentioned", color: "var(--c-t5)", bar: "var(--c-t5)" },
+};
 
-    let raf = 0;
-    const target = item.count;
-    const dur = 1000;
-    const delay = 120 + index * 70;
-    const fmt = (v: number) => Math.round(v).toLocaleString("en-US");
-    const startTimer = window.setTimeout(() => {
-      const start = performance.now();
-      const step = (now: number) => {
-        const t = Math.min(1, (now - start) / dur);
-        const e = 1 - Math.pow(1 - t, 3);
-        node.textContent = fmt(target * e);
-        if (t < 1) raf = requestAnimationFrame(step);
-      };
-      raf = requestAnimationFrame(step);
-    }, delay);
-
-    return () => {
-      window.clearTimeout(startTimer);
-      cancelAnimationFrame(raf);
-      node.textContent = fmt(target);
-    };
-  }, [item.count, index]);
-
+function EmptyState({ message }: { message: string }) {
   return (
     <div
-      className="grid items-center"
-      style={{ gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "4.5px 9px", borderRadius: "var(--c-radius-sm)" }}
+      className="c-mono flex flex-1 items-center justify-center px-4 text-center"
+      style={{
+        color: "var(--c-t4)",
+        fontSize: "var(--c-fs-xs)",
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+      }}
     >
-      <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 600, color: "var(--c-t6)", textAlign: "center" }}>
-        {item.rank}
-      </span>
-      <div className="min-w-0">
-        <div style={{ fontSize: "var(--c-fs-base)", fontWeight: 500, color: "var(--c-t2)", marginBottom: 3 }}>{item.region}</div>
-        <div style={{ height: 3, borderRadius: 999, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${pct.toFixed(1)}%`, borderRadius: 999, background: "linear-gradient(90deg, var(--c-accent-2), var(--c-accent))" }} />
-        </div>
-      </div>
-      <div className="flex items-center gap-[9px]">
-        <span ref={valueRef} className="c-mono" style={{ fontSize: "var(--c-fs-base)", fontWeight: 600, color: "var(--c-t2)" }}>
-          {item.count.toLocaleString("en-US")}
-        </span>
-        <span className="c-mono" style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: positive ? "var(--c-accent-text)" : "var(--c-silver-dim)" }}>
-          {positive ? "+" : "−"}{Math.abs(item.change)}%
-        </span>
-      </div>
+      {message}
     </div>
   );
 }
 
-export function MostMentionedRegionsPanel() {
-  const maxCount = useMemo(() => Math.max(...cyberRegionMentions.map((r) => r.count)), []);
+export function MostMentionedRegionsPanel({
+  regions = [],
+  isLoading = false,
+  hasError = false,
+}: {
+  regions?: RegionMetric[];
+  isLoading?: boolean;
+  hasError?: boolean;
+}) {
+  const top = regions.slice(0, 6);
+  const maxCount = top.reduce((m, r) => Math.max(m, r.itemCount), 0) || 1;
+
   return (
     <div className="cyber-panel h-full">
       <div className="cyber-panel-head">
@@ -73,12 +52,85 @@ export function MostMentionedRegionsPanel() {
           <Globe size={15} style={{ color: "var(--c-silver-dim)" }} />
           <span className="cyber-panel-title">Most Mentioned Regions</span>
         </div>
+        <span className="cyber-live-pill" style={{ color: "var(--c-silver-dim)" }}>
+          Inferred
+        </span>
       </div>
-      <div className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col" style={{ padding: "7px 6px" }}>
-        {cyberRegionMentions.map((r, i) => (
-          <RegionRow key={r.region} item={r} index={i} maxCount={maxCount} />
-        ))}
-      </div>
+
+      {isLoading && top.length === 0 ? (
+        <EmptyState message="Syncing region data…" />
+      ) : hasError && top.length === 0 ? (
+        <EmptyState message="Source unavailable." />
+      ) : top.length === 0 ? (
+        <EmptyState message="No live region data." />
+      ) : (
+        <div
+          className="tm-scrollbar cyber-scrollbar flex-1 min-h-0 overflow-y-auto flex flex-col"
+          style={{ padding: "10px 14px", gap: 9 }}
+        >
+          {top.map((region) => {
+            const role = displayRole(region);
+            const style = ROLE_STYLE[role];
+            const width = `${Math.max(6, Math.round((region.itemCount / maxCount) * 100))}%`;
+            return (
+              <div key={region.regionId} className="flex flex-col" style={{ gap: 5 }}>
+                <div className="flex items-baseline justify-between" style={{ gap: 8 }}>
+                  <span
+                    className="truncate"
+                    style={{
+                      fontSize: "var(--c-fs-sm)",
+                      fontWeight: 600,
+                      color: "var(--c-t2)",
+                      letterSpacing: "0.01em",
+                    }}
+                    title={region.sampleCountries.join(", ")}
+                  >
+                    {region.label}
+                  </span>
+                  <div className="flex flex-shrink-0 items-center" style={{ gap: 7 }}>
+                    <span
+                      className="c-disp"
+                      style={{
+                        fontSize: "var(--c-fs-2xs)",
+                        fontWeight: 700,
+                        letterSpacing: "0.07em",
+                        textTransform: "uppercase",
+                        color: style.color,
+                      }}
+                    >
+                      {style.label}
+                    </span>
+                    <span
+                      className="c-mono"
+                      style={{ fontSize: "var(--c-fs-xs)", fontWeight: 500, color: "var(--c-t3)" }}
+                    >
+                      {region.itemCount}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    height: 5,
+                    borderRadius: 3,
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width,
+                      height: "100%",
+                      borderRadius: 3,
+                      background: style.bar,
+                      opacity: role === "neutral" ? 0.4 : 0.85,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

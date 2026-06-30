@@ -1,19 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Shield } from "lucide-react";
-import { CyberMap } from "./CyberMap";
+import {
+  CyberMap,
+  activeHighlightRoles,
+  HIGHLIGHT_ROLE_LABEL,
+  HIGHLIGHT_ROLE_SWATCH,
+} from "./CyberMap";
+import type { RegionMetric } from "@/lib/cyber";
 import { CyberNewsPanel } from "./CyberNewsPanel";
 import { ThreatContextPanel } from "./ThreatContextPanel";
 import { MostMentionedRegionsPanel } from "./MostMentionedRegionsPanel";
 import { AffectedSectorsPanel } from "./AffectedSectorsPanel";
-import {
-  cyberAttackIndicators,
-  cyberHotspots,
-  cyberNewsItems,
-} from "@/data/cyberMockData";
+import { useCyberNewsFeed } from "./useCyberNewsFeed";
+import { analyzeCyberSignals } from "@/lib/cyber";
 
-function MapInfoStrip() {
+function MapInfoStrip({
+  itemCount,
+  isLoading,
+  hasError,
+  regions,
+}: {
+  itemCount: number;
+  isLoading: boolean;
+  hasError: boolean;
+  regions: RegionMetric[];
+}) {
+  const status = isLoading ? "Syncing" : hasError ? "Unavailable" : "Live";
+  const legendRoles = activeHighlightRoles(regions);
+
   return (
     <div
       className="flex flex-shrink-0 flex-wrap items-center gap-[10px]"
@@ -42,7 +58,7 @@ function MapInfoStrip() {
             color: "var(--c-t5)",
           }}
         >
-          Session IP
+          Source
         </span>
         <span
           className="c-mono"
@@ -52,12 +68,9 @@ function MapInfoStrip() {
             color: "var(--c-t3)",
           }}
         >
-          185.234.219.102
+          The Hacker News
         </span>
       </div>
-      <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>
-        Istanbul, Turkiye
-      </span>
       <span
         className="c-disp"
         style={{
@@ -72,11 +85,39 @@ function MapInfoStrip() {
           border: "1px solid var(--c-elev-border)",
         }}
       >
-        ISP
+        RSS
       </span>
       <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>
-        Turk Telekom
+        {status}
       </span>
+      {legendRoles.length > 0 ? (
+        <div className="flex items-center gap-[11px]" style={{ marginLeft: 4 }}>
+          {legendRoles.map((role) => (
+            <div key={role} className="flex items-center gap-[5px]">
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 2,
+                  background: HIGHLIGHT_ROLE_SWATCH[role],
+                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "var(--c-fs-2xs)",
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--c-t4)",
+                }}
+              >
+                {HIGHLIGHT_ROLE_LABEL[role]}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="flex-1" />
       <div className="flex items-center gap-[6px]">
         <span
@@ -88,7 +129,7 @@ function MapInfoStrip() {
             color: "var(--c-t5)",
           }}
         >
-          Active Arcs
+          RSS Items
         </span>
         <span
           className="c-mono"
@@ -98,33 +139,7 @@ function MapInfoStrip() {
             color: "var(--c-accent-text)",
           }}
         >
-          {cyberAttackIndicators.length}
-        </span>
-      </div>
-      <span style={{ fontSize: "var(--c-fs-xs)", color: "var(--c-t4)" }}>
-        -
-      </span>
-      <div className="flex items-center gap-[6px]">
-        <span
-          style={{
-            fontSize: "var(--c-fs-xs)",
-            fontWeight: 700,
-            letterSpacing: "0.07em",
-            textTransform: "uppercase",
-            color: "var(--c-t5)",
-          }}
-        >
-          Hotspots
-        </span>
-        <span
-          className="c-mono"
-          style={{
-            fontSize: "var(--c-fs-xs)",
-            fontWeight: 500,
-            color: "var(--c-t3)",
-          }}
-        >
-          {cyberHotspots.length}
+          {itemCount}
         </span>
       </div>
     </div>
@@ -132,7 +147,31 @@ function MapInfoStrip() {
 }
 
 export function CyberSecPanel() {
-  const [selectedNewsId, setSelectedNewsId] = useState(cyberNewsItems[0].id);
+  const cyberNewsFeed = useCyberNewsFeed();
+  const displayedNewsItems = useMemo(
+    () => cyberNewsFeed.items,
+    [cyberNewsFeed.items],
+  );
+  const [requestedNewsId, setRequestedNewsId] = useState("");
+  const selectedNewsId = displayedNewsItems.some(
+    (item) => item.id === requestedNewsId,
+  )
+    ? requestedNewsId
+    : (displayedNewsItems[0]?.id ?? "");
+
+  // Region + sector metrics inferred from the live RSS title+summary text.
+  // No mock data: panels render only what the open-source feed text yields.
+  const signals = useMemo(
+    () =>
+      analyzeCyberSignals(
+        displayedNewsItems.map((item) => ({
+          id: item.id,
+          title: item.headline,
+          summary: item.summary,
+        })),
+      ),
+    [displayedNewsItems],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -152,9 +191,14 @@ export function CyberSecPanel() {
               </div>
             </div>
             <div className="min-h-0 flex-1">
-              <CyberMap />
+              <CyberMap regions={signals.regions} />
             </div>
-            <MapInfoStrip />
+            <MapInfoStrip
+              itemCount={displayedNewsItems.length}
+              isLoading={cyberNewsFeed.isLoading}
+              hasError={Boolean(cyberNewsFeed.error)}
+              regions={signals.regions}
+            />
           </div>
 
           <div
@@ -162,10 +206,18 @@ export function CyberSecPanel() {
             style={{ height: 264, gap: 10 }}
           >
             <div className="min-w-0" style={{ flex: "0 0 304px" }}>
-              <MostMentionedRegionsPanel />
+              <MostMentionedRegionsPanel
+                regions={signals.regions}
+                isLoading={cyberNewsFeed.isLoading}
+                hasError={Boolean(cyberNewsFeed.error)}
+              />
             </div>
             <div className="min-w-0 flex-1">
-              <AffectedSectorsPanel />
+              <AffectedSectorsPanel
+                sectors={signals.sectors}
+                isLoading={cyberNewsFeed.isLoading}
+                hasError={Boolean(cyberNewsFeed.error)}
+              />
             </div>
           </div>
         </div>
@@ -173,12 +225,19 @@ export function CyberSecPanel() {
         <div className="min-h-0 min-w-0" style={{ flex: "1.15 1 0%" }}>
           <CyberNewsPanel
             selectedNewsId={selectedNewsId}
-            onSelectNews={setSelectedNewsId}
+            onSelectNews={setRequestedNewsId}
+            items={displayedNewsItems}
+            isLoading={cyberNewsFeed.isLoading}
+            isLive={cyberNewsFeed.items.length > 0}
+            error={cyberNewsFeed.error}
           />
         </div>
 
         <div className="min-h-0 min-w-0" style={{ flex: "1 1 0%" }}>
-          <ThreatContextPanel selectedNewsId={selectedNewsId} />
+          <ThreatContextPanel
+            selectedNewsId={selectedNewsId}
+            items={displayedNewsItems}
+          />
         </div>
       </main>
     </div>

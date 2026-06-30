@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Hanken_Grotesk, JetBrains_Mono, Newsreader } from "next/font/google";
+import { Space_Grotesk, Hanken_Grotesk, JetBrains_Mono, Newsreader, Spectral } from "next/font/google";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -34,6 +34,16 @@ const newsreader = Newsreader({
   display: "swap",
 });
 
+// Display serif used by the Contact screen headings, matching its design
+// handoff (Spectral, normal + italic). Exposed as --font-spectral.
+const spectral = Spectral({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  style: ["normal", "italic"],
+  variable: "--font-spectral",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "ECHIS",
   description: "Open-source intelligence situation awareness dashboard",
@@ -48,7 +58,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`h-full ${spaceGrotesk.variable} ${hankenGrotesk.variable} ${jetBrainsMono.variable} ${newsreader.variable}`}
+      className={`h-full ${spaceGrotesk.variable} ${hankenGrotesk.variable} ${jetBrainsMono.variable} ${newsreader.variable} ${spectral.variable}`}
     >
       <body className="h-full overflow-hidden">{children}</body>
     </html>
