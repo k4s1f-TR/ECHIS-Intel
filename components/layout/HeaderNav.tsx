@@ -63,16 +63,14 @@ export function HeaderNav({
           className="leading-none font-bold uppercase"
           style={{
             fontFamily: "var(--font-display), 'Space Grotesk', sans-serif",
-            fontSize: "20px",
+            fontSize: "23px",
             fontWeight: 700,
-            letterSpacing: "0.18em",
-            background: "linear-gradient(180deg, #ff5d6a 0%, #ff3548 52%, #d4172a 100%)",
+            letterSpacing: "0.14em",
+            background: "linear-gradient(180deg, #ef4051 0%, #bd1224 52%, #740812 100%)",
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
             WebkitTextFillColor: "transparent",
-            WebkitTextStroke: "0.8px #ff3548",
-            color: "#ff3548",
-            filter: "drop-shadow(0 1px 6px rgba(255,43,61,0.26))",
+            color: "#bd1224",
           }}
         >
           E C H I S

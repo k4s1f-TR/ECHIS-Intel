@@ -84,24 +84,11 @@ function MapSystemSwitch({
         borderRadius: 9,
         background: "rgba(7,8,10,0.72)",
         border: "1px solid var(--accent-blue-border)",
-        boxShadow:
-          "0 14px 36px rgba(0,0,0,0.42), 0 0 18px rgba(255,43,61,0.10), 0 1px 0 rgba(255,255,255,0.04) inset",
+        boxShadow: "0 14px 36px rgba(0,0,0,0.42)",
         backdropFilter: "blur(14px)",
         transition: "right 180ms ease, opacity 120ms ease",
       }}
     >
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          left: 8,
-          right: 8,
-          top: 0,
-          height: 1,
-          background: "var(--accent-grad)",
-          opacity: 0.92,
-        }}
-      />
       {MAP_SYSTEM_OPTIONS.map(({ key, label, title, icon: Icon }) => {
         const selected = value === key;
         return (

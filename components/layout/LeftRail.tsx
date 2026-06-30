@@ -100,7 +100,7 @@ export function LeftRail({
       style={{
         width: "68px",
         minWidth: "68px",
-        background: "linear-gradient(180deg, #09090b 0%, #050506 100%)",
+        background: "#050506",
         borderRight: "1px solid var(--c-border-2)",
         boxShadow: "1px 0 0 rgba(255,255,255,0.02) inset",
       }}
@@ -116,7 +116,6 @@ export function LeftRail({
           style={{
             background: "linear-gradient(145deg, #4a1418 0%, #1c0b0e 100%)",
             border: "1px solid var(--accent-blue-border)",
-            boxShadow: "0 0 14px var(--accent-blue-glow)",
           }}
         >
           <Eye size={16} strokeWidth={1.6} color="var(--accent-blue-text)" />

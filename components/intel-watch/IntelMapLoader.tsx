@@ -166,10 +166,8 @@ export default function IntelMapLoader({ ready, accent = '#e6303c', bars = 41, o
         zIndex: 50,
         overflow: 'hidden',
         transformOrigin: 'center',
-        background: '#0a0b0e',
-        backgroundImage:
-          'linear-gradient(rgba(140,160,190,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(140,160,190,.03) 1px,transparent 1px)',
-        backgroundSize: '60px 60px',
+        // Matches --iw-black used by every Intel Watch panel/dark surface.
+        background: '#040404',
         fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace',
         transition: 'opacity .6s ease, filter .6s ease, transform .6s ease',
       }}
@@ -192,7 +190,7 @@ export default function IntelMapLoader({ ready, accent = '#e6303c', bars = 41, o
           position: 'absolute',
           left: '50%',
           top: '50%',
-          transform: 'translate(-50%,-50%)',
+          transform: 'translate(-50%,-50%) scale(0.8)',
           width: 660,
           maxWidth: '84%',
         }}

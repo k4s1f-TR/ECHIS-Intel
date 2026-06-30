@@ -474,3 +474,47 @@ body {
   .policy-dossier [style*="pulseDot"],
   .policy-dossier [style*="liveBlink"] { animation: none !important; }
 }
+
+/* ── MapLibre compact attribution ("Toggle attribution") ────────────────────
+   The stock (i) toggle renders as a bright white chip that dominates the map
+   corner, and its expanded panel is bulky. Drop the white box, fade the whole
+   control so it blends into the basemap, and scale it down (the scale shrinks
+   the button, icon and expanded text together). */
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  transform: scale(0.7);
+  /* Bottom-left is the only edge the corner flex layout keeps fixed, so both
+     the scale pivot and the (i) button (re-pinned below) anchor there — that
+     keeps the circle from moving as the panel expands/collapses. */
+  transform-origin: bottom left;
+  opacity: 0.4;
+  min-height: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  transition: opacity 140ms ease;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact:hover {
+  opacity: 0.85;
+}
+/* Dim the (i) button circle so it no longer reads as a bright white dot, and
+   pin it to the bottom edge (the fixed corner) so it doesn't drift vertically
+   when the panel expands/collapses and the container height changes. */
+.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button {
+  background-color: rgba(255, 255, 255, 0.22) !important;
+  top: auto !important;
+  bottom: 0 !important;
+}
+/* Expanded panel: translucent dark sheet + small light text instead of the
+   opaque white block, so it takes far less visual space when open. */
+.maplibregl-ctrl-attrib.maplibregl-compact-show {
+  opacity: 0.95;
+  background-color: rgba(7, 8, 10, 0.82) !important;
+  border-radius: 9px !important;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner {
+  font-size: 9px;
+  line-height: 1.4;
+}
+.maplibregl-ctrl-attrib a,
+.maplibregl-ctrl-attrib-inner {
+  color: rgba(255, 255, 255, 0.6) !important;
+}

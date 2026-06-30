@@ -1429,8 +1429,8 @@ export function IntelWatchMap() {
 
         .iw-panel-title {
           color: var(--c-t1);
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 10.5px;
+          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
+          font-size: 14px;
           font-weight: 600;
           letter-spacing: 0.06em;
         }
@@ -1451,7 +1451,7 @@ export function IntelWatchMap() {
 
         .iw-stat-chip strong {
           color: var(--c-t1);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
           font-size: 9.5px;
           font-weight: 700;
           line-height: 1;
@@ -1463,7 +1463,7 @@ export function IntelWatchMap() {
 
         .iw-stat-chip span {
           color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
           font-size: 7px;
           font-weight: 700;
           letter-spacing: 0.10em;
@@ -1488,7 +1488,8 @@ export function IntelWatchMap() {
           background: transparent;
           color: var(--c-t5);
           cursor: pointer;
-          font-size: 7.8px;
+          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
+          font-size: 6.6px;
           font-weight: 600;
           letter-spacing: 0.10em;
           text-transform: uppercase;
@@ -1582,8 +1583,7 @@ export function IntelWatchMap() {
           width: 8px;
           height: 8px;
           border-radius: 2px;
-          background: var(--layer-hue);
-          box-shadow: 0 0 8px var(--layer-hue);
+          background: #ff2b3d;
         }
 
         .iw-layer-row[data-visible="false"] .iw-hue {
@@ -2108,7 +2108,7 @@ export function IntelWatchMap() {
                           }}
                         >
                           {layer.visible ? (
-                            <Eye size={14} color={layer.hue} strokeWidth={1.8} />
+                            <Eye size={14} color="#ff2b3d" strokeWidth={1.8} />
                           ) : (
                             <EyeOff size={14} color="#444b55" strokeWidth={1.8} />
                           )}

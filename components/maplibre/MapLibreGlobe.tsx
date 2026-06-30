@@ -1745,10 +1745,10 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
                   borderCountry: LUXE_BORDER_COUNTRY,
                   borderAdmin: LUXE_BORDER_ADMIN,
                   showBoundaries: false,
-                  // National border comes from the luxe outline; turn the OSM
-                  // sub-national (state/province) admin lines back on so
-                  // intra-country borders are visible on the globe.
-                  showAdminBoundaries: true,
+                  // National border comes from the luxe outline. The OSM
+                  // sub-national admin lines (state/province + district/city)
+                  // are kept off — they cluttered the globe.
+                  showAdminBoundaries: false,
                   labelHalo: LABEL_HALO,
                 },
               )
@@ -2392,29 +2392,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            // Camera-fixed atmosphere / key-light. Reworked from two competing
-            // bright blobs (a salmon spot + a separate white spot) into a single
-            // coherent soft key light: a warm-neutral core that reads as light
-            // (not red paint), feathered far out so there is no hard circular
-            // edge, plus a whisper of cool ambient bounce to round the sphere
-            // without reading as a second highlight. Restrained and premium.
             background:
-              "radial-gradient(78% 72% at 36% 24%, rgba(255,240,235,0.085) 0%, rgba(240,122,112,0.05) 32%, rgba(120,12,20,0.02) 58%, transparent 80%), " +
-              "radial-gradient(95% 88% at 66% 74%, rgba(176,196,224,0.022) 0%, transparent 66%), " +
-              "linear-gradient(132deg, rgba(255,255,255,0.03) 0%, transparent 26%, rgba(0,0,0,0.13) 74%, rgba(0,0,0,0.32) 100%)",
-            mixBlendMode: "screen",
-            opacity: 0.62,
-          }}
-        />
-
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            background:
-              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 44%, rgba(11,12,14,0.45) 72%, rgba(11,12,14,0.92) 100%)",
+              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 42%, rgba(4,4,5,0.6) 70%, rgba(4,4,5,0.98) 100%)",
           }}
         />
 
