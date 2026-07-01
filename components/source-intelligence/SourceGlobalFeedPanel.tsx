@@ -2,9 +2,34 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, ExternalLink, FileText, Radio, X } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  Layers,
+  Radio,
+  X,
+} from "lucide-react";
 import type { IntelligenceEventCandidate } from "@/data/source-intelligence/sourceIntelligenceTypes";
 import { useSourceIntelligenceItems } from "./useSourceIntelligenceItems";
+import { useSourceIntelligenceStore } from "./SourceIntelligenceProvider";
+import { useSourceFeedAutoRefresh } from "./useSourceFeedAutoRefresh";
+import {
+  clusterCorroboratedItems,
+  confidenceTier,
+  regionLabelForItem,
+  type ConfidenceLevel,
+} from "@/lib/sourceintel/feedInsights";
+
+const CONFIDENCE_COLOR: Record<ConfidenceLevel, string> = {
+  high: "var(--c-accent-text)",
+  medium: "var(--c-silver)",
+  low: "var(--c-t5)",
+};
+
+const FEED_INITIAL_RENDER = 30;
+const FEED_RENDER_STEP = 30;
 
 const LEFT_RAIL_W = 68;
 const HEADER_H = 52;
@@ -411,6 +436,10 @@ function SourceFeedCard({
   isSelected,
   onToggle,
   onCardClick,
+  regionLabel,
+  confidence,
+  corroborationCount,
+  corroborationSources,
 }: {
   item: IntelligenceEventCandidate;
   index: number;
@@ -418,6 +447,10 @@ function SourceFeedCard({
   isSelected: boolean;
   onToggle: () => void;
   onCardClick: () => void;
+  regionLabel?: string;
+  confidence?: { level: ConfidenceLevel; label: string };
+  corroborationCount?: number;
+  corroborationSources?: string[];
 }) {
   const activeBorder = isSelected
     ? "var(--c-accent-border)"
@@ -525,6 +558,42 @@ function SourceFeedCard({
             <span style={{ color: "var(--c-t5)" }}>{formatAge(item.publishedAt)}</span>
           </>
         )}
+        {regionLabel && (
+          <>
+            <span style={{ color: "var(--c-t6)" }}>-</span>
+            <span
+              className="truncate"
+              title={regionLabel}
+              style={{ maxWidth: 120, color: "var(--c-silver)", fontWeight: 600 }}
+            >
+              {regionLabel}
+            </span>
+          </>
+        )}
+        {confidence && (
+          <span
+            className="ml-auto inline-flex items-center gap-1"
+            title={`Inferred confidence: ${confidence.label}`}
+            style={{ color: CONFIDENCE_COLOR[confidence.level], fontWeight: 700 }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 999,
+                background: CONFIDENCE_COLOR[confidence.level],
+                boxShadow:
+                  confidence.level === "high"
+                    ? "0 0 6px var(--accent-blue-glow)"
+                    : "none",
+              }}
+            />
+            <span style={{ fontSize: "8.5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {confidence.label}
+            </span>
+          </span>
+        )}
       </div>
 
       {item.summary && (
@@ -540,6 +609,27 @@ function SourceFeedCard({
         <ProvenanceChip>{labelFor(item.primaryDomain)}</ProvenanceChip>
         <ProvenanceChip dimmed>{labelFor(item.sourceBasis)}</ProvenanceChip>
         <ProvenanceChip dimmed>{labelFor(item.collectionMethod)}</ProvenanceChip>
+        {corroborationCount && corroborationCount > 1 ? (
+          <span
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 uppercase"
+            title={
+              corroborationSources && corroborationSources.length > 0
+                ? `Corroborated by: ${corroborationSources.join(", ")}`
+                : undefined
+            }
+            style={{
+              fontSize: "7.5px",
+              fontWeight: 800,
+              letterSpacing: "0.07em",
+              color: "var(--c-accent-text)",
+              background: "var(--c-accent-bg-soft)",
+              border: "1px solid var(--c-accent-border)",
+            }}
+          >
+            <Layers size={8} />
+            {corroborationCount} sources
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -884,6 +974,70 @@ export function SourceGlobalFeedPanel({
       ? selectedItem
       : null;
 
+  // Shared store (already exposed) for status-strip stats.
+  const store = useSourceIntelligenceStore();
+  // Keep the feed fresh in the background (no visible controls in the header).
+  useSourceFeedAutoRefresh();
+
+  // Corroboration: collapse near-duplicate stories reported by multiple sources.
+  const clusters = useMemo(
+    () => clusterCorroboratedItems(visibleItems),
+    [visibleItems],
+  );
+
+  // Progressive rendering (virtualization-lite): grow a render window as the
+  // sentinel near the list bottom scrolls into view, so long feeds stay cheap.
+  const [renderLimit, setRenderLimit] = useState(FEED_INITIAL_RENDER);
+  const [renderLimitSource, setRenderLimitSource] = useState(effectiveSelectedSourceId);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Reset the render window when the source filter changes — adjust-during-
+  // render pattern (avoids a synchronous setState inside an effect).
+  if (renderLimitSource !== effectiveSelectedSourceId) {
+    setRenderLimitSource(effectiveSelectedSourceId);
+    setRenderLimit(FEED_INITIAL_RENDER);
+  }
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setRenderLimit((n) => (n < clusters.length ? n + FEED_RENDER_STEP : n));
+        }
+      },
+      { root: scrollRef.current, rootMargin: "320px 0px" },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [clusters.length]);
+  const renderedClusters = useMemo(
+    () => clusters.slice(0, renderLimit),
+    [clusters, renderLimit],
+  );
+
+  // Status-strip stats (derived from the shared store — no pipeline changes).
+  const onMapCount = store.markerCandidates.length;
+  const rejectedCount = useMemo(
+    () => store.filterResults.filter((result) => !result.accepted).length,
+    [store.filterResults],
+  );
+
+  // "New items" hint: surface a jump-to-top pill when the lead story changes
+  // while the user is scrolled down, instead of yanking their scroll position.
+  const [newItemsHint, setNewItemsHint] = useState(false);
+  const prevTopIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const topId = clusters[0]?.primary.id ?? null;
+    if (
+      prevTopIdRef.current !== null &&
+      topId !== prevTopIdRef.current &&
+      (scrollRef.current?.scrollTop ?? 0) > 240
+    ) {
+      setNewItemsHint(true);
+    }
+    prevTopIdRef.current = topId;
+  }, [clusters]);
+
   useEffect(() => {
     if (!selectedItemId || !scrollRef.current) return;
     const el = scrollRef.current.querySelector<HTMLElement>(
@@ -966,6 +1120,9 @@ export function SourceGlobalFeedPanel({
           <div
             ref={scrollRef}
             className="min-h-0 flex-1 overflow-y-auto"
+            onScroll={() => {
+              if ((scrollRef.current?.scrollTop ?? 0) < 40) setNewItemsHint(false);
+            }}
             style={{
               padding: "8px 10px",
               display: "flex",
@@ -975,6 +1132,31 @@ export function SourceGlobalFeedPanel({
               scrollbarColor: "rgba(236,47,59,0.18) transparent",
             }}
           >
+            {newItemsHint && (
+              <button
+                type="button"
+                onClick={() => {
+                  scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                  setNewItemsHint(false);
+                }}
+                className="sticky top-0 z-10 mx-auto inline-flex items-center gap-1 rounded-full"
+                style={{
+                  padding: "4px 11px",
+                  marginBottom: 2,
+                  fontSize: "9.5px",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  color: "var(--c-accent-text)",
+                  background: "var(--c-accent-bg-soft)",
+                  border: "1px solid var(--c-accent-border)",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+                }}
+              >
+                <ArrowUp size={11} />
+                New updates
+              </button>
+            )}
             {visibleItems.length === 0 ? (
               <div className="flex flex-1 items-center justify-center">
                 <span style={{ fontSize: "11px", color: "var(--c-t6)" }}>
@@ -982,42 +1164,72 @@ export function SourceGlobalFeedPanel({
                 </span>
               </div>
             ) : (
-              visibleItems.map((item, i) => (
-                <SourceFeedCard
-                  key={item.id}
-                  item={item}
-                  index={i + 1}
-                  isOpen={visibleSelectedItem?.id === item.id}
-                  isSelected={selectedItemId === item.id}
-                  onToggle={() =>
-                    setSelectedItem((prev) => (prev?.id === item.id ? null : item))
-                  }
-                  onCardClick={() => onItemSelect?.(item.id)}
-                />
-              ))
+              <>
+                {renderedClusters.map((cluster, i) => {
+                  const primary = cluster.primary;
+                  return (
+                    <SourceFeedCard
+                      key={primary.id}
+                      item={primary}
+                      index={i + 1}
+                      isOpen={visibleSelectedItem?.id === primary.id}
+                      isSelected={selectedItemId === primary.id}
+                      onToggle={() =>
+                        setSelectedItem((prev) =>
+                          prev?.id === primary.id ? null : primary,
+                        )
+                      }
+                      onCardClick={() => onItemSelect?.(primary.id)}
+                      regionLabel={regionLabelForItem(primary)}
+                      confidence={confidenceTier(primary)}
+                      corroborationCount={cluster.sourceCount}
+                      corroborationSources={cluster.sourceNames}
+                    />
+                  );
+                })}
+                {renderLimit < clusters.length && (
+                  <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />
+                )}
+              </>
             )}
           </div>
         )}
 
         {(loadState === "loaded" || loadState === "partial") && items.length > 0 && (
           <div
-            className="flex flex-shrink-0 items-center justify-between px-4 py-2"
+            className="flex flex-shrink-0 items-center justify-between gap-2 px-4 py-2"
             style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
           >
-            <span style={{ fontSize: "9.5px", color: "var(--c-t6)" }}>
-              {visibleItems.length} / {items.length} items
-            </span>
-            <span
-              style={{
-                fontSize: "8.5px",
-                fontWeight: 600,
-                letterSpacing: "0.06em",
-                color: "var(--c-t6)",
-                textTransform: "uppercase",
-              }}
-            >
-              Source Pipeline
-            </span>
+            <div className="flex items-center gap-2" style={{ fontSize: "9.5px", color: "var(--c-t5)" }}>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ color: "var(--c-t3)", fontWeight: 700 }}>{clusters.length}</span> stories
+              </span>
+              <span style={{ color: "var(--c-t6)" }}>·</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {visibleItems.length}/{items.length} items
+              </span>
+            </div>
+            <div className="flex items-center gap-2" style={{ fontSize: "9.5px", color: "var(--c-t5)" }}>
+              <span
+                className="inline-flex items-center gap-1"
+                title="Items placed on the globe"
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ width: 5, height: 5, borderRadius: 999, background: "var(--c-accent)" }}
+                />
+                <span style={{ color: "var(--c-t3)", fontWeight: 700 }}>{onMapCount}</span> on map
+              </span>
+              {rejectedCount > 0 && (
+                <>
+                  <span style={{ color: "var(--c-t6)" }}>·</span>
+                  <span title="Items filtered out as non-geopolitical noise" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {rejectedCount} filtered
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
