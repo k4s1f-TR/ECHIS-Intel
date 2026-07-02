@@ -2,10 +2,14 @@
 
 import {
   Anchor,
+  Building2,
+  ChevronLeft,
   Eye,
   EyeOff,
+  Factory,
+  Globe2,
+  Info,
   Layers,
-  Lock,
   MapPin,
   Minus,
   MousePointer2,
@@ -14,14 +18,16 @@ import {
   Plus,
   Radiation,
   Route,
+  Satellite,
   Search,
+  Shield,
   Target,
   Trash2,
   Undo2,
-  Unlock,
+  Warehouse,
   Waves,
 } from "lucide-react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import maplibregl from "maplibre-gl";
@@ -61,6 +67,8 @@ type Pin = {
   source: string;
   updated: string;
   note: string;
+  /** Analyst-placed pins are editable in the detail panel; seed pins are not. */
+  userCreated?: boolean;
 };
 
 type Annotation = {
@@ -69,7 +77,51 @@ type Annotation = {
   layer: string;
   color: string;
   coordinates: LngLat[];
+  /** Optional analyst label rendered next to the measurement on the map. */
+  name?: string;
 };
+
+type Selection =
+  | { type: "pin"; id: string }
+  | { type: "annotation"; id: string }
+  | null;
+
+const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
+  critical: { label: "KRİTİK", color: "#ff2b3d" },
+  high: { label: "YÜKSEK", color: "#ff9533" },
+  medium: { label: "ORTA", color: "#ffd23d" },
+  low: { label: "DÜŞÜK", color: "#4fd1c5" },
+};
+const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
+
+const TYPE_META: Record<PinType, { label: string; Icon: LucideIcon }> = {
+  naval: { label: "Deniz", Icon: Waves },
+  airdef: { label: "Hava Sav.", Icon: Shield },
+  logistics: { label: "Lojistik", Icon: Warehouse },
+  sigint: { label: "SIGINT", Icon: Satellite },
+  facility: { label: "Tesis", Icon: Factory },
+  incident: { label: "Olay", Icon: Building2 },
+};
+const PIN_TYPE_ORDER: PinType[] = [
+  "naval",
+  "airdef",
+  "logistics",
+  "sigint",
+  "facility",
+  "incident",
+];
+
+/** Curated draw palette — theme-consistent hues shared by line & area tools. */
+const DRAW_PALETTE = [
+  "#ff2b3d",
+  "#e0a82e",
+  "#4fd1c5",
+  "#4aa8ff",
+  "#b06bff",
+  "#9cff6a",
+  "#ff7ad9",
+  "#c4ccd6",
+];
 
 const DEFAULT_LAYERS: Layer[] = [
   { id: "naval", name: "Deniz Faaliyeti", hue: "#4aa8ff", visible: true, locked: false },
@@ -225,6 +277,65 @@ function toolCursor(tool: Tool) {
 }
 
 /* ----------------------------------------------------------------------- */
+/* Draw measurements — great-circle length (km) and spherical area (km²).   */
+/* ----------------------------------------------------------------------- */
+const EARTH_RADIUS_KM = 6371;
+
+function toRadians(degrees: number) {
+  return (degrees * Math.PI) / 180;
+}
+
+function haversineKm(a: LngLat, b: LngLat) {
+  const dLat = toRadians(b[1] - a[1]);
+  const dLng = toRadians(b[0] - a[0]);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(a[1])) * Math.cos(toRadians(b[1])) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+function lineLengthKm(coordinates: LngLat[]) {
+  let total = 0;
+  for (let i = 1; i < coordinates.length; i += 1) {
+    total += haversineKm(coordinates[i - 1], coordinates[i]);
+  }
+  return total;
+}
+
+function polygonAreaKm2(coordinates: LngLat[]) {
+  if (coordinates.length < 3) return 0;
+  let total = 0;
+  for (let i = 0; i < coordinates.length; i += 1) {
+    const [lng1, lat1] = coordinates[i];
+    const [lng2, lat2] = coordinates[(i + 1) % coordinates.length];
+    total +=
+      toRadians(lng2 - lng1) *
+      (2 + Math.sin(toRadians(lat1)) + Math.sin(toRadians(lat2)));
+  }
+  return Math.abs((total * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
+}
+
+function formatKm(value: number, unit: string) {
+  const text =
+    value >= 100
+      ? Math.round(value).toLocaleString("tr-TR")
+      : value.toFixed(1).replace(".", ",");
+  return `${text} ${unit}`;
+}
+
+function annotationMeasurement(annotation: Pick<Annotation, "kind" | "coordinates">) {
+  return annotation.kind === "area"
+    ? formatKm(polygonAreaKm2(annotation.coordinates), "km²")
+    : formatKm(lineLengthKm(annotation.coordinates), "km");
+}
+
+function annotationAnchor(coordinates: LngLat[]): LngLat {
+  const lng = coordinates.reduce((sum, c) => sum + c[0], 0) / coordinates.length;
+  const lat = coordinates.reduce((sum, c) => sum + c[1], 0) / coordinates.length;
+  return [lng, lat];
+}
+
+/* ----------------------------------------------------------------------- */
 /* Airbases overlay (public/data/airbases.geojson) — popup helpers.         */
 /* ----------------------------------------------------------------------- */
 const AIRBASES_SOURCE = "airbases";
@@ -239,6 +350,10 @@ const PORTS_DATA_URL = "/data/ports.geojson";
 const NUCLEAR_FACILITIES_SOURCE = "nuclear-facilities";
 const NUCLEAR_FACILITIES_LAYER = "nuclear-facilities-dot";
 const NUCLEAR_FACILITIES_DATA_URL = "/data/nuclear-facilities.geojson";
+/* Analyst pins rendered as a severity-coloured circle layer. */
+const PINS_SOURCE = "iw-pins";
+const PINS_LAYER = "iw-pins-dot";
+const ANNOTATION_HIT_LAYERS = ["iw-annotations-fill", "iw-annotations-line"];
 
 /**
  * Toggleable map data overlays shown in the left "VERİ KATMANLARI" panel.
@@ -352,10 +467,6 @@ function buildNuclearFacilityPopup(p: Record<string, unknown>) {
   );
 }
 
-function safeLayerCount(counts: Record<string, number>, id: string) {
-  return counts[id] ?? 0;
-}
-
 function ToolButton({
   active,
   disabled,
@@ -387,28 +498,6 @@ function ToolButton({
   );
 }
 
-function IconButton({
-  children,
-  label,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-}) {
-  return (
-    <button
-      aria-label={label}
-      className="iw-icon-button"
-      title={label}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function IntelWatchMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -424,6 +513,9 @@ export function IntelWatchMap() {
   const [draft, setDraft] = useState<LngLat[]>([]);
   const [activeLayer, setActiveLayer] = useState("annot");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selection, setSelection] = useState<Selection>(null);
+  const [drawColor, setDrawColor] = useState(DRAW_PALETTE[3]);
+  const annotationMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [overlayVisibility, setOverlayVisibility] = useState<Record<string, boolean>>(
     () =>
       Object.fromEntries(
@@ -438,27 +530,33 @@ export function IntelWatchMap() {
     return map;
   }, [layers]);
 
-  const activeLayerData = useMemo(
-    () => layers.find((layer) => layer.id === activeLayer) ?? layers.find((layer) => !layer.locked) ?? layers[0],
-    [activeLayer, layers],
-  );
-
-  const layerCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    layers.forEach((layer) => {
-      counts[layer.id] = 0;
-    });
-    pins.forEach((pin) => {
-      counts[pin.layer] = (counts[pin.layer] ?? 0) + 1;
-    });
-    annotations.forEach((annotation) => {
-      counts[annotation.layer] = (counts[annotation.layer] ?? 0) + 1;
-    });
-    return counts;
-  }, [annotations, layers, pins]);
-
   const totalPins = pins.length;
   const criticalPins = pins.filter((pin) => pin.severity === "critical").length;
+
+  const selectedPin = useMemo(
+    () =>
+      selection?.type === "pin"
+        ? pins.find((pin) => pin.id === selection.id) ?? null
+        : null,
+    [pins, selection],
+  );
+  const selectedAnnotation = useMemo(
+    () =>
+      selection?.type === "annotation"
+        ? annotations.find((annotation) => annotation.id === selection.id) ?? null
+        : null,
+    [annotations, selection],
+  );
+  const hasSelection = Boolean(selectedPin || selectedAnnotation);
+
+  // Live measurement readout while a line/area draft is in progress.
+  const draftMeasurement = useMemo(() => {
+    if (draft.length < 2) return "";
+    if (tool === "area" && draft.length >= 3) {
+      return formatKm(polygonAreaKm2(draft), "km²");
+    }
+    return formatKm(lineLengthKm(draft), "km");
+  }, [draft, tool]);
 
   const getWritableLayer = useCallback(() => {
     return (
@@ -533,19 +631,19 @@ export function IntelWatchMap() {
         item.id === layer.id ? { ...item, visible: true } : item,
       ),
     );
-    setAnnotations((current) => [
-      ...current,
-      {
-        id: makeId("annotation"),
-        kind: tool,
-        layer: layer.id,
-        color: layer.hue,
-        coordinates: draft,
-      },
-    ]);
+    const nextAnnotation: Annotation = {
+      id: makeId("annotation"),
+      kind: tool,
+      layer: layer.id,
+      color: drawColor,
+      coordinates: draft,
+    };
+    setAnnotations((current) => [...current, nextAnnotation]);
     setDraft([]);
     setTool("select");
-  }, [draft, getWritableLayer, tool]);
+    // Open the annotation in the detail panel so it can be named right away.
+    setSelection({ type: "annotation", id: nextAnnotation.id });
+  }, [draft, drawColor, getWritableLayer, tool]);
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
@@ -555,6 +653,11 @@ export function IntelWatchMap() {
       if (event.key === "Escape" && (tool === "line" || tool === "area")) {
         event.preventDefault();
         cancelDraft();
+      }
+
+      if (event.key === "Escape" && tool === "pin") {
+        event.preventDefault();
+        setTool("select");
       }
 
       if (event.key === "Enter" && (tool === "line" || tool === "area")) {
@@ -591,10 +694,11 @@ export function IntelWatchMap() {
           type: "facility",
           severity: "medium",
           layer: layer.id,
-          title: "Yeni İşaret",
+          title: `Yeni ${TYPE_META.facility.label} işareti`,
           source: "Analist girdisi",
           updated: "Şimdi",
-          note: "Harita üzerine eklenen kullanıcı işareti. Kaynak ve not alanları detay panelinden izlenebilir.",
+          note: "Harita üzerine eklenen kullanıcı işareti. Başlık, tür, önem ve not alanları detay panelinden düzenlenebilir.",
+          userCreated: true,
         };
         setActiveLayer(layer.id);
         setLayers((currentLayers) =>
@@ -603,6 +707,8 @@ export function IntelWatchMap() {
           ),
         );
         setPins((current) => [...current, nextPin]);
+        // Open the new pin in the detail panel so it can be titled right away.
+        setSelection({ type: "pin", id: nextPin.id });
         return;
       }
 
@@ -620,6 +726,32 @@ export function IntelWatchMap() {
 
     const onClick = (event: maplibregl.MapMouseEvent) => {
       if (event.originalEvent.detail > 1) return; // ignore the dbl-click pair
+
+      // Select tool: hit-test analyst pins and drawings, open the detail panel.
+      if (toolRef.current === "select") {
+        const hitLayers = [PINS_LAYER, ...ANNOTATION_HIT_LAYERS].filter((id) =>
+          map.getLayer(id),
+        );
+        const features = hitLayers.length
+          ? map.queryRenderedFeatures(event.point, { layers: hitLayers })
+          : [];
+        const pinFeature = features.find((f) => f.layer.id === PINS_LAYER);
+        const annotationFeature = features.find((f) => f.layer.id !== PINS_LAYER);
+        if (pinFeature?.properties?.id) {
+          setSelection({ type: "pin", id: String(pinFeature.properties.id) });
+          return;
+        }
+        if (annotationFeature?.properties?.id) {
+          setSelection({
+            type: "annotation",
+            id: String(annotationFeature.properties.id),
+          });
+          return;
+        }
+        setSelection(null);
+        return;
+      }
+
       handleMapPlace([event.lngLat.lng, event.lngLat.lat]);
     };
     const onDblClick = (event: maplibregl.MapMouseEvent) => {
@@ -920,61 +1052,7 @@ export function IntelWatchMap() {
   function handleClear() {
     setDraft([]);
     setAnnotations([]);
-  }
-
-  function handleCreateLayer() {
-    const createdCount = layers.filter((layer) => layer.userCreated).length + 1;
-    const hues = ["#7dd3fc", "#9cff6a", "#ff7ad9", "#f2d36b"];
-    const nextLayer: Layer = {
-      id: makeId("layer"),
-      name: `Yeni Katman ${createdCount}`,
-      hue: hues[(createdCount - 1) % hues.length],
-      visible: true,
-      locked: false,
-      userCreated: true,
-    };
-    setLayers((current) => [...current, nextLayer]);
-    setActiveLayer(nextLayer.id);
-  }
-
-  function handleSetActiveLayer(layer: Layer) {
-    if (layer.locked) return;
-    setActiveLayer(layer.id);
-  }
-
-  function handleToggleLayerVisible(layerId: string) {
-    setLayers((current) =>
-      current.map((layer) =>
-        layer.id === layerId ? { ...layer, visible: !layer.visible } : layer,
-      ),
-    );
-  }
-
-  function handleToggleLayerLocked(layerId: string) {
-    setLayers((current) => {
-      const toggled = current.map((layer) =>
-        layer.id === layerId ? { ...layer, locked: !layer.locked } : layer,
-      );
-      const lockedActive = toggled.find((layer) => layer.id === activeLayer)?.locked;
-      if (lockedActive) {
-        const nextActive = toggled.find((layer) => !layer.locked);
-        if (nextActive) setActiveLayer(nextActive.id);
-      }
-      return toggled;
-    });
-  }
-
-  function handleDeleteLayer(layerId: string) {
-    setLayers((current) => {
-      const nextLayers = current.filter((layer) => layer.id !== layerId);
-      if (activeLayer === layerId) {
-        const nextActive = nextLayers.find((layer) => !layer.locked) ?? nextLayers[0];
-        if (nextActive) setActiveLayer(nextActive.id);
-      }
-      return nextLayers;
-    });
-    setPins((current) => current.filter((pin) => pin.layer !== layerId));
-    setAnnotations((current) => current.filter((annotation) => annotation.layer !== layerId));
+    if (selection?.type === "annotation") setSelection(null);
   }
 
   function handleButtonZoom(direction: "in" | "out") {
@@ -990,6 +1068,58 @@ export function IntelWatchMap() {
     });
   }
 
+  function updatePin(pinId: string, patch: Partial<Pin>) {
+    setPins((current) =>
+      current.map((pin) =>
+        pin.id === pinId ? { ...pin, ...patch, updated: "Şimdi" } : pin,
+      ),
+    );
+  }
+
+  function updateAnnotation(annotationId: string, patch: Partial<Annotation>) {
+    setAnnotations((current) =>
+      current.map((annotation) =>
+        annotation.id === annotationId ? { ...annotation, ...patch } : annotation,
+      ),
+    );
+  }
+
+  function handleDeletePin(pinId: string) {
+    setPins((current) => current.filter((pin) => pin.id !== pinId));
+    setSelection(null);
+  }
+
+  function handleDeleteAnnotation(annotationId: string) {
+    setAnnotations((current) =>
+      current.filter((annotation) => annotation.id !== annotationId),
+    );
+    setSelection(null);
+  }
+
+  function handleFocusSelection() {
+    const map = mapRef.current;
+    if (!map) return;
+    if (selectedPin) {
+      map.flyTo({
+        center: [selectedPin.lng, selectedPin.lat],
+        zoom: Math.max(map.getZoom(), 6.5),
+        duration: 900,
+      });
+      return;
+    }
+    if (selectedAnnotation) {
+      const lngs = selectedAnnotation.coordinates.map((c) => c[0]);
+      const lats = selectedAnnotation.coordinates.map((c) => c[1]);
+      map.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 90, duration: 900, maxZoom: 8 },
+      );
+    }
+  }
+
   // Render committed annotations + the in-progress draft as GeoJSON layers.
   useEffect(() => {
     if (!mapReady) return;
@@ -1002,7 +1132,12 @@ export function IntelWatchMap() {
         .filter((annotation) => layerMap.get(annotation.layer)?.visible ?? true)
         .map((annotation) => ({
           type: "Feature",
-          properties: { color: annotation.color },
+          properties: {
+            id: annotation.id,
+            color: annotation.color,
+            selected:
+              selection?.type === "annotation" && selection.id === annotation.id,
+          },
           geometry:
             annotation.kind === "area"
               ? {
@@ -1039,7 +1174,15 @@ export function IntelWatchMap() {
         type: "fill",
         source: "iw-annotations",
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.12 },
+        paint: {
+          "fill-color": ["get", "color"],
+          "fill-opacity": [
+            "case",
+            ["boolean", ["get", "selected"], false],
+            0.24,
+            0.12,
+          ],
+        },
       });
       map.addLayer({
         id: "iw-annotations-line",
@@ -1048,8 +1191,8 @@ export function IntelWatchMap() {
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": ["get", "color"],
-          "line-width": 2,
-          "line-opacity": 0.9,
+          "line-width": ["case", ["boolean", ["get", "selected"], false], 3.4, 2],
+          "line-opacity": ["case", ["boolean", ["get", "selected"], false], 1, 0.9],
         },
       });
     }
@@ -1072,7 +1215,143 @@ export function IntelWatchMap() {
         },
       });
     }
-  }, [annotations, draft, layerMap, mapReady]);
+  }, [annotations, draft, layerMap, mapReady, selection]);
+
+  // Analyst pins — severity-coloured circle layer with a selection ring.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const pinData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: pins
+        .filter((pin) => layerMap.get(pin.layer)?.visible ?? true)
+        .map((pin) => ({
+          type: "Feature",
+          properties: {
+            id: pin.id,
+            severity: pin.severity,
+            selected: selection?.type === "pin" && selection.id === pin.id,
+          },
+          geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
+        })),
+    };
+
+    const pinSource = map.getSource(PINS_SOURCE);
+    if (pinSource) {
+      (pinSource as maplibregl.GeoJSONSource).setData(pinData);
+    } else {
+      map.addSource(PINS_SOURCE, { type: "geojson", data: pinData });
+      map.addLayer({
+        id: PINS_LAYER,
+        type: "circle",
+        source: PINS_SOURCE,
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            2,
+            ["match", ["get", "severity"], "critical", 3.9, "high", 3.4, 3],
+            6,
+            ["match", ["get", "severity"], "critical", 6, "high", 5.2, 4.6],
+            10,
+            ["match", ["get", "severity"], "critical", 8.6, "high", 7.4, 6.6],
+          ],
+          "circle-color": [
+            "match",
+            ["get", "severity"],
+            "critical",
+            SEVERITY_META.critical.color,
+            "high",
+            SEVERITY_META.high.color,
+            "medium",
+            SEVERITY_META.medium.color,
+            "low",
+            SEVERITY_META.low.color,
+            "#c4ccd6",
+          ],
+          "circle-opacity": 0.95,
+          "circle-stroke-color": [
+            "case",
+            ["boolean", ["get", "selected"], false],
+            "#f5f7fa",
+            "#05070b",
+          ],
+          "circle-stroke-width": [
+            "case",
+            ["boolean", ["get", "selected"], false],
+            2,
+            1.1,
+          ],
+        },
+      });
+    }
+  }, [pins, layerMap, mapReady, selection]);
+
+  // Pointer cursor over selectable pins/drawings while the select tool is on.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleEnter = () => {
+      if (toolRef.current !== "select") return;
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const handleLeave = () => {
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+    const hitLayers = [PINS_LAYER, ...ANNOTATION_HIT_LAYERS];
+    hitLayers.forEach((layerId) => {
+      map.on("mouseenter", layerId, handleEnter);
+      map.on("mouseleave", layerId, handleLeave);
+    });
+    return () => {
+      hitLayers.forEach((layerId) => {
+        map.off("mouseenter", layerId, handleEnter);
+        map.off("mouseleave", layerId, handleLeave);
+      });
+    };
+  }, [mapReady]);
+
+  // Name + measurement labels — one lightweight HTML marker per drawing
+  // (annotation counts stay tiny, so DOM markers are safe here).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    annotationMarkersRef.current.forEach((marker) => marker.remove());
+    annotationMarkersRef.current = [];
+
+    annotations
+      .filter((annotation) => layerMap.get(annotation.layer)?.visible ?? true)
+      .forEach((annotation) => {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = "iw-anno-label";
+        element.style.setProperty("--anno-color", annotation.color);
+        element.textContent = annotation.name
+          ? `${annotation.name} · ${annotationMeasurement(annotation)}`
+          : annotationMeasurement(annotation);
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (toolRef.current !== "select") return;
+          setSelection({ type: "annotation", id: annotation.id });
+        });
+        const marker = new maplibregl.Marker({ element, anchor: "center" })
+          .setLngLat(annotationAnchor(annotation.coordinates))
+          .addTo(map);
+        annotationMarkersRef.current.push(marker);
+      });
+
+    return () => {
+      annotationMarkersRef.current.forEach((marker) => marker.remove());
+      annotationMarkersRef.current = [];
+    };
+  }, [annotations, layerMap, mapReady]);
 
   const mapReadout = formatCoordinate(cursorCoordinate[1], cursorCoordinate[0]);
 
@@ -1083,6 +1362,7 @@ export function IntelWatchMap() {
           /* Single black used by every panel/dark surface in Intel Watch.
              Pure neutral tone — no anthracite/blue tint. */
           --iw-black: #040404;
+          --iw-panel-font: var(--font-ui), "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
           position: relative;
           width: 100%;
           height: 100%;
@@ -1245,7 +1525,15 @@ export function IntelWatchMap() {
           height: 27px;
           border-radius: 7px;
           background: rgba(255, 255, 255, 0.025);
-          font-size: 9.2px;
+          font-size: 9.8px;
+        }
+
+        .iw-panel-search svg {
+          color: var(--c-t4);
+        }
+
+        .iw-panel-search input::placeholder {
+          color: var(--c-t4);
         }
 
         .iw-top-right {
@@ -1444,9 +1732,9 @@ export function IntelWatchMap() {
         }
 
         .iw-rail-label {
-          color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7.5px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 8.4px;
           font-weight: 700;
           letter-spacing: 0.18em;
           line-height: 1;
@@ -1454,11 +1742,11 @@ export function IntelWatchMap() {
         }
 
         .iw-section-label {
-          color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 6.6px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 8.2px;
           font-weight: 700;
-          letter-spacing: 0.16em;
+          letter-spacing: 0.12em;
           line-height: 1;
           text-transform: uppercase;
         }
@@ -1484,8 +1772,9 @@ export function IntelWatchMap() {
 
         .iw-tool-item span {
           max-width: 46px;
-          color: var(--c-t4);
-          font-size: 7.8px;
+          color: var(--c-t3);
+          font-family: var(--iw-panel-font);
+          font-size: 8.4px;
           font-weight: 600;
           line-height: 1.05;
           text-align: center;
@@ -1527,25 +1816,8 @@ export function IntelWatchMap() {
           background: var(--c-border-1);
         }
 
-        .iw-draw-hint {
-          position: absolute;
-          top: 18px;
-          left: 50%;
-          z-index: 21;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          color: #c4ccd6;
-          font-size: 11px;
-          transform: translateX(-50%);
-          white-space: nowrap;
-        }
-
         .iw-panel-header,
-        .iw-panel-stats,
-        .iw-layer-top {
+        .iw-panel-stats {
           display: flex;
           align-items: center;
         }
@@ -1621,6 +1893,8 @@ export function IntelWatchMap() {
           flex-direction: column;
           border-left: 1px solid var(--c-border-1);
           background: var(--iw-black);
+          color: var(--c-t2);
+          font-family: var(--iw-panel-font);
         }
 
         .iw-panel-header {
@@ -1633,7 +1907,7 @@ export function IntelWatchMap() {
 
         .iw-panel-title {
           color: var(--c-t1);
-          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
+          font-family: var(--iw-panel-font);
           font-size: 12px;
           font-weight: 600;
           letter-spacing: 0.06em;
@@ -1655,8 +1929,8 @@ export function IntelWatchMap() {
 
         .iw-stat-chip strong {
           color: var(--c-t1);
-          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 8.8px;
+          font-family: var(--iw-panel-font);
+          font-size: 9.8px;
           font-weight: 700;
           line-height: 1;
         }
@@ -1666,11 +1940,11 @@ export function IntelWatchMap() {
         }
 
         .iw-stat-chip span {
-          color: var(--c-t5);
-          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 6.4px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 7.6px;
           font-weight: 700;
-          letter-spacing: 0.10em;
+          letter-spacing: 0.08em;
           line-height: 1;
         }
 
@@ -1680,13 +1954,13 @@ export function IntelWatchMap() {
           justify-content: center;
           gap: 4px;
           flex: 0 0 auto;
-          height: 20px;
+          height: 22px;
           border-bottom: 1px solid var(--c-border-2);
-          color: var(--c-t5);
-          font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 5px;
+          color: var(--c-t3);
+          font-family: var(--iw-panel-font);
+          font-size: 8px;
           font-weight: 600;
-          letter-spacing: 0.10em;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
         }
 
@@ -1723,7 +1997,7 @@ export function IntelWatchMap() {
           border: 1px solid var(--c-border-3);
           border-radius: 8px;
           background: rgba(255, 255, 255, 0.014);
-          color: var(--c-t4);
+          color: var(--c-t3);
           cursor: pointer;
           text-align: left;
           transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -1769,8 +2043,8 @@ export function IntelWatchMap() {
 
         .iw-data-layer-name {
           overflow: hidden;
-          color: #c4ccd6;
-          font-size: 8.3px;
+          color: var(--c-t2);
+          font-size: 9.6px;
           font-weight: 600;
           line-height: 1.1;
           text-overflow: ellipsis;
@@ -1778,82 +2052,16 @@ export function IntelWatchMap() {
         }
 
         .iw-data-layer-meta {
-          color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 6.3px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 7.5px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
           line-height: 1;
         }
 
         .iw-data-layer-row[data-visible="true"] .iw-data-layer-meta {
           color: #ff6470;
-        }
-
-        .iw-layer-top {
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .iw-new-layer {
-          flex: 0 0 auto;
-          padding: 3px 8px;
-          border: 1px solid rgba(255, 43, 61, 0.25);
-          border-radius: 7px;
-          background: rgba(255, 43, 61, 0.08);
-          color: #ff6470;
-          cursor: pointer;
-          font-size: 6.6px;
-          font-weight: 700;
-          transition: background 140ms ease;
-        }
-
-        .iw-new-layer:hover {
-          background: rgba(255, 43, 61, 0.16);
-        }
-
-        .iw-caption-copy {
-          margin: 6px 0 8px;
-          color: var(--c-t5);
-          font-size: 7.4px;
-          line-height: 1.4;
-        }
-
-        .iw-layer-list {
-          display: grid;
-          gap: 4px;
-        }
-
-        .iw-layer-row {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 6px 5px 7px;
-          border: 1px solid var(--c-border-3);
-          border-radius: 8px;
-          background: rgba(255, 255, 255, 0.012);
-        }
-
-        .iw-layer-row[data-active="true"] {
-          border-color: rgba(255, 43, 61, 0.55);
-          background: linear-gradient(180deg, rgba(255, 43, 61, 0.24), rgba(179, 18, 31, 0.10));
-        }
-
-        .iw-layer-main {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr);
-          align-items: center;
-          gap: 9px;
-          min-width: 0;
-          border: 0;
-          background: transparent;
-          color: inherit;
-          cursor: pointer;
-          padding: 0;
-          text-align: left;
-        }
-
-        .iw-layer-main:disabled {
-          cursor: default;
         }
 
         .iw-hue {
@@ -1863,82 +2071,347 @@ export function IntelWatchMap() {
           background: #ff2b3d;
         }
 
-        .iw-layer-row[data-visible="false"] .iw-hue {
-          opacity: 0.28;
+        /* Floating tool config for line/area draw palette. */
+        .iw-tool-config {
+          position: absolute;
+          top: 18px;
+          left: 50%;
+          z-index: 21;
+          display: grid;
+          gap: 7px;
+          padding: 9px 12px 8px;
+          border-radius: 12px;
+          transform: translateX(-50%);
         }
 
-        .iw-layer-name {
-          overflow: hidden;
-          color: #c4ccd6;
-          font-size: 8.4px;
-          font-weight: 500;
-          line-height: 1.15;
-          text-overflow: ellipsis;
+        .iw-config-row {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+        }
+
+        .iw-config-label {
+          flex: 0 0 auto;
+          min-width: 28px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 7.4px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+        }
+
+        .iw-config-hint {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          color: var(--c-t3);
+          font-size: 9.8px;
           white-space: nowrap;
         }
 
-        .iw-layer-row[data-visible="false"] .iw-layer-name {
-          color: var(--c-t5);
-        }
-
-        .iw-layer-meta {
-          margin-top: 3px;
-          color: var(--c-t5);
+        .iw-config-measure {
+          margin-left: 2px;
+          color: var(--c-t1);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 6.4px;
-          line-height: 1;
+          font-size: 9.2px;
+          font-weight: 600;
         }
 
-        .iw-layer-meta[data-active="true"] {
+        .iw-chip-row,
+        .iw-detail-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+
+        .iw-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3.5px 7px;
+          border: 1px solid var(--c-border-1);
+          border-radius: 999px;
+          background: rgba(4, 4, 4, 0.5);
+          color: var(--c-t4);
+          cursor: pointer;
+          font-family: var(--iw-panel-font);
+          font-size: 7.8px;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          white-space: nowrap;
+          transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+        }
+
+        .iw-chip:hover {
+          border-color: rgba(255, 255, 255, 0.22);
+          color: var(--c-t2);
+        }
+
+        .iw-chip[data-active="true"] {
+          border-color: color-mix(in srgb, var(--chip-color, #ff6470) 62%, transparent);
+          background: color-mix(in srgb, var(--chip-color, #ff6470) 14%, transparent);
+          color: var(--chip-color, #ff6470);
+        }
+
+        .iw-swatch-row {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .iw-swatch {
+          width: 15px;
+          height: 15px;
+          flex: 0 0 auto;
+          padding: 0;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 50%;
+          background: var(--swatch-color);
+          cursor: pointer;
+          transition: transform 140ms ease, box-shadow 140ms ease;
+        }
+
+        .iw-swatch:hover {
+          transform: scale(1.15);
+        }
+
+        .iw-swatch[data-active="true"] {
+          box-shadow:
+            0 0 0 2px var(--iw-black),
+            0 0 0 3.5px var(--swatch-color);
+        }
+
+        /* Drawing name + measurement labels rendered as map markers. */
+        .iw-anno-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2.5px 8px;
+          border: 1px solid color-mix(in srgb, var(--anno-color, #c4ccd6) 45%, transparent);
+          border-radius: 999px;
+          background: rgba(4, 4, 4, 0.82);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+          color: #c4ccd6;
+          cursor: pointer;
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 8px;
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+        }
+
+        .iw-anno-label::before {
+          content: "";
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--anno-color, #c4ccd6);
+        }
+
+        /* Detail panel (selected pin / drawing). */
+        .iw-detail-strip {
+          height: 3px;
+          background: linear-gradient(90deg, var(--detail-color, #ff2b3d), transparent);
+        }
+
+        .iw-detail-body {
+          padding: 10px 11px 14px;
+        }
+
+        .iw-back-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          margin-bottom: 10px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: var(--c-t4);
+          cursor: pointer;
+          font-family: var(--iw-panel-font);
+          font-size: 7.6px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          transition: color 140ms ease;
+        }
+
+        .iw-back-link:hover {
           color: #ff6470;
         }
 
-        .iw-layer-meta[data-locked="true"] {
-          color: #9a8060;
+        .iw-type-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 3px 8px;
+          border: 1px solid var(--c-border-1);
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.04);
+          color: var(--c-t3);
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 7.8px;
         }
 
-        .iw-layer-actions {
+        .iw-detail-title {
+          margin: 9px 0 0;
+          color: var(--c-t1);
+          font-family: var(--font-display), "Space Grotesk", sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.25;
+          text-wrap: pretty;
+        }
+
+        .iw-detail-coord {
+          color: var(--c-t3);
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 8.6px;
+        }
+
+        .iw-detail-section {
+          margin-top: 12px;
+        }
+
+        .iw-detail-label {
+          margin-bottom: 6px;
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 7.4px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        .iw-meta-row {
           display: flex;
-          gap: 3px;
-        }
-
-        .iw-icon-button {
-          width: 22px;
-          height: 22px;
-          display: grid;
-          place-items: center;
-          border: 0;
-          border-radius: 7px;
-          background: transparent;
-          color: var(--c-t5);
-          cursor: pointer;
-          transition: background 140ms ease, color 140ms ease;
-        }
-
-        .iw-icon-button:hover {
-          background: rgba(255,255,255,0.04);
-          color: #c4ccd6;
-        }
-
-        .iw-help-card {
-          display: grid;
-          gap: 5px;
-          margin-top: 14px;
-          padding: 8px;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 8px 10px;
           border: 1px solid var(--c-border-2);
-          border-radius: 10px;
+          border-radius: 9px;
           background: rgba(255, 255, 255, 0.02);
         }
 
-        .iw-help-card p {
-          margin: 0;
-          color: var(--c-t4);
-          font-size: 7.4px;
-          line-height: 1.42;
+        .iw-meta-row span {
+          color: var(--c-t2);
+          font-size: 9px;
+          font-weight: 600;
         }
 
-        .iw-help-card b {
+        .iw-note-card {
+          padding: 9px;
+          border: 1px solid var(--c-border-2);
+          border-left: 2px solid var(--detail-color, #ff2b3d);
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.02);
+          color: var(--c-t3);
+          font-size: 9.6px;
+          line-height: 1.55;
+          white-space: pre-line;
+        }
+
+        .iw-layer-ref {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          color: var(--c-t4);
+          font-size: 9px;
+        }
+
+        .iw-layer-ref strong {
+          color: var(--c-t2);
+          font-weight: 600;
+        }
+
+        .iw-source-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 30px;
+          padding: 7px 9px;
+          border: 1px solid var(--c-border-2);
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.02);
+          color: var(--c-t3);
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 8.8px;
+          line-height: 1.35;
+        }
+
+        .iw-detail-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 14px;
+        }
+
+        .iw-primary-action {
+          height: 30px;
+          flex: 1 1 auto;
+          border: 0;
+          border-radius: 9px;
+          background: linear-gradient(180deg, #ff2b3d, #b3121f);
+          box-shadow: 0 4px 16px rgba(255, 43, 61, 0.30);
+          color: white;
+          cursor: pointer;
+          font-size: 9.6px;
+          font-weight: 700;
+          transition: filter 140ms ease;
+        }
+
+        .iw-primary-action:hover {
+          filter: brightness(1.08);
+        }
+
+        .iw-delete-action {
+          width: 30px;
+          height: 30px;
+          display: grid;
+          place-items: center;
+          border: 1px solid var(--c-border-1);
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.02);
+          color: var(--c-t4);
+          cursor: pointer;
+          transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+        }
+
+        .iw-delete-action:hover {
+          border-color: rgba(255, 43, 61, 0.32);
+          background: rgba(255, 43, 61, 0.08);
           color: #ff6470;
+        }
+
+        .iw-edit-input,
+        .iw-edit-textarea {
+          width: 100%;
+          padding: 7px 9px;
+          border: 1px solid var(--c-border-1);
+          border-radius: 8px;
+          outline: none;
+          background: rgba(255, 255, 255, 0.03);
+          color: var(--c-t1);
+          font-size: 10px;
+          transition: border-color 140ms ease, background 140ms ease;
+        }
+
+        .iw-edit-input:focus,
+        .iw-edit-textarea:focus {
+          border-color: rgba(255, 43, 61, 0.45);
+          background: rgba(255, 43, 61, 0.04);
+        }
+
+        .iw-edit-input::placeholder,
+        .iw-edit-textarea::placeholder {
+          color: var(--c-t5);
+        }
+
+        .iw-edit-textarea {
+          min-height: 86px;
+          resize: vertical;
+          font-size: 9.6px;
+          line-height: 1.5;
         }
 
         @keyframes iw-blink {
@@ -2030,11 +2503,32 @@ export function IntelWatchMap() {
         </div>
 
         {(tool === "line" || tool === "area") && (
-          <div className="iw-glass iw-draw-hint">
-            <span className="iw-dot" aria-hidden="true" />
-            {tool === "line"
-              ? "Noktaları tıklayın · bitirmek için çift tıklayın · Esc iptal"
-              : "Köşeleri tıklayın · 3+ nokta · bitirmek için çift tıklayın · Esc iptal"}
+          <div className="iw-glass iw-tool-config" role="toolbar" aria-label="Çizim ayarları">
+            <div className="iw-config-row">
+              <span className="iw-config-label">RENK</span>
+              <div className="iw-swatch-row">
+                {DRAW_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    aria-label={`Çizim rengi ${color}`}
+                    className="iw-swatch"
+                    data-active={drawColor === color}
+                    style={{ "--swatch-color": color } as CSSProperties}
+                    type="button"
+                    onClick={() => setDrawColor(color)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="iw-config-hint">
+              <span className="iw-dot" aria-hidden="true" />
+              {tool === "line"
+                ? "Noktaları tıklayın · bitirmek için çift tıklayın · Esc iptal"
+                : "Köşeleri tıklayın · 3+ nokta · bitirmek için çift tıklayın · Esc iptal"}
+              {draftMeasurement && (
+                <b className="iw-config-measure">{draftMeasurement}</b>
+              )}
+            </div>
           </div>
         )}
 
@@ -2099,11 +2593,298 @@ export function IntelWatchMap() {
         </label>
 
         <div className="iw-panel-mode-title">
-          <Layers size={10} strokeWidth={1.8} />
-          KATMANLAR
+          {hasSelection ? (
+            <Info size={10} strokeWidth={1.8} />
+          ) : (
+            <Layers size={10} strokeWidth={1.8} />
+          )}
+          {hasSelection ? "DETAY" : "KATMANLAR"}
         </div>
 
         <div className="iw-panel-body intel-watch-scrollbar tm-scrollbar">
+          {selectedPin ? (
+            <div
+              style={
+                {
+                  "--detail-color": SEVERITY_META[selectedPin.severity].color,
+                } as CSSProperties
+              }
+            >
+              <div className="iw-detail-strip" />
+              <div className="iw-detail-body">
+                <button
+                  className="iw-back-link"
+                  type="button"
+                  onClick={() => setSelection(null)}
+                >
+                  <ChevronLeft size={11} strokeWidth={2.2} />
+                  KATMANLAR
+                </button>
+
+                {selectedPin.userCreated ? (
+                  <>
+                    <div className="iw-detail-section" style={{ marginTop: 0 }}>
+                      <div className="iw-detail-label">TÜR</div>
+                      <div className="iw-detail-chips">
+                        {PIN_TYPE_ORDER.map((type) => {
+                          const meta = TYPE_META[type];
+                          return (
+                            <button
+                              key={type}
+                              className="iw-chip"
+                              data-active={selectedPin.type === type}
+                              style={{ "--chip-color": "#ff6470" } as CSSProperties}
+                              type="button"
+                              onClick={() => updatePin(selectedPin.id, { type })}
+                            >
+                              <meta.Icon size={10} strokeWidth={2} />
+                              {meta.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="iw-detail-section">
+                      <div className="iw-detail-label">BAŞLIK</div>
+                      <input
+                        className="iw-edit-input"
+                        value={selectedPin.title}
+                        onChange={(event) =>
+                          updatePin(selectedPin.id, { title: event.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="iw-detail-section">
+                      <div className="iw-detail-label">ÖNEM</div>
+                      <div className="iw-detail-chips">
+                        {SEVERITY_ORDER.map((severity) => (
+                          <button
+                            key={severity}
+                            className="iw-chip"
+                            data-active={selectedPin.severity === severity}
+                            style={
+                              {
+                                "--chip-color": SEVERITY_META[severity].color,
+                              } as CSSProperties
+                            }
+                            type="button"
+                            onClick={() => updatePin(selectedPin.id, { severity })}
+                          >
+                            {SEVERITY_META[severity].label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="iw-detail-section">
+                      <div className="iw-detail-label">NOT</div>
+                      <textarea
+                        className="iw-edit-textarea"
+                        value={selectedPin.note}
+                        onChange={(event) =>
+                          updatePin(selectedPin.id, { note: event.target.value })
+                        }
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="iw-type-chip">
+                      {(() => {
+                        const meta = TYPE_META[selectedPin.type];
+                        return (
+                          <>
+                            <meta.Icon size={11} strokeWidth={2.2} />
+                            {meta.label}
+                          </>
+                        );
+                      })()}
+                      <b style={{ color: SEVERITY_META[selectedPin.severity].color }}>
+                        {SEVERITY_META[selectedPin.severity].label}
+                      </b>
+                    </div>
+                    <h2 className="iw-detail-title">{selectedPin.title}</h2>
+                    <div className="iw-detail-section">
+                      <div className="iw-meta-row">
+                        <div className="iw-detail-label" style={{ marginBottom: 0 }}>
+                          SON GÜNCELLEME
+                        </div>
+                        <span>{selectedPin.updated}</span>
+                      </div>
+                    </div>
+                    <div className="iw-detail-section">
+                      <div className="iw-detail-label">DURUM NOTU</div>
+                      <div className="iw-note-card">{selectedPin.note}</div>
+                    </div>
+                  </>
+                )}
+
+                <div className="iw-detail-section">
+                  <div className="iw-meta-row">
+                    <div className="iw-detail-label" style={{ marginBottom: 0 }}>
+                      KONUM
+                    </div>
+                    <span className="iw-detail-coord">
+                      {formatCoordinate(selectedPin.lat, selectedPin.lng)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">KAYNAK</div>
+                  <div className="iw-source-row">
+                    <Globe2 size={13} strokeWidth={1.8} />
+                    <span>{selectedPin.source}</span>
+                  </div>
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-layer-ref">
+                    <span
+                      className="iw-hue"
+                      style={
+                        {
+                          background:
+                            layerMap.get(selectedPin.layer)?.hue ?? "#c4ccd6",
+                        } as CSSProperties
+                      }
+                    />
+                    <span>
+                      Katman:{" "}
+                      <strong>
+                        {layerMap.get(selectedPin.layer)?.name ?? "Bilinmeyen"}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="iw-detail-actions">
+                  <button
+                    className="iw-primary-action"
+                    type="button"
+                    onClick={handleFocusSelection}
+                  >
+                    Odakla
+                  </button>
+                  <button
+                    aria-label="İşareti sil"
+                    className="iw-delete-action"
+                    type="button"
+                    onClick={() => handleDeletePin(selectedPin.id)}
+                  >
+                    <Trash2 size={15} strokeWidth={1.8} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : selectedAnnotation ? (
+            <div
+              style={{ "--detail-color": selectedAnnotation.color } as CSSProperties}
+            >
+              <div className="iw-detail-strip" />
+              <div className="iw-detail-body">
+                <button
+                  className="iw-back-link"
+                  type="button"
+                  onClick={() => setSelection(null)}
+                >
+                  <ChevronLeft size={11} strokeWidth={2.2} />
+                  KATMANLAR
+                </button>
+
+                <div className="iw-type-chip">
+                  {selectedAnnotation.kind === "area" ? (
+                    <Pentagon size={11} strokeWidth={2.2} />
+                  ) : (
+                    <Route size={11} strokeWidth={2.2} />
+                  )}
+                  {selectedAnnotation.kind === "area" ? "Alan" : "Çizgi"}
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">İSİM ETİKETİ</div>
+                  <input
+                    className="iw-edit-input"
+                    placeholder="örn. Tatbikat sahası"
+                    value={selectedAnnotation.name ?? ""}
+                    onChange={(event) =>
+                      updateAnnotation(selectedAnnotation.id, {
+                        name: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-meta-row">
+                    <div className="iw-detail-label" style={{ marginBottom: 0 }}>
+                      {selectedAnnotation.kind === "area" ? "YÜZÖLÇÜMÜ" : "UZUNLUK"}
+                    </div>
+                    <span>{annotationMeasurement(selectedAnnotation)}</span>
+                  </div>
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">RENK</div>
+                  <div className="iw-swatch-row">
+                    {DRAW_PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        aria-label={`Çizim rengi ${color}`}
+                        className="iw-swatch"
+                        data-active={selectedAnnotation.color === color}
+                        style={{ "--swatch-color": color } as CSSProperties}
+                        type="button"
+                        onClick={() =>
+                          updateAnnotation(selectedAnnotation.id, { color })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-layer-ref">
+                    <span
+                      className="iw-hue"
+                      style={
+                        {
+                          background:
+                            layerMap.get(selectedAnnotation.layer)?.hue ?? "#c4ccd6",
+                        } as CSSProperties
+                      }
+                    />
+                    <span>
+                      Katman:{" "}
+                      <strong>
+                        {layerMap.get(selectedAnnotation.layer)?.name ?? "Bilinmeyen"}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="iw-detail-actions">
+                  <button
+                    className="iw-primary-action"
+                    type="button"
+                    onClick={handleFocusSelection}
+                  >
+                    Odakla
+                  </button>
+                  <button
+                    aria-label="Çizimi sil"
+                    className="iw-delete-action"
+                    type="button"
+                    onClick={() => handleDeleteAnnotation(selectedAnnotation.id)}
+                  >
+                    <Trash2 size={15} strokeWidth={1.8} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div className="iw-layers-body">
               <div className="iw-data-layer-section">
                 <div className="iw-section-label">VERİ KATMANLARI</div>
@@ -2132,7 +2913,7 @@ export function IntelWatchMap() {
                         {isVisible ? (
                           <Eye size={12} color="#ff6470" strokeWidth={1.9} />
                         ) : (
-                          <EyeOff size={12} color="#444b55" strokeWidth={1.9} />
+                          <EyeOff size={12} color="#8a94a3" strokeWidth={1.9} />
                         )}
                       </button>
                     );
@@ -2140,110 +2921,8 @@ export function IntelWatchMap() {
                 </div>
               </div>
 
-              <div className="iw-layer-top">
-                <div className="iw-section-label">TAKİP KATMANLARI</div>
-                <button className="iw-new-layer" type="button" onClick={handleCreateLayer}>
-                  + YENİ
-                </button>
-              </div>
-              <div className="iw-caption-copy">
-                Bir katmana tıklayarak aktif hedef yapın - yeni işaret ve çizimler oraya eklenir.
-              </div>
-
-              <div className="iw-layer-list">
-                {layers.map((layer) => {
-                  const count = safeLayerCount(layerCounts, layer.id);
-                  const isActive = activeLayerData?.id === layer.id;
-                  return (
-                    <div
-                      key={layer.id}
-                      className="iw-layer-row"
-                      data-active={isActive}
-                      data-visible={layer.visible}
-                      style={{ "--layer-hue": layer.hue } as CSSProperties}
-                    >
-                      <button
-                        className="iw-layer-main"
-                        disabled={layer.locked}
-                        type="button"
-                        onClick={() => handleSetActiveLayer(layer)}
-                      >
-                        <span className="iw-hue" />
-                        <span style={{ minWidth: 0 }}>
-                          <span className="iw-layer-name">{layer.name}</span>
-                          <span
-                            className="iw-layer-meta"
-                            data-active={isActive && !layer.locked}
-                            data-locked={layer.locked}
-                          >
-                            {layer.locked
-                              ? `Kilitli · ${count} öğe`
-                              : isActive
-                                ? "● AKTİF HEDEF"
-                                : `${count} öğe`}
-                          </span>
-                        </span>
-                      </button>
-
-                      <div className="iw-layer-actions">
-                        <IconButton
-                          label={layer.locked ? "Kilidi aç" : "Kilitle"}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleToggleLayerLocked(layer.id);
-                          }}
-                        >
-                          {layer.locked ? (
-                            <Lock size={14} color="#ff6470" strokeWidth={1.8} />
-                          ) : (
-                            <Unlock size={14} strokeWidth={1.8} />
-                          )}
-                        </IconButton>
-                        <IconButton
-                          label={layer.visible ? "Gizle" : "Göster"}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleToggleLayerVisible(layer.id);
-                          }}
-                        >
-                          {layer.visible ? (
-                            <Eye size={14} color="#ff2b3d" strokeWidth={1.8} />
-                          ) : (
-                            <EyeOff size={14} color="#444b55" strokeWidth={1.8} />
-                          )}
-                        </IconButton>
-                        {layer.userCreated && (
-                          <IconButton
-                            label="Katmanı sil"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDeleteLayer(layer.id);
-                            }}
-                          >
-                            <Trash2 size={14} color="#5e5566" strokeWidth={1.8} />
-                          </IconButton>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="iw-help-card">
-                <p>
-                  <b>›</b> İşaret aracı ile haritaya yeni takip noktası ekleyin.
-                </p>
-                <p>
-                  <b>›</b> Çizgi ve alan araçlarında çift tıklama çizimi tamamlar.
-                </p>
-                <p>
-                  <b>›</b> Kilitli katmanlardaki işaretler seçilemez.
-                </p>
-                <p>
-                  <b>›</b> Arama, görünür işaretleri başlık, tür ve kaynakla filtreler.
-                </p>
-              </div>
             </div>
+          )}
         </div>
       </aside>
     </section>
