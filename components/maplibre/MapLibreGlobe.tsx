@@ -228,14 +228,6 @@ const buildSilverPinSvg = (ringColor: string, ringWidth: number): string =>
   `<circle cx="18" cy="17" r="9.5" fill="rgba(20,16,22,0.92)" stroke="${ringColor}" stroke-width="${ringWidth}"/>` +
   "</svg>";
 
-const PIN_ICON_ID = "echis-marker-pin";
-const PIN_SEL_ICON_ID = "echis-marker-pin-selected";
-const PIN_ICON_PIXEL_RATIO = 2;
-const PIN_ICON_SIZE_DEFAULT = 0.85;
-const PIN_ICON_SIZE_SELECTED = 1.24;
-const PIN_SVG = buildSilverPinSvg(SILVER_RING, 0.9);
-const PIN_SELECTED_SVG = buildSilverPinSvg("#FFFFFF", 1.2);
-
 const GLOBAL_PIN_ICON_ID = "echis-marker-pin-premium";
 const GLOBAL_PIN_SEL_ICON_ID = "echis-marker-pin-premium-selected";
 const GLOBAL_PIN_ICON_PIXEL_RATIO = 1;
@@ -278,8 +270,6 @@ function registerSvgIcon(
 }
 
 function registerPinIcons(map: maplibregl.Map): void {
-  registerSvgIcon(map, PIN_ICON_ID, PIN_SVG, PIN_ICON_PIXEL_RATIO);
-  registerSvgIcon(map, PIN_SEL_ICON_ID, PIN_SELECTED_SVG, PIN_ICON_PIXEL_RATIO);
   registerSvgIcon(
     map,
     GLOBAL_PIN_ICON_ID,
@@ -502,6 +492,8 @@ function setMarkerVisibility(
           MARKER_BLOOM_SIGNALS,
           MARKER_GLOW_SIGNALS,
           MARKER_LAYER_SIGNALS,
+          MARKER_HOVER_GLOW_SIGNALS,
+          MARKER_HOVER_LAYER_SIGNALS,
           MARKER_SEL_SIGNALS,
         ];
   const vis = visible ? "visible" : "none";
@@ -535,7 +527,6 @@ function setupMarkerLayers(map: maplibregl.Map): void {
   const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
   const addGlowLayers = (source: string, bloomId: string, glowId: string) => {
-    const isGlobal = source === MARKER_SOURCE_GLOBAL;
     // Outer selection bloom — soft and controlled, centered on the pin head.
     if (!map.getLayer(bloomId)) {
       map.addLayer({
@@ -546,9 +537,9 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         paint: {
           "circle-radius": 22,
           "circle-color": SILVER_HALO,
-          "circle-blur": isGlobal ? 0.94 : 1,
+          "circle-blur": 0.94,
           "circle-opacity": 0,
-          "circle-translate": isGlobal ? [0, -16] : [0, -11],
+          "circle-translate": [0, -16],
           "circle-translate-anchor": "viewport",
         },
       } as unknown as maplibregl.LayerSpecification);
@@ -561,14 +552,14 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         source,
         layout: { visibility: "none" },
         paint: {
-          "circle-radius": isGlobal ? 11 : 10,
+          "circle-radius": 11,
           "circle-color": SILVER_GLOW,
-          "circle-blur": isGlobal ? 0.34 : 0.15,
+          "circle-blur": 0.34,
           "circle-opacity": 0,
-          "circle-stroke-width": isGlobal ? 1.2 : 2.5,
+          "circle-stroke-width": 1.2,
           "circle-stroke-color": SILVER_RING,
           "circle-stroke-opacity": 0,
-          "circle-translate": isGlobal ? [0, -16] : [0, -11],
+          "circle-translate": [0, -16],
           "circle-translate-anchor": "viewport",
         },
       } as unknown as maplibregl.LayerSpecification);
@@ -685,11 +676,10 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     layerId: string,
     selId: string,
   ) => {
-    const isGlobal = source === MARKER_SOURCE_GLOBAL;
-    const iconId = isGlobal ? GLOBAL_PIN_ICON_ID : PIN_ICON_ID;
-    const selIconId = isGlobal ? GLOBAL_PIN_SEL_ICON_ID : PIN_SEL_ICON_ID;
-    const defaultSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_DEFAULT : PIN_ICON_SIZE_DEFAULT;
-    const selectedSize = isGlobal ? GLOBAL_PIN_ICON_SIZE_SELECTED : PIN_ICON_SIZE_SELECTED;
+    const iconId = GLOBAL_PIN_ICON_ID;
+    const selIconId = GLOBAL_PIN_SEL_ICON_ID;
+    const defaultSize = GLOBAL_PIN_ICON_SIZE_DEFAULT;
+    const selectedSize = GLOBAL_PIN_ICON_SIZE_SELECTED;
     // Normal pins — all features; selected feature excluded once a selection exists
     if (!map.getLayer(layerId)) {
       map.addLayer({
@@ -789,24 +779,23 @@ function applyMarkerSelection(
       applyMarkerHover(map, kind, null);
       // Match expressions route the selected feature to highlight values;
       // all other features get transparent (0) so glow is exclusive.
-      const isGlobal = kind === "global";
 
       // Outer bloom
       map.setPaintProperty(
         bloomId,
         "circle-opacity",
-        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.24 : 0.45),
+        selectedMarkerOpacityExpression(selectedId, 0.24),
       );
       // Inner ring: fill + vivid stroke
       map.setPaintProperty(
         glowId,
         "circle-opacity",
-        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.42 : 0.7),
+        selectedMarkerOpacityExpression(selectedId, 0.42),
       );
       map.setPaintProperty(
         glowId,
         "circle-stroke-opacity",
-        selectedMarkerOpacityExpression(selectedId, isGlobal ? 0.68 : 1),
+        selectedMarkerOpacityExpression(selectedId, 0.68),
       );
 
       // Normal layer excludes selected so the selected-pin layer (larger, on top)

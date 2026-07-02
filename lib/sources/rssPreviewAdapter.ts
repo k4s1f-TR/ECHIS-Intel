@@ -17,6 +17,8 @@ const MAX_BLOCK_SCAN = 200;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_TITLE_LENGTH = 240;
 const RSS_DIAGNOSTIC_BODY_CHARS = 500;
+/** Upper bound on a feed response body; larger bodies abort the request. */
+const MAX_FEED_BYTES = 3 * 1024 * 1024;
 
 export type RssPreviewDiagnosticCategory =
   | "fetch_failed"
@@ -30,11 +32,6 @@ type FeedResponse = {
   status: number;
   finalUrl: string;
   contentType: string;
-};
-
-type FeedRequestRelaxation = {
-  allowInsecureCert: boolean;
-  insecureHttpParser: boolean;
 };
 
 export class RssPreviewDiagnosticError extends Error {
@@ -173,6 +170,13 @@ function clamp(value: string, max: number): string {
   return value.slice(0, Math.max(0, max - 1)).trimEnd() + "...";
 }
 
+/** Accept only http(s) URLs from feed content; anything else is dropped. */
+function safeHttpUrl(value: string): string | null {
+  const trimmed = (value || "").trim();
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  return trimmed;
+}
+
 function safeIsoDate(value: string): string {
   if (!value) return "";
   const parsed = new Date(value);
@@ -189,14 +193,7 @@ function safeIsoDate(value: string): string {
  */
 function fetchFeed(feedUrl: string): Promise<FeedResponse> {
   return new Promise((resolve, reject) => {
-    const makeRequest = (
-      url: string,
-      hops = 0,
-      relaxation: FeedRequestRelaxation = {
-        allowInsecureCert: false,
-        insecureHttpParser: false,
-      },
-    ): void => {
+    const makeRequest = (url: string, hops = 0): void => {
       if (hops > 5) {
         reject(new Error("upstream_too_many_redirects"));
         return;
@@ -216,10 +213,6 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
         : parsed.protocol === "https:"
           ? 443
           : 80;
-      const agent =
-        parsed.protocol === "https:" && relaxation.allowInsecureCert
-          ? new https.Agent({ rejectUnauthorized: false })
-          : undefined;
 
       const req = lib.request(
         {
@@ -227,8 +220,6 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           port,
           path: parsed.pathname + parsed.search,
           method: "GET",
-          agent,
-          insecureHTTPParser: relaxation.insecureHttpParser,
           headers: {
             "User-Agent": "ECHIS/1.0",
             Accept:
@@ -248,12 +239,21 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           ) {
             res.destroy();
             const next = new URL(resHeaders.location, url).href;
-            makeRequest(next, hops + 1, relaxation);
+            makeRequest(next, hops + 1);
             return;
           }
 
           const chunks: Buffer[] = [];
-          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          let receivedBytes = 0;
+          res.on("data", (chunk: Buffer) => {
+            receivedBytes += chunk.length;
+            if (receivedBytes > MAX_FEED_BYTES) {
+              res.destroy();
+              reject(new Error("upstream_body_too_large"));
+              return;
+            }
+            chunks.push(chunk);
+          });
           res.on("end", () => {
             resolve({
               body: Buffer.concat(chunks).toString("utf8"),
@@ -275,24 +275,6 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
           const abort = new Error("Feed request timed out");
           abort.name = "AbortError";
           reject(abort);
-        } else if (
-          parsed.protocol === "https:" &&
-          !relaxation.allowInsecureCert &&
-          (err.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
-            err.code === "SELF_SIGNED_CERT_IN_CHAIN")
-        ) {
-          makeRequest(url, hops, {
-            ...relaxation,
-            allowInsecureCert: true,
-          });
-        } else if (
-          !relaxation.insecureHttpParser &&
-          err.code === "HPE_CR_EXPECTED"
-        ) {
-          makeRequest(url, hops, {
-            ...relaxation,
-            insecureHttpParser: true,
-          });
         } else {
           reject(err);
         }
@@ -425,7 +407,7 @@ export function parseRssPreviewItemsFromXml(
       const linkRaw = isAtom
         ? takeAtomLink(block)
         : takeFirstTag(block, ["link"]);
-      const url = (linkRaw || "").trim() || source.baseUrl;
+      const url = safeHttpUrl(linkRaw) ?? source.baseUrl;
 
       const summaryRaw = takeFirstTag(block, [
         "description",

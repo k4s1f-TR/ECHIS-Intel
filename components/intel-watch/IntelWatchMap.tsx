@@ -1,12 +1,9 @@
 "use client";
 
 import {
-  Building2,
+  Anchor,
   Eye,
   EyeOff,
-  Factory,
-  Globe2,
-  Info,
   Layers,
   Lock,
   MapPin,
@@ -15,15 +12,13 @@ import {
   Pentagon,
   Plane,
   Plus,
+  Radiation,
   Route,
-  Satellite,
   Search,
-  Shield,
   Target,
   Trash2,
   Undo2,
   Unlock,
-  Warehouse,
   Waves,
 } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
@@ -42,7 +37,6 @@ import IntelMapLoader from "./IntelMapLoader";
 const PANEL_WIDTH = 318;
 
 type Tool = "select" | "pin" | "line" | "area";
-type Tab = "layers" | "detail";
 type Severity = "critical" | "high" | "medium" | "low";
 type PinType = "naval" | "airdef" | "logistics" | "sigint" | "facility" | "incident";
 type LngLat = [number, number];
@@ -75,22 +69,6 @@ type Annotation = {
   layer: string;
   color: string;
   coordinates: LngLat[];
-};
-
-const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
-  critical: { label: "KRİTİK", color: "#ff2b3d" },
-  high: { label: "YÜKSEK", color: "#ff9533" },
-  medium: { label: "ORTA", color: "#ffd23d" },
-  low: { label: "DÜŞÜK", color: "#4fd1c5" },
-};
-
-const TYPE_META: Record<PinType, { label: string; Icon: LucideIcon }> = {
-  naval: { label: "Deniz", Icon: Waves },
-  airdef: { label: "Hava Savunma", Icon: Shield },
-  logistics: { label: "Lojistik", Icon: Warehouse },
-  sigint: { label: "SIGINT", Icon: Satellite },
-  facility: { label: "Tesis", Icon: Factory },
-  incident: { label: "Olay", Icon: Building2 },
 };
 
 const DEFAULT_LAYERS: Layer[] = [
@@ -252,6 +230,15 @@ function toolCursor(tool: Tool) {
 const AIRBASES_SOURCE = "airbases";
 const AIRBASES_LAYER = "airbases-dot";
 const AIRBASES_DATA_URL = "/data/airbases.geojson";
+const CHOKEPOINTS_SOURCE = "chokepoints";
+const CHOKEPOINTS_LAYER = "chokepoints-dot";
+const CHOKEPOINTS_DATA_URL = "/data/chokepoints.geojson";
+const PORTS_SOURCE = "ports";
+const PORTS_LAYER = "ports-dot";
+const PORTS_DATA_URL = "/data/ports.geojson";
+const NUCLEAR_FACILITIES_SOURCE = "nuclear-facilities";
+const NUCLEAR_FACILITIES_LAYER = "nuclear-facilities-dot";
+const NUCLEAR_FACILITIES_DATA_URL = "/data/nuclear-facilities.geojson";
 
 /**
  * Toggleable map data overlays shown in the left "VERİ KATMANLARI" panel.
@@ -264,9 +251,20 @@ type MapOverlay = {
   color: string;
   layerId: string;
   Icon: LucideIcon;
+  /** Initial toggle state; defaults to visible when omitted. */
+  defaultVisible?: boolean;
 };
 const MAP_OVERLAYS: MapOverlay[] = [
   { id: "airbases", label: "Üsler", color: "#e0a82e", layerId: AIRBASES_LAYER, Icon: Plane },
+  { id: "chokepoints", label: "Chokepoints", color: "#4fd1c5", layerId: CHOKEPOINTS_LAYER, Icon: Waves },
+  { id: "ports", label: "Limanlar", color: "#4aa8ff", layerId: PORTS_LAYER, Icon: Anchor, defaultVisible: false },
+  {
+    id: "nuclear-facilities",
+    label: "Nükleer Tesis",
+    color: "#9cff6a",
+    layerId: NUCLEAR_FACILITIES_LAYER,
+    Icon: Radiation,
+  },
 ];
 
 function escapeHtml(value: unknown) {
@@ -301,6 +299,55 @@ function buildAirbasePopup(p: Record<string, unknown>) {
     (p.url
       ? `<a class="iw-ab-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">Kaynak ↗</a>`
       : "") +
+    `</div>`
+  );
+}
+
+function buildChokepointPopup(p: Record<string, unknown>) {
+  return (
+    `<div class="iw-ab">` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Chokepoint")}</div>` +
+    (p.region ? `<div class="iw-ab-sub">${escapeHtml(p.region)}</div>` : "") +
+    `<div class="iw-ab-meta">` +
+    airbaseRow("Tür", "Maritime chokepoint") +
+    airbaseRow("Bölge", p.region) +
+    `</div>` +
+    `</div>`
+  );
+}
+
+function buildPortPopup(p: Record<string, unknown>) {
+  const coords =
+    p.latitude != null && p.longitude != null ? `${p.latitude}, ${p.longitude}` : "";
+  return (
+    `<div class="iw-ab">` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Liman")}</div>` +
+    (p.country ? `<div class="iw-ab-sub">${escapeHtml(p.country)}</div>` : "") +
+    `<div class="iw-ab-meta">` +
+    airbaseRow("Liman boyutu", p.harbor_size) +
+    airbaseRow("Liman tipi", p.harbor_type) +
+    airbaseRow("Barınak", p.shelter) +
+    airbaseRow("Giriş limanı", p.port_of_entry) +
+    airbaseRow("Koordinat", coords) +
+    `</div>` +
+    `</div>`
+  );
+}
+
+function buildNuclearFacilityPopup(p: Record<string, unknown>) {
+  const coords =
+    p.latitude != null && p.longitude != null ? `${p.latitude}, ${p.longitude}` : "";
+  const sub = [p.country, p.location].filter(Boolean).map(escapeHtml).join(" · ");
+  return (
+    `<div class="iw-ab">` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Nükleer Tesis")}</div>` +
+    (sub ? `<div class="iw-ab-sub">${sub}</div>` : "") +
+    `<div class="iw-ab-meta">` +
+    airbaseRow("Sınıf", p.group_label) +
+    airbaseRow("Kategori", p.category) +
+    airbaseRow("İşlev", p.function) +
+    airbaseRow("Koordinat", coords) +
+    `</div>` +
     `</div>`
   );
 }
@@ -362,11 +409,6 @@ function IconButton({
   );
 }
 
-function MarkerGlyph({ type }: { type: PinType }) {
-  const Icon = TYPE_META[type].Icon;
-  return <Icon size={12} strokeWidth={2.2} />;
-}
-
 export function IntelWatchMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -376,16 +418,17 @@ export function IntelWatchMap() {
   const [mapFullyLoaded, setMapFullyLoaded] = useState(false);
   const [loaderGone, setLoaderGone] = useState(false);
   const [tool, setTool] = useState<Tool>("select");
-  const [tab, setTab] = useState<Tab>("layers");
   const [layers, setLayers] = useState<Layer[]>(DEFAULT_LAYERS);
   const [pins, setPins] = useState<Pin[]>(INITIAL_DISPLAY_PINS);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [draft, setDraft] = useState<LngLat[]>([]);
-  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [activeLayer, setActiveLayer] = useState("annot");
   const [searchQuery, setSearchQuery] = useState("");
   const [overlayVisibility, setOverlayVisibility] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(MAP_OVERLAYS.map((overlay) => [overlay.id, true])),
+    () =>
+      Object.fromEntries(
+        MAP_OVERLAYS.map((overlay) => [overlay.id, overlay.defaultVisible ?? true]),
+      ),
   );
   const [cursorCoordinate, setCursorCoordinate] = useState<LngLat>(ECHIS_VIEW.center);
 
@@ -394,11 +437,6 @@ export function IntelWatchMap() {
     layers.forEach((layer) => map.set(layer.id, layer));
     return map;
   }, [layers]);
-
-  const selectedPin = useMemo(
-    () => pins.find((pin) => pin.id === selectedPinId) ?? null,
-    [pins, selectedPinId],
-  );
 
   const activeLayerData = useMemo(
     () => layers.find((layer) => layer.id === activeLayer) ?? layers.find((layer) => !layer.locked) ?? layers[0],
@@ -565,8 +603,6 @@ export function IntelWatchMap() {
           ),
         );
         setPins((current) => [...current, nextPin]);
-        setSelectedPinId(nextPin.id);
-        setTab("detail");
         return;
       }
 
@@ -676,6 +712,184 @@ export function IntelWatchMap() {
     };
   }, [mapReady]);
 
+  // Chokepoints overlay — strategic maritime passages as a toggleable circle layer
+  // (GeoJSON streamed from /public; click opens a detail popup).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!map.getSource(CHOKEPOINTS_SOURCE)) {
+      map.addSource(CHOKEPOINTS_SOURCE, { type: "geojson", data: CHOKEPOINTS_DATA_URL });
+      map.addLayer({
+        id: CHOKEPOINTS_LAYER,
+        type: "circle",
+        source: CHOKEPOINTS_SOURCE,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 2.5, 6, 4.4, 10, 6.5],
+          "circle-color": "#4fd1c5",
+          "circle-opacity": 0.92,
+          "circle-stroke-color": "#041014",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 2, 1, 8, 1.6],
+        },
+      });
+    }
+
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: "264px",
+      className: "iw-airbase-popup",
+    });
+
+    const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
+      popup
+        .setLngLat(coords)
+        .setHTML(buildChokepointPopup(feature.properties ?? {}))
+        .addTo(map);
+    };
+    const handleEnter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const handleLeave = () => {
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+
+    map.on("click", CHOKEPOINTS_LAYER, handleClick);
+    map.on("mouseenter", CHOKEPOINTS_LAYER, handleEnter);
+    map.on("mouseleave", CHOKEPOINTS_LAYER, handleLeave);
+
+    return () => {
+      map.off("click", CHOKEPOINTS_LAYER, handleClick);
+      map.off("mouseenter", CHOKEPOINTS_LAYER, handleEnter);
+      map.off("mouseleave", CHOKEPOINTS_LAYER, handleLeave);
+      popup.remove();
+    };
+  }, [mapReady]);
+
+  // Ports overlay — ~3,669 world ports as a data-driven circle layer
+  // (native GeoJSON layer, not HTML markers, so the globe stays smooth;
+  // GeoJSON streamed from /public; click opens a detail popup).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!map.getSource(PORTS_SOURCE)) {
+      map.addSource(PORTS_SOURCE, { type: "geojson", data: PORTS_DATA_URL });
+      map.addLayer({
+        id: PORTS_LAYER,
+        type: "circle",
+        source: PORTS_SOURCE,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 6, 3, 10, 4.6],
+          "circle-color": "#4aa8ff",
+          "circle-opacity": 0.85,
+          "circle-stroke-color": "#04121f",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 2, 0.6, 8, 1.2],
+        },
+      });
+    }
+
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: "264px",
+      className: "iw-airbase-popup",
+    });
+
+    const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
+      popup
+        .setLngLat(coords)
+        .setHTML(buildPortPopup(feature.properties ?? {}))
+        .addTo(map);
+    };
+    const handleEnter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const handleLeave = () => {
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+
+    map.on("click", PORTS_LAYER, handleClick);
+    map.on("mouseenter", PORTS_LAYER, handleEnter);
+    map.on("mouseleave", PORTS_LAYER, handleLeave);
+
+    return () => {
+      map.off("click", PORTS_LAYER, handleClick);
+      map.off("mouseenter", PORTS_LAYER, handleEnter);
+      map.off("mouseleave", PORTS_LAYER, handleLeave);
+      popup.remove();
+    };
+  }, [mapReady]);
+
+  // Nuclear facilities overlay — civil, military, and strategic nuclear sites
+  // (GeoJSON streamed from /public; click opens a detail popup).
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!map.getSource(NUCLEAR_FACILITIES_SOURCE)) {
+      map.addSource(NUCLEAR_FACILITIES_SOURCE, {
+        type: "geojson",
+        data: NUCLEAR_FACILITIES_DATA_URL,
+      });
+      map.addLayer({
+        id: NUCLEAR_FACILITIES_LAYER,
+        type: "circle",
+        source: NUCLEAR_FACILITIES_SOURCE,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 2.2, 6, 3.8, 10, 5.8],
+          "circle-color": "#9cff6a",
+          "circle-opacity": 0.9,
+          "circle-stroke-color": "#061008",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 2, 0.7, 8, 1.4],
+        },
+      });
+    }
+
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: "292px",
+      className: "iw-airbase-popup",
+    });
+
+    const handleClick = (event: maplibregl.MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      const coords = feature.geometry.coordinates.slice(0, 2) as [number, number];
+      popup
+        .setLngLat(coords)
+        .setHTML(buildNuclearFacilityPopup(feature.properties ?? {}))
+        .addTo(map);
+    };
+    const handleEnter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const handleLeave = () => {
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+
+    map.on("click", NUCLEAR_FACILITIES_LAYER, handleClick);
+    map.on("mouseenter", NUCLEAR_FACILITIES_LAYER, handleEnter);
+    map.on("mouseleave", NUCLEAR_FACILITIES_LAYER, handleLeave);
+
+    return () => {
+      map.off("click", NUCLEAR_FACILITIES_LAYER, handleClick);
+      map.off("mouseenter", NUCLEAR_FACILITIES_LAYER, handleEnter);
+      map.off("mouseleave", NUCLEAR_FACILITIES_LAYER, handleLeave);
+      popup.remove();
+    };
+  }, [mapReady]);
+
   // Apply the left-panel overlay toggles to their MapLibre layers.
   useEffect(() => {
     if (!mapReady) return;
@@ -761,21 +975,6 @@ export function IntelWatchMap() {
     });
     setPins((current) => current.filter((pin) => pin.layer !== layerId));
     setAnnotations((current) => current.filter((annotation) => annotation.layer !== layerId));
-    if (selectedPin?.layer === layerId) setSelectedPinId(null);
-  }
-
-  function handleFocusPin(pin: Pin) {
-    setSelectedPinId(pin.id);
-    mapRef.current?.flyTo({
-      center: [pin.lng, pin.lat],
-      zoom: Math.max(mapRef.current.getZoom(), 6.5),
-      duration: 900,
-    });
-  }
-
-  function handleDeletePin(pinId: string) {
-    setPins((current) => current.filter((pin) => pin.id !== pinId));
-    setSelectedPinId(null);
   }
 
   function handleButtonZoom(direction: "in" | "out") {
@@ -1046,7 +1245,7 @@ export function IntelWatchMap() {
           height: 27px;
           border-radius: 7px;
           background: rgba(255, 255, 255, 0.025);
-          font-size: 10px;
+          font-size: 9.2px;
         }
 
         .iw-top-right {
@@ -1244,13 +1443,22 @@ export function IntelWatchMap() {
           padding: 9px 8px 10px;
         }
 
-        .iw-rail-label,
-        .iw-section-label {
+        .iw-rail-label {
           color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
           font-size: 7.5px;
           font-weight: 700;
           letter-spacing: 0.18em;
+          line-height: 1;
+          text-transform: uppercase;
+        }
+
+        .iw-section-label {
+          color: var(--c-t5);
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 6.6px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
           line-height: 1;
           text-transform: uppercase;
         }
@@ -1337,11 +1545,7 @@ export function IntelWatchMap() {
 
         .iw-panel-header,
         .iw-panel-stats,
-        .iw-layer-top,
-        .iw-detail-actions,
-        .iw-meta-row,
-        .iw-source-row,
-        .iw-layer-ref {
+        .iw-layer-top {
           display: flex;
           align-items: center;
         }
@@ -1430,7 +1634,7 @@ export function IntelWatchMap() {
         .iw-panel-title {
           color: var(--c-t1);
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 600;
           letter-spacing: 0.06em;
         }
@@ -1452,7 +1656,7 @@ export function IntelWatchMap() {
         .iw-stat-chip strong {
           color: var(--c-t1);
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 9.5px;
+          font-size: 8.8px;
           font-weight: 700;
           line-height: 1;
         }
@@ -1464,41 +1668,26 @@ export function IntelWatchMap() {
         .iw-stat-chip span {
           color: var(--c-t5);
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 7px;
+          font-size: 6.4px;
           font-weight: 700;
           letter-spacing: 0.10em;
           line-height: 1;
         }
 
-        .iw-tabs {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          flex: 0 0 auto;
-          height: 30px;
-          border-bottom: 1px solid var(--c-border-2);
-        }
-
-        .iw-tab {
+        .iw-panel-mode-title {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 5px;
-          border: 0;
-          border-bottom: 2px solid transparent;
-          background: transparent;
+          gap: 4px;
+          flex: 0 0 auto;
+          height: 20px;
+          border-bottom: 1px solid var(--c-border-2);
           color: var(--c-t5);
-          cursor: pointer;
           font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
-          font-size: 6.6px;
+          font-size: 5px;
           font-weight: 600;
           letter-spacing: 0.10em;
           text-transform: uppercase;
-          transition: color 140ms ease, border-color 140ms ease;
-        }
-
-        .iw-tab[aria-selected="true"] {
-          border-bottom-color: #ff2b3d;
-          color: var(--c-t1);
         }
 
         .iw-panel-body {
@@ -1508,7 +1697,95 @@ export function IntelWatchMap() {
         }
 
         .iw-layers-body {
-          padding: 10px 11px 14px;
+          padding: 9px 10px 13px;
+        }
+
+        .iw-data-layer-section {
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid var(--c-border-2);
+        }
+
+        .iw-data-layer-list {
+          display: grid;
+          gap: 4px;
+          margin-top: 7px;
+        }
+
+        .iw-data-layer-row {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 7px;
+          width: 100%;
+          min-height: 31px;
+          padding: 5px 7px;
+          border: 1px solid var(--c-border-3);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.014);
+          color: var(--c-t4);
+          cursor: pointer;
+          text-align: left;
+          transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+        }
+
+        .iw-data-layer-row:hover {
+          border-color: rgba(255, 43, 61, 0.34);
+          background: rgba(255, 43, 61, 0.08);
+        }
+
+        .iw-data-layer-row[data-visible="true"] {
+          border-color: rgba(255, 43, 61, 0.55);
+          background: linear-gradient(180deg, rgba(255, 43, 61, 0.24), rgba(179, 18, 31, 0.10));
+          color: #ff6470;
+        }
+
+        .iw-data-layer-icon {
+          width: 21px;
+          height: 21px;
+          display: grid;
+          place-items: center;
+          border: 1px solid color-mix(in srgb, var(--layer-hue) 42%, transparent);
+          border-radius: 7px;
+          background: color-mix(in srgb, var(--layer-hue) 12%, transparent);
+          color: var(--layer-hue);
+        }
+
+        .iw-data-layer-row[data-visible="false"] .iw-data-layer-icon {
+          opacity: 0.45;
+        }
+
+        .iw-data-layer-row[data-visible="true"] .iw-data-layer-icon {
+          border-color: rgba(255, 43, 61, 0.50);
+          background: rgba(255, 43, 61, 0.14);
+          color: #ff6470;
+        }
+
+        .iw-data-layer-copy {
+          display: grid;
+          min-width: 0;
+          gap: 2px;
+        }
+
+        .iw-data-layer-name {
+          overflow: hidden;
+          color: #c4ccd6;
+          font-size: 8.3px;
+          font-weight: 600;
+          line-height: 1.1;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .iw-data-layer-meta {
+          color: var(--c-t5);
+          font-family: var(--font-mono), "JetBrains Mono", monospace;
+          font-size: 6.3px;
+          line-height: 1;
+        }
+
+        .iw-data-layer-row[data-visible="true"] .iw-data-layer-meta {
+          color: #ff6470;
         }
 
         .iw-layer-top {
@@ -1524,7 +1801,7 @@ export function IntelWatchMap() {
           background: rgba(255, 43, 61, 0.08);
           color: #ff6470;
           cursor: pointer;
-          font-size: 7.6px;
+          font-size: 6.6px;
           font-weight: 700;
           transition: background 140ms ease;
         }
@@ -1536,7 +1813,7 @@ export function IntelWatchMap() {
         .iw-caption-copy {
           margin: 6px 0 8px;
           color: var(--c-t5);
-          font-size: 8px;
+          font-size: 7.4px;
           line-height: 1.4;
         }
 
@@ -1557,8 +1834,8 @@ export function IntelWatchMap() {
         }
 
         .iw-layer-row[data-active="true"] {
-          border-color: rgba(255, 43, 61, 0.38);
-          background: rgba(255, 43, 61, 0.07);
+          border-color: rgba(255, 43, 61, 0.55);
+          background: linear-gradient(180deg, rgba(255, 43, 61, 0.24), rgba(179, 18, 31, 0.10));
         }
 
         .iw-layer-main {
@@ -1593,7 +1870,7 @@ export function IntelWatchMap() {
         .iw-layer-name {
           overflow: hidden;
           color: #c4ccd6;
-          font-size: 9.2px;
+          font-size: 8.4px;
           font-weight: 500;
           line-height: 1.15;
           text-overflow: ellipsis;
@@ -1608,7 +1885,7 @@ export function IntelWatchMap() {
           margin-top: 3px;
           color: var(--c-t5);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7px;
+          font-size: 6.4px;
           line-height: 1;
         }
 
@@ -1656,193 +1933,12 @@ export function IntelWatchMap() {
         .iw-help-card p {
           margin: 0;
           color: var(--c-t4);
-          font-size: 8.2px;
+          font-size: 7.4px;
           line-height: 1.42;
         }
 
         .iw-help-card b {
           color: #ff6470;
-        }
-
-        .iw-detail-strip {
-          height: 3px;
-          background: linear-gradient(90deg, var(--severity-color), transparent);
-        }
-
-        .iw-detail-body {
-          padding: 10px 11px 14px;
-        }
-
-        .iw-type-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 2px 7px;
-          border: 1px solid var(--c-border-1);
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.04);
-          color: var(--c-t4);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7.5px;
-        }
-
-        .iw-detail-title {
-          margin: 9px 0 6px;
-          color: var(--c-t1);
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          line-height: 1.25;
-          text-wrap: pretty;
-        }
-
-        .iw-detail-coord {
-          color: var(--c-t4);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8.8px;
-        }
-
-        .iw-detail-section {
-          margin-top: 13px;
-        }
-
-        .iw-detail-label {
-          margin-bottom: 6px;
-          color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 7px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-        }
-
-        .iw-meta-row {
-          justify-content: space-between;
-          gap: 12px;
-          padding: 8px 10px;
-          border: 1px solid var(--c-border-2);
-          border-radius: 9px;
-          background: rgba(255, 255, 255, 0.02);
-        }
-
-        .iw-meta-row span {
-          color: #c4ccd6;
-          font-size: 9px;
-          font-weight: 600;
-        }
-
-        .iw-note-card {
-          padding: 9px;
-          border: 1px solid var(--c-border-2);
-          border-left: 2px solid var(--severity-color);
-          border-radius: 9px;
-          background: rgba(255, 255, 255, 0.02);
-          color: var(--c-t3);
-          font-size: 10px;
-          line-height: 1.58;
-          white-space: pre-line;
-        }
-
-        .iw-layer-ref {
-          gap: 7px;
-          color: var(--c-t4);
-          font-size: 9.4px;
-        }
-
-        .iw-layer-ref strong {
-          color: #c4ccd6;
-          font-weight: 600;
-        }
-
-        .iw-source-row {
-          gap: 8px;
-          min-height: 30px;
-          padding: 7px 9px;
-          border: 1px solid var(--c-border-2);
-          border-radius: 9px;
-          background: rgba(255, 255, 255, 0.02);
-          color: var(--c-t3);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 9.2px;
-          line-height: 1.35;
-        }
-
-        .iw-detail-actions {
-          gap: 8px;
-          margin-top: 14px;
-        }
-
-        .iw-primary-action {
-          height: 30px;
-          flex: 1 1 auto;
-          border: 0;
-          border-radius: 9px;
-          background: linear-gradient(180deg, #ff2b3d, #b3121f);
-          box-shadow: 0 4px 16px rgba(255, 43, 61, 0.30);
-          color: white;
-          cursor: pointer;
-          font-size: 9.6px;
-          font-weight: 700;
-          transition: filter 140ms ease;
-        }
-
-        .iw-primary-action:hover {
-          filter: brightness(1.08);
-        }
-
-        .iw-delete-action {
-          width: 30px;
-          height: 30px;
-          display: grid;
-          place-items: center;
-          border: 1px solid var(--c-border-1);
-          border-radius: 9px;
-          background: rgba(255,255,255,0.02);
-          color: var(--c-t4);
-          cursor: pointer;
-          transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
-        }
-
-        .iw-delete-action:hover {
-          border-color: rgba(255, 43, 61, 0.32);
-          background: rgba(255, 43, 61, 0.08);
-          color: #ff6470;
-        }
-
-        .iw-empty-detail {
-          min-height: 360px;
-          display: grid;
-          place-items: center;
-          padding: 24px;
-          text-align: center;
-        }
-
-        .iw-empty-tile {
-          width: 46px;
-          height: 46px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 12px;
-          border: 1px solid var(--c-border-1);
-          border-radius: 11px;
-          background: rgba(255, 255, 255, 0.03);
-          color: var(--c-t5);
-        }
-
-        .iw-empty-detail strong {
-          display: block;
-          color: var(--c-t4);
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 10.5px;
-          font-weight: 600;
-        }
-
-        .iw-empty-detail p {
-          max-width: 240px;
-          margin: 7px auto 0;
-          color: var(--c-t5);
-          font-size: 9.4px;
-          line-height: 1.45;
         }
 
         @keyframes iw-blink {
@@ -1931,19 +2027,6 @@ export function IntelWatchMap() {
           </div>
         </aside>
 
-        <aside className="iw-glass iw-tool-rail" aria-label="Map data layers">
-          <div className="iw-tool-stack">
-            {MAP_OVERLAYS.map((overlay) => (
-              <ToolButton
-                key={overlay.id}
-                active={overlayVisibility[overlay.id] ?? false}
-                icon={overlay.Icon}
-                label={overlay.label}
-                onClick={() => toggleOverlay(overlay.id)}
-              />
-            ))}
-          </div>
-        </aside>
         </div>
 
         {(tool === "line" || tool === "area") && (
@@ -2015,32 +2098,48 @@ export function IntelWatchMap() {
           />
         </label>
 
-        <div className="iw-tabs" role="tablist">
-          <button
-            aria-selected={tab === "layers"}
-            className="iw-tab"
-            role="tab"
-            type="button"
-            onClick={() => setTab("layers")}
-          >
-            <Layers size={14} strokeWidth={1.8} />
-            KATMANLAR
-          </button>
-          <button
-            aria-selected={tab === "detail"}
-            className="iw-tab"
-            role="tab"
-            type="button"
-            onClick={() => setTab("detail")}
-          >
-            <Info size={14} strokeWidth={1.8} />
-            DETAY
-          </button>
+        <div className="iw-panel-mode-title">
+          <Layers size={10} strokeWidth={1.8} />
+          KATMANLAR
         </div>
 
         <div className="iw-panel-body intel-watch-scrollbar tm-scrollbar">
-          {tab === "layers" ? (
             <div className="iw-layers-body">
+              <div className="iw-data-layer-section">
+                <div className="iw-section-label">VERİ KATMANLARI</div>
+                <div className="iw-data-layer-list">
+                  {MAP_OVERLAYS.map((overlay) => {
+                    const Icon = overlay.Icon;
+                    const isVisible = overlayVisibility[overlay.id] ?? false;
+                    return (
+                      <button
+                        key={overlay.id}
+                        className="iw-data-layer-row"
+                        data-visible={isVisible}
+                        style={{ "--layer-hue": overlay.color } as CSSProperties}
+                        type="button"
+                        onClick={() => toggleOverlay(overlay.id)}
+                      >
+                        <span className="iw-data-layer-icon">
+                          <Icon size={13} strokeWidth={1.9} />
+                        </span>
+                        <span className="iw-data-layer-copy">
+                          <span className="iw-data-layer-name">{overlay.label}</span>
+                          <span className="iw-data-layer-meta">
+                            {isVisible ? "Gösteriliyor" : "Gizli"}
+                          </span>
+                        </span>
+                        {isVisible ? (
+                          <Eye size={12} color="#ff6470" strokeWidth={1.9} />
+                        ) : (
+                          <EyeOff size={12} color="#444b55" strokeWidth={1.9} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="iw-layer-top">
                 <div className="iw-section-label">TAKİP KATMANLARI</div>
                 <button className="iw-new-layer" type="button" onClick={handleCreateLayer}>
@@ -2145,85 +2244,6 @@ export function IntelWatchMap() {
                 </p>
               </div>
             </div>
-          ) : selectedPin ? (
-            <div style={{ "--severity-color": SEVERITY_META[selectedPin.severity].color } as CSSProperties}>
-              <div className="iw-detail-strip" />
-              <div className="iw-detail-body">
-                <div className="iw-type-chip">
-                  <MarkerGlyph type={selectedPin.type} />
-                  {TYPE_META[selectedPin.type].label}
-                </div>
-                <h2 className="iw-detail-title">{selectedPin.title}</h2>
-                <div className="iw-detail-coord">{formatCoordinate(selectedPin.lat, selectedPin.lng)}</div>
-
-                <div className="iw-detail-section">
-                  <div className="iw-meta-row">
-                    <div className="iw-detail-label" style={{ marginBottom: 0 }}>
-                      SON GÜNCELLEME
-                    </div>
-                    <span>{selectedPin.updated}</span>
-                  </div>
-                </div>
-
-                <div className="iw-detail-section">
-                  <div className="iw-detail-label">THREAT CONTEXT SUMMARY</div>
-                  <div className="iw-note-card">{selectedPin.note}</div>
-                </div>
-
-                <div className="iw-detail-section">
-                  <div className="iw-layer-ref">
-                    <span
-                      className="iw-hue"
-                      style={
-                        {
-                          "--layer-hue": layerMap.get(selectedPin.layer)?.hue ?? "#c4ccd6",
-                        } as CSSProperties
-                      }
-                    />
-                    <span>
-                      Katman: <strong>{layerMap.get(selectedPin.layer)?.name ?? "Bilinmeyen"}</strong>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="iw-detail-section">
-                  <div className="iw-detail-label">KAYNAK</div>
-                  <div className="iw-source-row">
-                    <Globe2 size={14} strokeWidth={1.8} />
-                    <span>{selectedPin.source}</span>
-                  </div>
-                </div>
-
-                <div className="iw-detail-actions">
-                  <button
-                    className="iw-primary-action"
-                    type="button"
-                    onClick={() => handleFocusPin(selectedPin)}
-                  >
-                    Odakla
-                  </button>
-                  <button
-                    aria-label="İşareti sil"
-                    className="iw-delete-action"
-                    type="button"
-                    onClick={() => handleDeletePin(selectedPin.id)}
-                  >
-                    <Trash2 size={16} strokeWidth={1.8} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="iw-empty-detail">
-              <div>
-                <div className="iw-empty-tile">
-                  <MapPin size={20} strokeWidth={1.7} />
-                </div>
-                <strong>İşaret seçilmedi</strong>
-                <p>Haritadaki görünür bir işareti seçerek açık kaynak detaylarını görüntüleyin.</p>
-              </div>
-            </div>
-          )}
         </div>
       </aside>
     </section>

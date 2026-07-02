@@ -1,0 +1,75 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [56.25, 26.57] },
+      "properties": { "name": "Strait of Hormuz", "region": "Persian Gulf" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [43.33, 12.58] },
+      "properties": { "name": "Bab-el-Mandeb", "region": "Red Sea" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [32.35, 30.5] },
+      "properties": { "name": "Suez Canal", "region": "Red Sea / Mediterranean" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [102.9, 1.43] },
+      "properties": { "name": "Strait of Malacca", "region": "SE Asia" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [105.9, -6] },
+      "properties": { "name": "Sunda Strait", "region": "SE Asia" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [115.8, -8.7] },
+      "properties": { "name": "Lombok Strait", "region": "SE Asia" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [29.07, 41.1] },
+      "properties": { "name": "Bosphorus Strait", "region": "Turkish Straits" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [26.4, 40.2] },
+      "properties": { "name": "Dardanelles Strait", "region": "Turkish Straits" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-5.6, 35.95] },
+      "properties": { "name": "Strait of Gibraltar", "region": "Mediterranean / Atlantic" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-79.68, 9.08] },
+      "properties": { "name": "Panama Canal", "region": "Central America" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [18.47, -34.35] },
+      "properties": { "name": "Cape of Good Hope", "region": "Southern Africa" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [12.7, 55.8] },
+      "properties": { "name": "Danish Straits", "region": "Baltic" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [119.5, 24.5] },
+      "properties": { "name": "Taiwan Strait", "region": "East Asia" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [18.9, 40.15] },
+      "properties": { "name": "Strait of Otranto", "region": "Adriatic" }
+    }
+  ]
+}

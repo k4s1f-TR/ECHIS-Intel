@@ -92,18 +92,8 @@ const ECHIS_GRAD_DARK = "#3b0509";
 const ECHIS_GRAD_BRIGHT = "#a80d18";
 const ECHIS_GRAD_MID = "#6f0710";
 
-const PIN_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34">' +
-  "<defs>" +
-  '<linearGradient id="pinBody" x1="4" y1="2" x2="20" y2="31" gradientUnits="userSpaceOnUse">' +
-  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
-  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
-  "</linearGradient>" +
-  "</defs>" +
-  '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0z" fill="url(#pinBody)"/>' +
-  '<circle cx="12" cy="12" r="4.2" fill="#0a0d10"/>' +
-  "</svg>";
-
+// Shared premium pin — Global View and SOCMINT use the same icon so both
+// modes read as one marker system.
 const GLOBAL_PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">' +
   "<defs>" +
@@ -131,7 +121,6 @@ const GLOBAL_PIN_SVG =
   '<circle cx="14" cy="12.8" r="4.18" fill="none" stroke="#170309" stroke-opacity=".9" stroke-width=".52"/>' +
   "</svg>";
 
-const PIN_SVG_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`;
 const GLOBAL_PIN_SVG_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(GLOBAL_PIN_SVG)}`;
 
 // Screen framing — the dashboard's side panels. Globe shifts into the free
@@ -1459,7 +1448,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
         icon.className = "luxe-marker-pin-icon";
         icon.alt = "";
         icon.draggable = false;
-        icon.src = kind === "global" ? GLOBAL_PIN_SVG_URL : PIN_SVG_URL;
+        icon.src = GLOBAL_PIN_SVG_URL;
 
         const badgeEl = document.createElement("div");
         badgeEl.className = "luxe-marker-badge";
@@ -1694,24 +1683,6 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             transition: opacity 0.22s ease;
           }
           .luxe-marker {
-            --pin-w: 24px;
-            --pin-h: 34px;
-            --glow-offset: 11px;
-            --bloom-color: #a80d18;
-            --bloom-opacity: 0.45;
-            --glow-size: 20px;
-            --glow-fill: rgba(168,13,24,0.34);
-            --glow-opacity: 0.7;
-            --glow-stroke-width: 2.5px;
-            --glow-stroke-opacity: 1;
-            width: var(--pin-w);
-            height: var(--pin-h);
-            user-select: none;
-            transform-origin: 50% 100%;
-            transition: width .18s ease, height .18s ease, filter .18s ease;
-            filter: drop-shadow(0 3px 5px rgba(0,0,0,0.44));
-          }
-          .luxe-marker[data-kind="global"] {
             --pin-w: 22.4px;
             --pin-h: 27.2px;
             --glow-offset: 16px;
@@ -1722,25 +1693,21 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             --glow-opacity: 0.42;
             --glow-stroke-width: 1.2px;
             --glow-stroke-opacity: 0.68;
+            width: var(--pin-w);
+            height: var(--pin-h);
+            user-select: none;
+            transform-origin: 50% 100%;
+            transition: width .18s ease, height .18s ease, filter .18s ease;
+            filter: drop-shadow(0 3px 5px rgba(0,0,0,0.44));
           }
           .luxe-marker:not([data-selected="true"]):hover {
-            filter: drop-shadow(0 4px 7px rgba(0,0,0,0.48));
-          }
-          .luxe-marker[data-kind="global"]:not([data-selected="true"]):hover {
             --pin-w: 24.08px;
             --pin-h: 29.24px;
+            filter: drop-shadow(0 4px 7px rgba(0,0,0,0.48));
           }
-          .luxe-marker[data-kind="signals"]:not([data-selected="true"]):hover {
-            --pin-w: 25.2px;
-            --pin-h: 35.7px;
-          }
-          .luxe-marker[data-kind="global"][data-selected="true"] {
+          .luxe-marker[data-selected="true"] {
             --pin-w: 26.32px;
             --pin-h: 31.96px;
-          }
-          .luxe-marker[data-kind="signals"][data-selected="true"] {
-            --pin-w: 34.8px;
-            --pin-h: 49.3px;
           }
           .luxe-marker-pin-icon {
             position: absolute;

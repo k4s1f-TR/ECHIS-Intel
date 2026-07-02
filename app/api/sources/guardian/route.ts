@@ -6,6 +6,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const GUARDIAN_SOURCE_ID = "guardian-world";
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type GuardianRoutePayload = {
+  sourceId: string;
+  items: Awaited<ReturnType<typeof fetchGuardianArticles>>;
+  collectedAt: string;
+  previewOnly: true;
+  cacheStatus?: "fresh" | "stale";
+};
+
+let guardianCache: { payload: GuardianRoutePayload; fetchedAt: number } | null = null;
+let guardianInFlight: Promise<GuardianRoutePayload> | null = null;
+
+const noCacheHeaders = { "Cache-Control": "no-store, max-age=0" };
 
 export async function GET() {
   if (!process.env.GUARDIAN_API_KEY) {
@@ -25,19 +39,34 @@ export async function GET() {
     );
   }
 
-  const noCacheHeaders = { "Cache-Control": "no-store, max-age=0" };
-
   try {
-    const items = await fetchGuardianArticles(source);
-    return NextResponse.json(
-      {
+    if (guardianCache && Date.now() - guardianCache.fetchedAt < CACHE_TTL_MS) {
+      return NextResponse.json(
+        { ...guardianCache.payload, cacheStatus: "fresh" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
+    if (guardianInFlight) {
+      const payload = await guardianInFlight;
+      return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
+    }
+
+    guardianInFlight = (async (): Promise<GuardianRoutePayload> => {
+      const items = await fetchGuardianArticles(source);
+      const payload: GuardianRoutePayload = {
         sourceId: source.id,
         items,
         collectedAt: new Date().toISOString(),
         previewOnly: true,
-      },
-      { status: 200, headers: noCacheHeaders },
-    );
+        cacheStatus: "fresh",
+      };
+      guardianCache = { payload, fetchedAt: Date.now() };
+      return payload;
+    })();
+
+    const payload = await guardianInFlight;
+    return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
   } catch (err) {
     let reason = "guardian_fetch_failed";
     if (err instanceof Error) {
@@ -49,6 +78,14 @@ export async function GET() {
         reason = err.message;
       }
     }
+
+    if (reason !== "guardian_key_not_configured" && guardianCache) {
+      return NextResponse.json(
+        { ...guardianCache.payload, cacheStatus: "stale" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
     return NextResponse.json(
       {
         sourceId: source.id,
@@ -57,5 +94,7 @@ export async function GET() {
       },
       { status: reason === "guardian_key_not_configured" ? 500 : 502, headers: noCacheHeaders },
     );
+  } finally {
+    guardianInFlight = null;
   }
 }

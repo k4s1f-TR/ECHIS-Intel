@@ -62,7 +62,7 @@ function labelFor(value: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function ProvenanceChip({
+export function ProvenanceChip({
   children,
   dimmed = false,
 }: {

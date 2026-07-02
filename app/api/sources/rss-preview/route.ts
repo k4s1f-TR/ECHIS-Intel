@@ -117,6 +117,19 @@ const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   "globalvoices-filtered",
 ]);
 
+const RSS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type RssRoutePayload = {
+  sourceId: string;
+  items: Awaited<ReturnType<typeof fetchRssPreview>>;
+  collectedAt: string;
+  cacheStatus?: "fresh" | "stale";
+};
+
+// Keyed per sourceId; size is bounded by ALLOWED_PREVIEW_SOURCE_IDS.
+const rssCache = new Map<string, { payload: RssRoutePayload; fetchedAt: number }>();
+const rssInFlight = new Map<string, Promise<RssRoutePayload>>();
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sourceId = searchParams.get("sourceId");
@@ -146,15 +159,35 @@ export async function GET(request: Request) {
   const noCacheHeaders = { "Cache-Control": "no-store, max-age=0" };
 
   try {
-    const items = await fetchRssPreview(source);
-    return NextResponse.json(
-      {
+    const cached = rssCache.get(source.id);
+    if (cached && Date.now() - cached.fetchedAt < RSS_CACHE_TTL_MS) {
+      return NextResponse.json(
+        { ...cached.payload, cacheStatus: "fresh" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
+    const pending = rssInFlight.get(source.id);
+    if (pending) {
+      const payload = await pending;
+      return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
+    }
+
+    const inFlight = (async (): Promise<RssRoutePayload> => {
+      const items = await fetchRssPreview(source);
+      const payload: RssRoutePayload = {
         sourceId: source.id,
         items,
         collectedAt: new Date().toISOString(),
-      },
-      { status: 200, headers: noCacheHeaders },
-    );
+        cacheStatus: "fresh",
+      };
+      rssCache.set(source.id, { payload, fetchedAt: Date.now() });
+      return payload;
+    })();
+    rssInFlight.set(source.id, inFlight);
+
+    const payload = await inFlight;
+    return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
   } catch (err) {
     let reason = "feed_fetch_failed";
     let diagnosticCategory: string | undefined;
@@ -177,6 +210,14 @@ export async function GET(request: Request) {
         reason = "parse_failed";
       }
     }
+    const stale = rssCache.get(source.id);
+    if (stale) {
+      return NextResponse.json(
+        { ...stale.payload, cacheStatus: "stale" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
     return NextResponse.json(
       {
         sourceId: source.id,
@@ -186,5 +227,7 @@ export async function GET(request: Request) {
       },
       { status: 502, headers: noCacheHeaders },
     );
+  } finally {
+    rssInFlight.delete(source.id);
   }
 }

@@ -6,6 +6,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const RELIEFWEB_SOURCE_ID = "reliefweb-crises";
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type ReliefWebRoutePayload = {
+  sourceId: string;
+  items: Awaited<ReturnType<typeof fetchReliefWebReports>>;
+  collectedAt: string;
+  previewOnly: true;
+  cacheStatus?: "fresh" | "stale";
+};
+
+let reliefwebCache: { payload: ReliefWebRoutePayload; fetchedAt: number } | null = null;
+let reliefwebInFlight: Promise<ReliefWebRoutePayload> | null = null;
+
+const noCacheHeaders = { "Cache-Control": "no-store, max-age=0" };
 
 export async function GET() {
   const source = candidateSourceDefinitions.find(
@@ -18,19 +32,34 @@ export async function GET() {
     );
   }
 
-  const noCacheHeaders = { "Cache-Control": "no-store, max-age=0" };
-
   try {
-    const items = await fetchReliefWebReports(source);
-    return NextResponse.json(
-      {
+    if (reliefwebCache && Date.now() - reliefwebCache.fetchedAt < CACHE_TTL_MS) {
+      return NextResponse.json(
+        { ...reliefwebCache.payload, cacheStatus: "fresh" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
+    if (reliefwebInFlight) {
+      const payload = await reliefwebInFlight;
+      return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
+    }
+
+    reliefwebInFlight = (async (): Promise<ReliefWebRoutePayload> => {
+      const items = await fetchReliefWebReports(source);
+      const payload: ReliefWebRoutePayload = {
         sourceId: source.id,
         items,
         collectedAt: new Date().toISOString(),
         previewOnly: true,
-      },
-      { status: 200, headers: noCacheHeaders },
-    );
+        cacheStatus: "fresh",
+      };
+      reliefwebCache = { payload, fetchedAt: Date.now() };
+      return payload;
+    })();
+
+    const payload = await reliefwebInFlight;
+    return NextResponse.json(payload, { status: 200, headers: noCacheHeaders });
   } catch (err) {
     let reason = "reliefweb_fetch_failed";
     if (err instanceof Error) {
@@ -41,6 +70,14 @@ export async function GET() {
         reason = err.message;
       }
     }
+
+    if (reliefwebCache) {
+      return NextResponse.json(
+        { ...reliefwebCache.payload, cacheStatus: "stale" },
+        { status: 200, headers: noCacheHeaders },
+      );
+    }
+
     return NextResponse.json(
       {
         sourceId: source.id,
@@ -49,5 +86,7 @@ export async function GET() {
       },
       { status: 502, headers: noCacheHeaders },
     );
+  } finally {
+    reliefwebInFlight = null;
   }
 }

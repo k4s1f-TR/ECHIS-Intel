@@ -18,9 +18,11 @@ interface Props {
   onConfidenceChange: (min: number) => void;
 }
 
+// Same label / dropdown / item styling as FloatingMonitoringCard so both map
+// modes share one floating-card standard.
 const LABEL_STYLE = {
-  fontSize: "var(--fs-2xs)",
-  color: "var(--text-muted)",
+  fontSize: "8.5px",
+  color: "var(--c-silver-dim)",
   fontWeight: 600,
 } as const;
 
@@ -32,10 +34,10 @@ const THRESHOLD_OPTIONS: { label: string; value: number }[] = [
 ];
 
 const DROPDOWN_STYLE = {
-  background: "var(--bg-card)",
-  border: "1px solid var(--border-hover)",
+  background: "var(--bg-panel)",
+  border: "1px solid var(--c-border-1)",
   backdropFilter: "blur(14px)",
-  boxShadow: "var(--shadow-md)",
+  boxShadow: "var(--shadow-inset-highlight), 0 8px 24px rgba(0,0,0,0.6)",
 } as const;
 
 const TYPE_COLORS: Record<SocmintReportType, string> = {
@@ -59,8 +61,11 @@ function itemStyle(active: boolean) {
     textAlign: "left" as const,
     padding: "7px 12px",
     fontSize: "12px",
-    color: active ? "var(--icon-active)" : "var(--text-secondary)",
-    background: active ? "var(--accent-blue-bg)" : "transparent",
+    color: active ? "var(--c-accent-text)" : "var(--c-silver-dim)",
+    background: active ? "var(--c-accent-grad-soft)" : "transparent",
+    border: active
+      ? "1px solid var(--c-accent-border)"
+      : "1px solid transparent",
     cursor: "pointer",
   };
 }
@@ -99,21 +104,29 @@ export function SignalsFloatingCard({
   if (collapsed) {
     return (
       <button
-        className="absolute top-4 left-4 rounded-xl z-10 flex items-center gap-2"
+        className="absolute top-4 left-4 rounded-xl z-30 flex items-center gap-2"
         onClick={() => setCollapsed(false)}
         style={{
           padding: "10px 12px",
-          background: "var(--bg-overlay)",
-          border: "1px solid var(--border-primary)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
           backdropFilter: "blur(14px)",
-          boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
+          boxShadow:
+            "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}
       >
-        <Radio size={10} style={{ color: "var(--accent-blue-text)" }} />
-        <span style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: "var(--text-body)", letterSpacing: "0.1em" }}>
+        <Radio size={10} style={{ color: "var(--c-silver-dim)" }} />
+        <span
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "var(--c-silver)",
+            letterSpacing: "0.08em",
+          }}
+        >
           SOCMINT
         </span>
-        <ChevronRight size={12} style={{ color: "var(--text-muted)" }} />
+        <ChevronRight size={12} style={{ color: "var(--c-t5)" }} />
       </button>
     );
   }
@@ -121,56 +134,57 @@ export function SignalsFloatingCard({
   return (
     <div
       ref={cardRef}
-      className="absolute top-4 left-4 rounded-xl z-10"
+      className="absolute top-4 left-4 rounded-xl z-30"
       style={{
         padding: "14px 16px",
-        background: "var(--bg-overlay)",
-        border: "1px solid var(--border-primary)",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--c-border-1)",
         backdropFilter: "blur(14px)",
-        width: "214px",
-        minWidth: "214px",
-        boxShadow: "var(--shadow-lg), var(--shadow-inset-highlight)",
+        minWidth: "206px",
+        boxShadow:
+          "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
       }}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <Radio size={9} style={{ color: "var(--accent-blue-text)" }} />
-            <span className="tracking-widest uppercase font-semibold" style={LABEL_STYLE}>
-              SOCMINT Watch
-            </span>
-          </div>
-          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
-            Public social source monitoring
+        <div className="flex items-center gap-1.5">
+          <Radio size={9} style={{ color: "var(--c-t5)" }} />
+          <span className="tracking-widest uppercase" style={LABEL_STYLE}>
+            SOCMINT Watch
           </span>
         </div>
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={() => {
+            setRegionOpen(false);
+            setCollapsed(true);
+          }}
           aria-label="Collapse SOCMINT card"
-          style={{ color: "var(--text-muted)" }}
+          style={{ color: "var(--c-t5)" }}
         >
           <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
         </button>
       </div>
 
+      {/* Coverage */}
       <div className="mb-3" style={{ position: "relative" }}>
-        <span className="tracking-widest uppercase block mb-1" style={LABEL_STYLE}>
-          Coverage
-        </span>
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="tracking-widest uppercase" style={LABEL_STYLE}>
+            Coverage
+          </span>
+        </div>
         <button
           className="flex items-center justify-between w-full"
           onClick={() => setRegionOpen((v) => !v)}
         >
           <span
             className="font-semibold"
-            style={{ fontSize: "var(--fs-lg)", color: "var(--text-primary)" }}
+            style={{ fontSize: "14px", color: "var(--c-silver)" }}
           >
             {regionLabel}
           </span>
           <ChevronDown
             size={12}
             style={{
-              color: "var(--text-muted)",
+              color: "var(--c-t5)",
               transform: regionOpen ? "rotate(180deg)" : undefined,
               transition: "transform 150ms",
             }}
@@ -178,7 +192,7 @@ export function SignalsFloatingCard({
         </button>
         <span
           className="block mt-0.5"
-          style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}
+          style={{ fontSize: "10.5px", color: "var(--c-silver-dim)" }}
         >
           {regionSubtitle}
         </span>
@@ -197,7 +211,7 @@ export function SignalsFloatingCard({
                   onMouseEnter={(e) => {
                     if (!active)
                       (e.currentTarget as HTMLElement).style.background =
-                        "var(--bg-surface-hover)";
+                        "rgba(255,255,255,0.04)";
                   }}
                   onMouseLeave={(e) => {
                     if (!active)
@@ -213,13 +227,13 @@ export function SignalsFloatingCard({
                 </button>
               );
             })}
-            <div style={{ borderTop: "1px solid var(--border-dim)" }} />
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
             <button
               style={itemStyle(isGlobal)}
               onMouseEnter={(e) => {
                 if (!isGlobal)
                   (e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-surface-hover)";
+                    "rgba(255,255,255,0.04)";
               }}
               onMouseLeave={(e) => {
                 if (!isGlobal)
@@ -237,10 +251,11 @@ export function SignalsFloatingCard({
         )}
       </div>
 
+      {/* Min Confidence */}
       <div
         className="mb-3"
         style={{
-          borderTop: "1px solid var(--border-dim)",
+          borderTop: "1px solid rgba(255,255,255,0.05)",
           paddingTop: "11px",
         }}
       >
@@ -255,16 +270,19 @@ export function SignalsFloatingCard({
                 key={opt.value}
                 onClick={() => onConfidenceChange(opt.value)}
                 style={{
-                  fontSize: "var(--fs-xs)",
+                  fontSize: "9.5px",
                   fontWeight: 600,
+                  letterSpacing: "0.04em",
                   padding: "4px 7px",
-                  borderRadius: "6px",
+                  borderRadius: "5px",
                   whiteSpace: "nowrap",
-                  color: active ? "var(--icon-active)" : "var(--text-muted)",
-                  background: active ? "var(--accent-blue-bg-strong)" : "var(--bg-surface)",
+                  color: active ? "var(--c-accent-text)" : "var(--c-t5)",
+                  background: active
+                    ? "var(--c-accent-grad-soft)"
+                    : "rgba(255,255,255,0.026)",
                   border: active
-                    ? "1px solid var(--accent-blue-border)"
-                    : "1px solid var(--border-dim)",
+                    ? "1px solid var(--c-accent-border)"
+                    : "1px solid rgba(255,255,255,0.055)",
                   transition: "all 150ms",
                 }}
               >
@@ -275,12 +293,11 @@ export function SignalsFloatingCard({
         </div>
       </div>
 
+      {/* Stats */}
       <div
         style={{
-          borderTop: "1px solid var(--border-dim)",
+          borderTop: "1px solid rgba(255,255,255,0.05)",
           paddingTop: "11px",
-          maxHeight: "168px",
-          overflowY: "auto",
         }}
       >
         <span className="tracking-widest uppercase block mb-2" style={LABEL_STYLE}>
@@ -291,13 +308,14 @@ export function SignalsFloatingCard({
             const count = filtered.filter((report) => report.type === type).length;
             return (
               <div key={type} className="flex items-center justify-between">
-                <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
+                <span style={{ fontSize: "10.5px", color: "var(--c-silver-dim)" }}>
                   {SOCMINT_TYPE_LABELS[type]}
                 </span>
                 <span
                   style={{
                     fontSize: "12px",
                     fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
                     color: TYPE_COLORS[type],
                   }}
                 >
@@ -306,27 +324,26 @@ export function SignalsFloatingCard({
               </div>
             );
           })}
-          <div
-            style={{
-              borderTop: "1px solid var(--border-dim)",
-              paddingTop: "6px",
-              marginTop: "2px",
-            }}
-            className="flex items-center justify-between"
+        </div>
+        <div
+          style={{
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+            paddingTop: "8px",
+            marginTop: "8px",
+          }}
+        >
+          <span
+            className="block tracking-widest uppercase mb-1.5"
+            style={LABEL_STYLE}
           >
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
-              Total Reports
-            </span>
-            <span
-              style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "var(--text-primary)",
-              }}
-            >
-              {filtered.length}
-            </span>
-          </div>
+            Total Reports
+          </span>
+          <span
+            className="font-bold leading-none"
+            style={{ fontSize: "28px", color: "var(--c-t1)" }}
+          >
+            {filtered.length}
+          </span>
         </div>
       </div>
     </div>

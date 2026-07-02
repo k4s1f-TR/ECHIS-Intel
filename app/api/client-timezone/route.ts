@@ -23,6 +23,8 @@ const FALLBACK_RESPONSE: ClientTimezoneResponse = {
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FINDIP_TIMEOUT_MS = 3500;
+/** Hard cap so an IP-scanning client cannot grow the cache unbounded. */
+const CACHE_MAX_ENTRIES = 5000;
 const timezoneCache = new Map<string, CacheEntry>();
 
 function getFirstHeaderIp(value: string | null): string | null {
@@ -215,6 +217,10 @@ export async function GET(request: NextRequest) {
   }
 
   const payload = await fetchFindIpTimezone(ip);
+  if (timezoneCache.size >= CACHE_MAX_ENTRIES) {
+    const oldestKey = timezoneCache.keys().next().value;
+    if (oldestKey !== undefined) timezoneCache.delete(oldestKey);
+  }
   timezoneCache.set(ip, {
     expiresAt: Date.now() + CACHE_TTL_MS,
     payload,

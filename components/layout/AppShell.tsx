@@ -576,7 +576,20 @@ export function AppShell() {
     handleViewChange("situation");
   }
 
+  // Same interaction contract as Global View: a feed card click focuses the
+  // marker on the globe and opens the on-globe popup; the detail modal opens
+  // from the card's detail toggle instead.
   function handleSignalSelect(id: string) {
+    setSelectedSignalId(id);
+    setSignalDetailOpen(false);
+    setMarkerPopup({ kind: "signals", id });
+    const report = socmintReports.find((r) => r.id === id);
+    if (report?.coordinates) {
+      getActiveGlobe()?.focusMarker(report.coordinates[0], report.coordinates[1]);
+    }
+  }
+
+  function handleSignalDetailOpen(id: string) {
     setSelectedSignalId(id);
     setMarkerPopup(null);
     setSignalDetailOpen(true);
@@ -943,6 +956,7 @@ export function AppShell() {
                 confidenceMin={signalConfidenceMin}
                 selectedId={selectedSignalId}
                 onSelect={handleSignalSelect}
+                onOpenDetail={handleSignalDetailOpen}
                 isBookmarked={isBookmarked}
                 onToggleBookmark={toggleBookmark}
               />
