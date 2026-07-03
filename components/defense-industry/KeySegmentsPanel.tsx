@@ -1,9 +1,10 @@
 "use client";
 import { useMemo } from "react";
 import { Layers } from "lucide-react";
-import { defenseKeySegments, type DefenseSegmentMention } from "@/data/defenseIndustryMockData";
+import { defenseKeySegments } from "@/data/defenseIndustryMockData";
+import type { DefenseSegmentMetric } from "@/lib/defense";
 
-function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount: number }) {
+function SegmentRow({ item, maxCount }: { item: DefenseSegmentMetric; maxCount: number }) {
   const pct = (item.count / maxCount) * 100;
   const positive = item.change >= 0;
   return (
@@ -63,8 +64,9 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMention; maxCount:
   );
 }
 
-export function KeySegmentsPanel() {
-  const maxCount = useMemo(() => Math.max(...defenseKeySegments.map((s) => s.count)), []);
+export function KeySegmentsPanel({ segments }: { segments?: DefenseSegmentMetric[] }) {
+  const rows = segments && segments.length > 0 ? segments : defenseKeySegments;
+  const maxCount = useMemo(() => Math.max(1, ...rows.map((s) => s.count)), [rows]);
   return (
     <div
       className="h-full flex flex-col"
@@ -95,7 +97,7 @@ export function KeySegmentsPanel() {
         </span>
       </div>
       <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-1 defense-scrollbar">
-        {defenseKeySegments.map((s) => (
+        {rows.map((s) => (
           <SegmentRow key={s.segment} item={s} maxCount={maxCount} />
         ))}
       </div>

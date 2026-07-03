@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { Factory } from "lucide-react";
-import { defenseFeedItems, type DefenseFeedItem } from "@/data/defenseIndustryMockData";
+import { defenseFeedItems } from "@/data/defenseIndustryMockData";
+import type { DefenseFeedItemLive } from "@/lib/defense";
 
 const PRIORITY: Record<string, { text: string; bg: string; border: string }> = {
   elevated: { text: "var(--c-high)", bg: "var(--c-high-bg)", border: "var(--c-high-border)" },
@@ -15,7 +16,7 @@ function FeedCard({
   isSelected,
   onClick,
 }: {
-  item: DefenseFeedItem;
+  item: DefenseFeedItemLive;
   isSelected: boolean;
   onClick: () => void;
 }) {
@@ -105,10 +106,17 @@ function FeedCard({
 export function DefenseIndustryFeedPanel({
   selectedItemId,
   onSelectItem,
+  items,
+  isLoading = false,
+  hasError = false,
 }: {
   selectedItemId: string;
   onSelectItem: (id: string) => void;
+  items?: DefenseFeedItemLive[];
+  isLoading?: boolean;
+  hasError?: boolean;
 }) {
+  const feedItems = items && items.length > 0 ? items : isLoading || hasError ? [] : defenseFeedItems;
   return (
     <div
       className="flex flex-col h-full"
@@ -145,14 +153,34 @@ export function DefenseIndustryFeedPanel({
         </div>
       </div>
       <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-2 defense-scrollbar">
-        {defenseFeedItems.map((item) => (
-          <FeedCard
-            key={item.id}
-            item={item}
-            isSelected={item.id === selectedItemId}
-            onClick={() => onSelectItem(item.id)}
-          />
-        ))}
+        {isLoading && feedItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+              Syncing defense feed…
+            </span>
+          </div>
+        ) : hasError && feedItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+              Defense feed unavailable.
+            </span>
+          </div>
+        ) : feedItems.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+              No defense-industry items detected.
+            </span>
+          </div>
+        ) : (
+          feedItems.map((item) => (
+            <FeedCard
+              key={item.id}
+              item={item}
+              isSelected={item.id === selectedItemId}
+              onClick={() => onSelectItem(item.id)}
+            />
+          ))
+        )}
       </div>
     </div>
   );

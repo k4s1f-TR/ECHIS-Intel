@@ -24,6 +24,13 @@ const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   "the-hacker-news",
   "defense-news-global",
   "dod-news",
+  // ── Defense Industry screen feeds ───────────────────────────────────────
+  "breaking-defense",
+  "securityweek",
+  "cisa-news",
+  "defensenews-all",
+  "the-war-zone",
+  "the-aviationist",
   // ── Turkish sources ─────────────────────────────────────────────────────
   "aa-en-live",
   "trt-haber-turkiye",

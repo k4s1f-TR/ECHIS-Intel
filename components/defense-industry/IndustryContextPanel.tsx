@@ -9,6 +9,7 @@ import {
   FileText,
 } from "lucide-react";
 import { defenseFeedItems } from "@/data/defenseIndustryMockData";
+import type { DefenseFeedItemLive } from "@/lib/defense";
 
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
@@ -124,8 +125,15 @@ function StatusBar({
   );
 }
 
-export function IndustryContextPanel({ selectedItemId }: { selectedItemId?: string }) {
-  const selected = defenseFeedItems.find((d) => d.id === selectedItemId) || defenseFeedItems[0];
+export function IndustryContextPanel({
+  selectedItemId,
+  items,
+}: {
+  selectedItemId?: string;
+  items?: DefenseFeedItemLive[];
+}) {
+  const source: DefenseFeedItemLive[] = items && items.length > 0 ? items : defenseFeedItems;
+  const selected = source.find((d) => d.id === selectedItemId) || source[0];
   const ctx = selected.context;
 
   return (

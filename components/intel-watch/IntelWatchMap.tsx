@@ -2,11 +2,12 @@
 
 import {
   Anchor,
-  Building2,
   ChevronLeft,
+  Download,
   Eye,
   EyeOff,
   Factory,
+  FolderOpen,
   Globe2,
   Info,
   Layers,
@@ -24,10 +25,11 @@ import {
   Target,
   Trash2,
   Undo2,
+  Upload,
   Warehouse,
   Waves,
 } from "lucide-react";
-import type { CSSProperties } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import maplibregl from "maplibre-gl";
@@ -44,17 +46,8 @@ const PANEL_WIDTH = 318;
 
 type Tool = "select" | "pin" | "line" | "area";
 type Severity = "critical" | "high" | "medium" | "low";
-type PinType = "naval" | "airdef" | "logistics" | "sigint" | "facility" | "incident";
+type PinType = "naval" | "airdef" | "logistics" | "sigint" | "facility";
 type LngLat = [number, number];
-
-type Layer = {
-  id: string;
-  name: string;
-  hue: string;
-  visible: boolean;
-  locked: boolean;
-  userCreated?: boolean;
-};
 
 type Pin = {
   id: string;
@@ -62,24 +55,27 @@ type Pin = {
   lat: number;
   type: PinType;
   severity: Severity;
-  layer: string;
   title: string;
   source: string;
   updated: string;
   note: string;
-  /** Analyst-placed pins are editable in the detail panel; seed pins are not. */
-  userCreated?: boolean;
 };
 
 type Annotation = {
   id: string;
   kind: "line" | "area";
-  layer: string;
   color: string;
   coordinates: LngLat[];
   /** Optional analyst label rendered next to the measurement on the map. */
   name?: string;
 };
+
+/** Pins + drawings snapshot — the unit of undo history and localStorage. */
+type WorkspaceSnapshot = { pins: Pin[]; annotations: Annotation[] };
+
+/** Persisted analyst workspace (survives tab switches / reloads). */
+const STORAGE_KEY = "echis.intel-watch.v1";
+const HISTORY_LIMIT = 50;
 
 type Selection =
   | { type: "pin"; id: string }
@@ -87,20 +83,19 @@ type Selection =
   | null;
 
 const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
-  critical: { label: "KRİTİK", color: "#ff2b3d" },
-  high: { label: "YÜKSEK", color: "#ff9533" },
-  medium: { label: "ORTA", color: "#ffd23d" },
-  low: { label: "DÜŞÜK", color: "#4fd1c5" },
+  critical: { label: "URGENT", color: "#ff2b3d" },
+  high: { label: "HIGH", color: "#ff9533" },
+  medium: { label: "MEDIUM", color: "#ffd23d" },
+  low: { label: "LOW", color: "#4fd1c5" },
 };
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
 
 const TYPE_META: Record<PinType, { label: string; Icon: LucideIcon }> = {
-  naval: { label: "Deniz", Icon: Waves },
-  airdef: { label: "Hava Sav.", Icon: Shield },
-  logistics: { label: "Lojistik", Icon: Warehouse },
+  naval: { label: "Naval", Icon: Waves },
+  airdef: { label: "Air Def.", Icon: Shield },
+  logistics: { label: "Logistics", Icon: Warehouse },
   sigint: { label: "SIGINT", Icon: Satellite },
-  facility: { label: "Tesis", Icon: Factory },
-  incident: { label: "Olay", Icon: Building2 },
+  facility: { label: "Facility", Icon: Factory },
 };
 const PIN_TYPE_ORDER: PinType[] = [
   "naval",
@@ -108,7 +103,6 @@ const PIN_TYPE_ORDER: PinType[] = [
   "logistics",
   "sigint",
   "facility",
-  "incident",
 ];
 
 /** Curated draw palette — theme-consistent hues shared by line & area tools. */
@@ -123,145 +117,82 @@ const DRAW_PALETTE = [
   "#c4ccd6",
 ];
 
-const DEFAULT_LAYERS: Layer[] = [
-  { id: "naval", name: "Deniz Faaliyeti", hue: "#4aa8ff", visible: true, locked: false },
-  { id: "airdef", name: "Hava Savunma", hue: "#ff2b3d", visible: true, locked: false },
-  { id: "logistics", name: "Lojistik & İkmal", hue: "#f5a623", visible: true, locked: false },
-  { id: "cyber", name: "Siber / SIGINT", hue: "#b06bff", visible: true, locked: false },
-  { id: "unrest", name: "Sivil Karışıklık", hue: "#ff5e7a", visible: true, locked: false },
-  { id: "annot", name: "Çizimlerim", hue: "#c4ccd6", visible: true, locked: false },
-];
-
-const INITIAL_PINS: Pin[] = [
-  {
-    id: "pin-tartus",
-    lng: 35.88,
-    lat: 34.9,
-    type: "naval",
-    severity: "high",
-    layer: "naval",
-    title: "Tartus liman faaliyeti izleme notu",
-    source: "Public maritime advisory / regional media",
-    updated: "12 dk önce",
-    note:
-      "Açık kaynaklarda liman çevresindeki rota uyarıları ve diplomatik açıklamalarda yoğunlaşma izleniyor. Girdi, kamuya açık denizcilik duyuruları ve bölgesel haber kapsamından türetilmiştir.",
-  },
-  {
-    id: "pin-kyiv",
-    lng: 30.52,
-    lat: 50.45,
-    type: "airdef",
-    severity: "critical",
-    layer: "airdef",
-    title: "Kiev hava savunma açıklamaları yoğunlaştı",
-    source: "Official statements / open-source reporting",
-    updated: "18 dk önce",
-    note:
-      "Kamuya açık açıklamalar ve medya raporlarında hava savunma kapasitesi, yardım paketleri ve sivil altyapı güvenliği başlıkları öne çıkıyor.",
-  },
-  {
-    id: "pin-suez",
-    lng: 32.55,
-    lat: 29.97,
-    type: "logistics",
-    severity: "medium",
-    layer: "logistics",
-    title: "Süveyş geçiş akışı lojistik takibi",
-    source: "Port authority notices / trade press",
-    updated: "31 dk önce",
-    note:
-      "Açık liman duyuruları ve ticaret basını, geçiş programları ile sigorta yorumlarında sınırlı ama izlenebilir hareketlilik gösteriyor.",
-  },
-  {
-    id: "pin-taipei",
-    lng: 121.56,
-    lat: 25.04,
-    type: "sigint",
-    severity: "high",
-    layer: "cyber",
-    title: "Tayvan çevresi kamu sinyal yoğunluğu",
-    source: "Public cyber advisories / media monitoring",
-    updated: "44 dk önce",
-    note:
-      "Kamuya açık siber uyarılar, medya izleme verileri ve resmi açıklamalarda bölgesel gerilimle ilişkili anma yoğunluğu artmış görünüyor.",
-  },
-  {
-    id: "pin-ankara",
-    lng: 32.86,
-    lat: 39.93,
-    type: "facility",
-    severity: "medium",
-    layer: "annot",
-    title: "Ankara diplomatik temas merkezi",
-    source: "Government calendar / regional media",
-    updated: "1 sa önce",
-    note:
-      "Kamu takvimleri ve bölgesel medya, savunma, enerji ve sınır güvenliği başlıklarında yoğun diplomatik temaslara işaret ediyor.",
-  },
-  {
-    id: "pin-bab",
-    lng: 43.33,
-    lat: 12.58,
-    type: "incident",
-    severity: "low",
-    layer: "unrest",
-    title: "Bab el-Mandeb denizcilik ihtiyat duyurusu",
-    source: "Maritime advisory / public reporting",
-    updated: "1 sa 24 dk önce",
-    note:
-      "Kamuya açık denizcilik uyarıları transit hatlarında ihtiyat tavsiyesi yayımladı; rota yönlendirmelerinde açık kaynaklı büyük değişiklik görülmüyor.",
-  },
-];
-
-const PIN_DETAIL_OVERRIDES: Record<
-  string,
-  Partial<Pick<Pin, "title" | "updated" | "note">>
-> = {
-  "pin-tartus": {
-    title: "Tartus port activity monitoring note",
-    updated: "12 min ago",
-    note:
-      "Open-source maritime advisories and regional reporting indicate increased attention around routing, port activity, and diplomatic messaging near Tartus. The signal is derived from public notices and media coverage, not from closed-source collection. Current reporting supports continued monitoring but does not confirm a discrete operational incident.",
-  },
-  "pin-kyiv": {
-    title: "Kyiv air-defense statements intensify",
-    updated: "18 min ago",
-    note:
-      "Public statements and open-source reporting show sustained emphasis on air-defense capacity, partner assistance, and civilian infrastructure protection around Kyiv. The item reflects a convergence of official messaging and media references. It should be treated as a public-source threat context note rather than a confirmed tactical update.",
-  },
-  "pin-suez": {
-    title: "Suez transit flow logistics watch",
-    updated: "31 min ago",
-    note:
-      "Port authority notices and trade-press references point to measurable attention around transit scheduling, insurance commentary, and logistics continuity through Suez. The available public material does not indicate a confirmed disruption. It does justify tracking because small routing changes can have downstream commercial impact.",
-  },
-  "pin-taipei": {
-    title: "Taiwan public signal density increase",
-    updated: "44 min ago",
-    note:
-      "Public cyber advisories, media-monitoring references, and official statements show increased mention density connected to Taiwan-related regional tension. The signal is informational and should not be read as evidence of a specific intrusion campaign. It provides context for tracking cyber and strategic communications activity in the area.",
-  },
-  "pin-ankara": {
-    title: "Ankara diplomatic contact hub",
-    updated: "1 hr ago",
-    note:
-      "Government calendars and regional media references indicate elevated diplomatic engagement in Ankara across defense, energy, and border-security topics. The available sources describe scheduling and public messaging rather than a single crisis event. The marker is useful as a context anchor for monitoring follow-on statements and partner reactions.",
-  },
-  "pin-bab": {
-    title: "Bab el-Mandeb maritime caution advisory",
-    updated: "1 hr 24 min ago",
-    note:
-      "Public maritime advisories recommend caution for transit lanes around Bab el-Mandeb, while open reporting has not confirmed a major routing change. The note reflects a watch condition based on public safety guidance and shipping-sector commentary. Continued monitoring is warranted because advisory language can shift quickly if threat reporting changes.",
-  },
-};
-
-const INITIAL_DISPLAY_PINS = INITIAL_PINS.map((pin) => ({
-  ...pin,
-  ...PIN_DETAIL_OVERRIDES[pin.id],
-}));
-
 function makeId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/* ----------------------------------------------------------------------- */
+/* Workspace sanitizers — shared by localStorage restore and GeoJSON import */
+/* so malformed input can never poison the map state.                       */
+/* ----------------------------------------------------------------------- */
+function sanitizePin(value: unknown): Pin | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const lng = Number(v.lng);
+  const lat = Number(v.lat);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  return {
+    id: typeof v.id === "string" && v.id ? v.id : makeId("pin"),
+    lng: Math.max(-180, Math.min(180, lng)),
+    lat: Math.max(-85, Math.min(85, lat)),
+    type: (PIN_TYPE_ORDER as string[]).includes(v.type as string)
+      ? (v.type as PinType)
+      : "facility",
+    severity: (SEVERITY_ORDER as string[]).includes(v.severity as string)
+      ? (v.severity as Severity)
+      : "medium",
+    title: typeof v.title === "string" && v.title ? v.title : "Untitled marker",
+    source: typeof v.source === "string" && v.source ? v.source : "Analyst input",
+    updated: typeof v.updated === "string" && v.updated ? v.updated : "—",
+    note: typeof v.note === "string" ? v.note : "",
+  };
+}
+
+/** Read + sanitize the persisted workspace (SSR-safe, corrupt-store-safe). */
+function readStoredWorkspace(): WorkspaceSnapshot {
+  const empty: WorkspaceSnapshot = { pins: [], annotations: [] };
+  if (typeof window === "undefined") return empty;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as Partial<WorkspaceSnapshot>;
+    return {
+      pins: Array.isArray(parsed.pins)
+        ? parsed.pins.map(sanitizePin).filter((pin): pin is Pin => pin !== null)
+        : [],
+      annotations: Array.isArray(parsed.annotations)
+        ? parsed.annotations
+            .map(sanitizeAnnotation)
+            .filter((annotation): annotation is Annotation => annotation !== null)
+        : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function sanitizeAnnotation(value: unknown): Annotation | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const kind = v.kind === "area" ? "area" : v.kind === "line" ? "line" : null;
+  if (!kind) return null;
+  const coordinates = Array.isArray(v.coordinates)
+    ? v.coordinates
+        .map((c) =>
+          Array.isArray(c) && Number.isFinite(Number(c[0])) && Number.isFinite(Number(c[1]))
+            ? ([Number(c[0]), Number(c[1])] as LngLat)
+            : null,
+        )
+        .filter((c): c is LngLat => c !== null)
+    : [];
+  if (coordinates.length < (kind === "line" ? 2 : 3)) return null;
+  return {
+    id: typeof v.id === "string" && v.id ? v.id : makeId("annotation"),
+    kind,
+    color: typeof v.color === "string" && v.color ? v.color : DRAW_PALETTE[3],
+    coordinates,
+    name: typeof v.name === "string" && v.name ? v.name : undefined,
+  };
 }
 
 function formatCoordinate(lat: number, lng: number) {
@@ -318,14 +249,14 @@ function polygonAreaKm2(coordinates: LngLat[]) {
 function formatKm(value: number, unit: string) {
   const text =
     value >= 100
-      ? Math.round(value).toLocaleString("tr-TR")
-      : value.toFixed(1).replace(".", ",");
+      ? Math.round(value).toLocaleString("en-US")
+      : value.toFixed(1);
   return `${text} ${unit}`;
 }
 
 function annotationMeasurement(annotation: Pick<Annotation, "kind" | "coordinates">) {
   return annotation.kind === "area"
-    ? formatKm(polygonAreaKm2(annotation.coordinates), "km²")
+    ? formatKm(polygonAreaKm2(annotation.coordinates), "sq km")
     : formatKm(lineLengthKm(annotation.coordinates), "km");
 }
 
@@ -356,7 +287,7 @@ const PINS_LAYER = "iw-pins-dot";
 const ANNOTATION_HIT_LAYERS = ["iw-annotations-fill", "iw-annotations-line"];
 
 /**
- * Toggleable map data overlays shown in the left "VERİ KATMANLARI" panel.
+ * Toggleable map data overlays shown in the left "DATA LAYERS" panel.
  * Add a new entry here (id + label + dot colour + its MapLibre layer id) to
  * expose another dataset toggle — the panel renders from this list.
  */
@@ -370,17 +301,47 @@ type MapOverlay = {
   defaultVisible?: boolean;
 };
 const MAP_OVERLAYS: MapOverlay[] = [
-  { id: "airbases", label: "Üsler", color: "#e0a82e", layerId: AIRBASES_LAYER, Icon: Plane },
+  { id: "airbases", label: "Airbases", color: "#e0a82e", layerId: AIRBASES_LAYER, Icon: Plane },
   { id: "chokepoints", label: "Chokepoints", color: "#4fd1c5", layerId: CHOKEPOINTS_LAYER, Icon: Waves },
-  { id: "ports", label: "Limanlar", color: "#4aa8ff", layerId: PORTS_LAYER, Icon: Anchor, defaultVisible: false },
+  { id: "ports", label: "Ports", color: "#4aa8ff", layerId: PORTS_LAYER, Icon: Anchor },
   {
     id: "nuclear-facilities",
-    label: "Nükleer Tesis",
+    label: "Nuclear Facilities",
     color: "#9cff6a",
     layerId: NUCLEAR_FACILITIES_LAYER,
     Icon: Radiation,
   },
 ];
+
+/* ----------------------------------------------------------------------- */
+/* Panel search — searches analyst pins/drawings plus the overlay datasets. */
+/* The overlay name index is fetched lazily on first search interaction     */
+/* (same /public URLs the map streams, so the browser cache is shared).     */
+/* ----------------------------------------------------------------------- */
+type SearchHit = {
+  id: string;
+  kind: "pin" | "annotation" | "overlay";
+  /** Which MAP_OVERLAYS toggle the hit belongs to (overlay hits only). */
+  overlayId?: string;
+  label: string;
+  sub: string;
+  color: string;
+  lng: number;
+  lat: number;
+};
+
+const SEARCH_DATASETS: { url: string; overlayId: string; sub: string; color: string }[] = [
+  { url: AIRBASES_DATA_URL, overlayId: "airbases", sub: "Airbase", color: "#e0a82e" },
+  { url: CHOKEPOINTS_DATA_URL, overlayId: "chokepoints", sub: "Chokepoint", color: "#4fd1c5" },
+  { url: PORTS_DATA_URL, overlayId: "ports", sub: "Port", color: "#4aa8ff" },
+  {
+    url: NUCLEAR_FACILITIES_DATA_URL,
+    overlayId: "nuclear-facilities",
+    sub: "Nuclear facility",
+    color: "#9cff6a",
+  },
+];
+const SEARCH_RESULT_LIMIT = 12;
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -401,18 +362,18 @@ function buildAirbasePopup(p: Record<string, unknown>) {
   const sub = [country, p.status].filter(Boolean).map(escapeHtml).join(" · ");
   return (
     `<div class="iw-ab">` +
-    `<div class="iw-ab-title">${escapeHtml(p.name || "Hava Üssü")}</div>` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Air Base")}</div>` +
     (sub ? `<div class="iw-ab-sub">${sub}</div>` : "") +
     `<div class="iw-ab-meta">` +
-    airbaseRow("Kullanım", p.usage) +
-    airbaseRow("Kuruluş", p.operating_organization) +
-    (codes ? `<div class="iw-ab-row"><span>Kod</span><b>${codes}</b></div>` : "") +
-    airbaseRow("Yıl", p.year_built) +
-    airbaseRow("İrtifa", p.elevation) +
-    airbaseRow("Pist", p.runways) +
+    airbaseRow("Use", p.usage) +
+    airbaseRow("Operator", p.operating_organization) +
+    (codes ? `<div class="iw-ab-row"><span>Code</span><b>${codes}</b></div>` : "") +
+    airbaseRow("Year", p.year_built) +
+    airbaseRow("Elevation", p.elevation) +
+    airbaseRow("Runway", p.runways) +
     `</div>` +
     (p.url
-      ? `<a class="iw-ab-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">Kaynak ↗</a>`
+      ? `<a class="iw-ab-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">Source -></a>`
       : "") +
     `</div>`
   );
@@ -424,8 +385,8 @@ function buildChokepointPopup(p: Record<string, unknown>) {
     `<div class="iw-ab-title">${escapeHtml(p.name || "Chokepoint")}</div>` +
     (p.region ? `<div class="iw-ab-sub">${escapeHtml(p.region)}</div>` : "") +
     `<div class="iw-ab-meta">` +
-    airbaseRow("Tür", "Maritime chokepoint") +
-    airbaseRow("Bölge", p.region) +
+    airbaseRow("Type", "Maritime chokepoint") +
+    airbaseRow("Region", p.region) +
     `</div>` +
     `</div>`
   );
@@ -436,14 +397,14 @@ function buildPortPopup(p: Record<string, unknown>) {
     p.latitude != null && p.longitude != null ? `${p.latitude}, ${p.longitude}` : "";
   return (
     `<div class="iw-ab">` +
-    `<div class="iw-ab-title">${escapeHtml(p.name || "Liman")}</div>` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Port")}</div>` +
     (p.country ? `<div class="iw-ab-sub">${escapeHtml(p.country)}</div>` : "") +
     `<div class="iw-ab-meta">` +
-    airbaseRow("Liman boyutu", p.harbor_size) +
-    airbaseRow("Liman tipi", p.harbor_type) +
-    airbaseRow("Barınak", p.shelter) +
-    airbaseRow("Giriş limanı", p.port_of_entry) +
-    airbaseRow("Koordinat", coords) +
+    airbaseRow("Harbor size", p.harbor_size) +
+    airbaseRow("Harbor type", p.harbor_type) +
+    airbaseRow("Shelter", p.shelter) +
+    airbaseRow("Port of entry", p.port_of_entry) +
+    airbaseRow("Coordinates", coords) +
     `</div>` +
     `</div>`
   );
@@ -455,15 +416,37 @@ function buildNuclearFacilityPopup(p: Record<string, unknown>) {
   const sub = [p.country, p.location].filter(Boolean).map(escapeHtml).join(" · ");
   return (
     `<div class="iw-ab">` +
-    `<div class="iw-ab-title">${escapeHtml(p.name || "Nükleer Tesis")}</div>` +
+    `<div class="iw-ab-title">${escapeHtml(p.name || "Nuclear Facility")}</div>` +
     (sub ? `<div class="iw-ab-sub">${sub}</div>` : "") +
     `<div class="iw-ab-meta">` +
-    airbaseRow("Sınıf", p.group_label) +
-    airbaseRow("Kategori", p.category) +
-    airbaseRow("İşlev", p.function) +
-    airbaseRow("Koordinat", coords) +
+    airbaseRow("Class", p.group_label) +
+    airbaseRow("Category", p.category) +
+    airbaseRow("Function", p.function) +
+    airbaseRow("Coordinates", coords) +
     `</div>` +
     `</div>`
+  );
+}
+
+function SearchHitRow({
+  hit,
+  onSelect,
+}: {
+  hit: SearchHit;
+  onSelect: (hit: SearchHit) => void;
+}) {
+  return (
+    <button
+      className="iw-search-hit"
+      type="button"
+      onClick={() => onSelect(hit)}
+    >
+      <span className="iw-search-hit-dot" style={{ background: hit.color }} />
+      <span className="iw-search-hit-copy">
+        <span className="iw-search-hit-label">{hit.label}</span>
+        <span className="iw-search-hit-sub">{hit.sub}</span>
+      </span>
+    </button>
   );
 }
 
@@ -507,11 +490,13 @@ export function IntelWatchMap() {
   const [mapFullyLoaded, setMapFullyLoaded] = useState(false);
   const [loaderGone, setLoaderGone] = useState(false);
   const [tool, setTool] = useState<Tool>("select");
-  const [layers, setLayers] = useState<Layer[]>(DEFAULT_LAYERS);
-  const [pins, setPins] = useState<Pin[]>(INITIAL_DISPLAY_PINS);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  // Workspace state is restored from localStorage so analyst work survives
+  // tab switches and reloads.
+  const [pins, setPins] = useState<Pin[]>(() => readStoredWorkspace().pins);
+  const [annotations, setAnnotations] = useState<Annotation[]>(
+    () => readStoredWorkspace().annotations,
+  );
   const [draft, setDraft] = useState<LngLat[]>([]);
-  const [activeLayer, setActiveLayer] = useState("annot");
   const [searchQuery, setSearchQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
   const [drawColor, setDrawColor] = useState(DRAW_PALETTE[3]);
@@ -523,15 +508,49 @@ export function IntelWatchMap() {
       ),
   );
   const [cursorCoordinate, setCursorCoordinate] = useState<LngLat>(ECHIS_VIEW.center);
+  // Right-panel tab (shown while nothing is selected on the map).
+  const [panelTab, setPanelTab] = useState<"layers" | "workspace">("layers");
+  // Undo history — snapshots pushed right before every structural change.
+  const [history, setHistory] = useState<WorkspaceSnapshot[]>([]);
+  // Two-step "Clear" confirmation (auto-resets after a short window).
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmClearTimer = useRef<number | null>(null);
+  // Transient status line for GeoJSON import/export feedback.
+  const [transferNote, setTransferNote] = useState<string | null>(null);
+  const transferNoteTimer = useRef<number | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  // Overlay name index for the panel search; null until first fetch resolves.
+  const [overlayIndex, setOverlayIndex] = useState<SearchHit[] | null>(null);
+  const overlayIndexRequested = useRef(false);
 
-  const layerMap = useMemo(() => {
-    const map = new Map<string, Layer>();
-    layers.forEach((layer) => map.set(layer.id, layer));
-    return map;
-  }, [layers]);
+  // Committed workspace mirror so stable callbacks can snapshot pre-mutation
+  // state without re-binding on every pins/annotations change.
+  const workspaceRef = useRef<WorkspaceSnapshot>({ pins: [], annotations: [] });
+  useEffect(() => {
+    workspaceRef.current = { pins, annotations };
+  }, [pins, annotations]);
 
-  const totalPins = pins.length;
-  const criticalPins = pins.filter((pin) => pin.severity === "critical").length;
+  const pushHistory = useCallback((snapshot?: WorkspaceSnapshot) => {
+    const entry = snapshot ?? workspaceRef.current;
+    setHistory((current) => [...current.slice(-(HISTORY_LIMIT - 1)), entry]);
+  }, []);
+
+  // Keep localStorage in sync with the analyst workspace.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ pins, annotations }));
+    } catch {
+      // Storage full/unavailable — the in-memory workspace keeps working.
+    }
+  }, [pins, annotations]);
+
+  useEffect(
+    () => () => {
+      if (confirmClearTimer.current) window.clearTimeout(confirmClearTimer.current);
+      if (transferNoteTimer.current) window.clearTimeout(transferNoteTimer.current);
+    },
+    [],
+  );
 
   const selectedPin = useMemo(
     () =>
@@ -558,13 +577,91 @@ export function IntelWatchMap() {
     return formatKm(lineLengthKm(draft), "km");
   }, [draft, tool]);
 
-  const getWritableLayer = useCallback(() => {
-    return (
-      layers.find((layer) => layer.id === activeLayer && !layer.locked) ??
-      layers.find((layer) => !layer.locked) ??
-      null
-    );
-  }, [activeLayer, layers]);
+  // Lazily build the overlay search index on first search interaction.
+  const ensureOverlayIndex = useCallback(() => {
+    if (overlayIndexRequested.current) return;
+    overlayIndexRequested.current = true;
+    Promise.all(
+      SEARCH_DATASETS.map(async (dataset) => {
+        try {
+          const response = await fetch(dataset.url);
+          if (!response.ok) return [] as SearchHit[];
+          const json = (await response.json()) as {
+            features?: {
+              geometry?: { type?: string; coordinates?: number[] };
+              properties?: Record<string, unknown>;
+            }[];
+          };
+          const features = Array.isArray(json?.features) ? json.features : [];
+          return features.flatMap((feature, index) => {
+            const name = feature?.properties?.name;
+            const coordinates = feature?.geometry?.coordinates;
+            if (
+              feature?.geometry?.type !== "Point" ||
+              typeof name !== "string" ||
+              !name ||
+              !Array.isArray(coordinates) ||
+              !Number.isFinite(coordinates[0]) ||
+              !Number.isFinite(coordinates[1])
+            ) {
+              return [] as SearchHit[];
+            }
+            return [
+              {
+                id: `${dataset.overlayId}-${index}`,
+                kind: "overlay" as const,
+                overlayId: dataset.overlayId,
+                label: name,
+                sub: dataset.sub,
+                color: dataset.color,
+                lng: coordinates[0],
+                lat: coordinates[1],
+              },
+            ];
+          });
+        } catch {
+          return [] as SearchHit[];
+        }
+      }),
+    ).then((groups) => setOverlayIndex(groups.flat()));
+  }, []);
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase("en-US");
+    if (query.length < 2) return [] as SearchHit[];
+    const matches = (value: string) => value.toLocaleLowerCase("en-US").includes(query);
+    const hits: SearchHit[] = [];
+    for (const pin of pins) {
+      if (!matches(pin.title) && !matches(pin.note)) continue;
+      hits.push({
+        id: pin.id,
+        kind: "pin",
+        label: pin.title,
+        sub: `${TYPE_META[pin.type].label} marker`,
+        color: SEVERITY_META[pin.severity].color,
+        lng: pin.lng,
+        lat: pin.lat,
+      });
+    }
+    for (const annotation of annotations) {
+      if (!annotation.name || !matches(annotation.name)) continue;
+      const [lng, lat] = annotationAnchor(annotation.coordinates);
+      hits.push({
+        id: annotation.id,
+        kind: "annotation",
+        label: annotation.name,
+        sub: annotation.kind === "area" ? "Area drawing" : "Line drawing",
+        color: annotation.color,
+        lng,
+        lat,
+      });
+    }
+    for (const hit of overlayIndex ?? []) {
+      if (hits.length >= SEARCH_RESULT_LIMIT) break;
+      if (matches(hit.label)) hits.push(hit);
+    }
+    return hits.slice(0, SEARCH_RESULT_LIMIT);
+  }, [annotations, overlayIndex, pins, searchQuery]);
 
   // Create the MapLibre command basemap once and own the camera/render state.
   useEffect(() => {
@@ -622,28 +719,19 @@ export function IntelWatchMap() {
     const minPoints = tool === "line" ? 2 : 3;
     if (draft.length < minPoints) return;
 
-    const layer = getWritableLayer();
-    if (!layer) return;
-
-    setActiveLayer(layer.id);
-    setLayers((currentLayers) =>
-      currentLayers.map((item) =>
-        item.id === layer.id ? { ...item, visible: true } : item,
-      ),
-    );
     const nextAnnotation: Annotation = {
       id: makeId("annotation"),
       kind: tool,
-      layer: layer.id,
       color: drawColor,
       coordinates: draft,
     };
+    pushHistory();
     setAnnotations((current) => [...current, nextAnnotation]);
     setDraft([]);
     setTool("select");
     // Open the annotation in the detail panel so it can be named right away.
     setSelection({ type: "annotation", id: nextAnnotation.id });
-  }, [draft, drawColor, getWritableLayer, tool]);
+  }, [draft, drawColor, pushHistory, tool]);
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
@@ -685,27 +773,18 @@ export function IntelWatchMap() {
   const handleMapPlace = useCallback(
     (coordinate: LngLat) => {
       if (tool === "pin") {
-        const layer = getWritableLayer();
-        if (!layer) return;
         const nextPin: Pin = {
           id: makeId("pin"),
           lng: coordinate[0],
           lat: coordinate[1],
           type: "facility",
           severity: "medium",
-          layer: layer.id,
-          title: `Yeni ${TYPE_META.facility.label} işareti`,
-          source: "Analist girdisi",
-          updated: "Şimdi",
-          note: "Harita üzerine eklenen kullanıcı işareti. Başlık, tür, önem ve not alanları detay panelinden düzenlenebilir.",
-          userCreated: true,
+          title: `New ${TYPE_META.facility.label} marker`,
+          source: "Analyst input",
+          updated: "Now",
+          note: "User marker added on the map. Title, type, priority, and note can be edited from the detail panel.",
         };
-        setActiveLayer(layer.id);
-        setLayers((currentLayers) =>
-          currentLayers.map((item) =>
-            item.id === layer.id ? { ...item, visible: true } : item,
-          ),
-        );
+        pushHistory();
         setPins((current) => [...current, nextPin]);
         // Open the new pin in the detail panel so it can be titled right away.
         setSelection({ type: "pin", id: nextPin.id });
@@ -716,7 +795,7 @@ export function IntelWatchMap() {
         setDraft((current) => [...current, coordinate]);
       }
     },
-    [tool, getWritableLayer],
+    [tool, pushHistory],
   );
 
   // Bind map click (place) + dbl-click (finish) to the current handlers.
@@ -1041,19 +1120,180 @@ export function IntelWatchMap() {
     setOverlayVisibility((current) => ({ ...current, [id]: !current[id] }));
   }
 
+  // Undo: first steps back through the active draft, then pops the last
+  // workspace snapshot (covers pin/drawing add, delete, move, clear, import).
   function handleUndo() {
     if ((tool === "line" || tool === "area") && draft.length > 0) {
       setDraft((current) => current.slice(0, -1));
       return;
     }
-    setAnnotations((current) => current.slice(0, -1));
+    const last = history[history.length - 1];
+    if (!last) return;
+    setHistory((current) => current.slice(0, -1));
+    setPins(last.pins);
+    setAnnotations(last.annotations);
+    setSelection(null);
   }
 
+  // Clear: two-step confirm — first click arms the button, second click
+  // wipes pins + drawings (undoable via the history snapshot).
   function handleClear() {
+    if (draft.length === 0 && annotations.length === 0 && pins.length === 0) return;
+    if (!confirmClear) {
+      setConfirmClear(true);
+      if (confirmClearTimer.current) window.clearTimeout(confirmClearTimer.current);
+      confirmClearTimer.current = window.setTimeout(() => setConfirmClear(false), 3500);
+      return;
+    }
+    if (confirmClearTimer.current) window.clearTimeout(confirmClearTimer.current);
+    setConfirmClear(false);
+    pushHistory();
     setDraft([]);
     setAnnotations([]);
-    if (selection?.type === "annotation") setSelection(null);
+    setPins([]);
+    setSelection(null);
   }
+
+  function showTransferNote(message: string) {
+    setTransferNote(message);
+    if (transferNoteTimer.current) window.clearTimeout(transferNoteTimer.current);
+    transferNoteTimer.current = window.setTimeout(() => setTransferNote(null), 6000);
+  }
+
+  // Export the analyst workspace as a plain GeoJSON FeatureCollection.
+  function handleExport() {
+    if (pins.length === 0 && annotations.length === 0) return;
+    const featureCollection = {
+      type: "FeatureCollection",
+      features: [
+        ...pins.map((pin) => ({
+          type: "Feature",
+          properties: {
+            echisKind: "pin",
+            title: pin.title,
+            type: pin.type,
+            severity: pin.severity,
+            note: pin.note,
+            source: pin.source,
+            updated: pin.updated,
+          },
+          geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
+        })),
+        ...annotations.map((annotation) => ({
+          type: "Feature",
+          properties: {
+            echisKind: "annotation",
+            name: annotation.name ?? "",
+            color: annotation.color,
+          },
+          geometry:
+            annotation.kind === "area"
+              ? {
+                  type: "Polygon",
+                  coordinates: [[...annotation.coordinates, annotation.coordinates[0]]],
+                }
+              : { type: "LineString", coordinates: annotation.coordinates },
+        })),
+      ],
+    };
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    const blob = new Blob([JSON.stringify(featureCollection, null, 2)], {
+      type: "application/geo+json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `intel-watch-${stamp}.geojson`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    showTransferNote(`${pins.length} markers, ${annotations.length} drawings exported.`);
+  }
+
+  // Import a GeoJSON file: Points become pins, LineStrings/Polygons drawings.
+  function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as {
+          features?: {
+            geometry?: { type?: string; coordinates?: unknown };
+            properties?: Record<string, unknown>;
+          }[];
+        };
+        const features = Array.isArray(parsed?.features) ? parsed.features : [];
+        const importedPins: Pin[] = [];
+        const importedAnnotations: Annotation[] = [];
+        for (const feature of features) {
+          const geometry = feature?.geometry;
+          const properties = feature?.properties ?? {};
+          if (geometry?.type === "Point" && Array.isArray(geometry.coordinates)) {
+            const pin = sanitizePin({
+              ...properties,
+              id: undefined,
+              lng: geometry.coordinates[0],
+              lat: geometry.coordinates[1],
+            });
+            if (pin) importedPins.push(pin);
+          } else if (geometry?.type === "LineString") {
+            const annotation = sanitizeAnnotation({
+              ...properties,
+              id: undefined,
+              kind: "line",
+              coordinates: geometry.coordinates,
+            });
+            if (annotation) importedAnnotations.push(annotation);
+          } else if (geometry?.type === "Polygon" && Array.isArray(geometry.coordinates)) {
+            const ring = Array.isArray(geometry.coordinates[0])
+              ? (geometry.coordinates[0] as unknown[]).slice(0, -1)
+              : [];
+            const annotation = sanitizeAnnotation({
+              ...properties,
+              id: undefined,
+              kind: "area",
+              coordinates: ring,
+            });
+            if (annotation) importedAnnotations.push(annotation);
+          }
+        }
+        if (!importedPins.length && !importedAnnotations.length) {
+          showTransferNote("No importable items were found in the file.");
+          return;
+        }
+        pushHistory();
+        setPins((current) => [...current, ...importedPins]);
+        setAnnotations((current) => [...current, ...importedAnnotations]);
+        showTransferNote(
+          `${importedPins.length} markers, ${importedAnnotations.length} drawings imported.`,
+        );
+      } catch {
+        showTransferNote("File could not be read - it is not valid GeoJSON.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Search result: select + fly to the hit; reveal its overlay if hidden.
+  const handleSearchHit = useCallback((hit: SearchHit) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (hit.kind === "pin") {
+      setSelection({ type: "pin", id: hit.id });
+    } else if (hit.kind === "annotation") {
+      setSelection({ type: "annotation", id: hit.id });
+    } else if (hit.overlayId) {
+      const overlayId = hit.overlayId;
+      setOverlayVisibility((current) => ({ ...current, [overlayId]: true }));
+    }
+    map.flyTo({
+      center: [hit.lng, hit.lat],
+      zoom: Math.max(map.getZoom(), 6.5),
+      duration: 900,
+    });
+    setSearchQuery("");
+  }, []);
 
   function handleButtonZoom(direction: "in" | "out") {
     if (direction === "in") mapRef.current?.zoomIn();
@@ -1071,7 +1311,7 @@ export function IntelWatchMap() {
   function updatePin(pinId: string, patch: Partial<Pin>) {
     setPins((current) =>
       current.map((pin) =>
-        pin.id === pinId ? { ...pin, ...patch, updated: "Şimdi" } : pin,
+        pin.id === pinId ? { ...pin, ...patch, updated: "Now" } : pin,
       ),
     );
   }
@@ -1085,11 +1325,13 @@ export function IntelWatchMap() {
   }
 
   function handleDeletePin(pinId: string) {
+    pushHistory();
     setPins((current) => current.filter((pin) => pin.id !== pinId));
     setSelection(null);
   }
 
   function handleDeleteAnnotation(annotationId: string) {
+    pushHistory();
     setAnnotations((current) =>
       current.filter((annotation) => annotation.id !== annotationId),
     );
@@ -1128,26 +1370,24 @@ export function IntelWatchMap() {
 
     const annotationData: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
-      features: annotations
-        .filter((annotation) => layerMap.get(annotation.layer)?.visible ?? true)
-        .map((annotation) => ({
-          type: "Feature",
-          properties: {
-            id: annotation.id,
-            color: annotation.color,
-            selected:
-              selection?.type === "annotation" && selection.id === annotation.id,
-          },
-          geometry:
-            annotation.kind === "area"
-              ? {
-                  type: "Polygon",
-                  coordinates: [
-                    [...annotation.coordinates, annotation.coordinates[0]],
-                  ],
-                }
-              : { type: "LineString", coordinates: annotation.coordinates },
-        })),
+      features: annotations.map((annotation) => ({
+        type: "Feature",
+        properties: {
+          id: annotation.id,
+          color: annotation.color,
+          selected:
+            selection?.type === "annotation" && selection.id === annotation.id,
+        },
+        geometry:
+          annotation.kind === "area"
+            ? {
+                type: "Polygon",
+                coordinates: [
+                  [...annotation.coordinates, annotation.coordinates[0]],
+                ],
+              }
+            : { type: "LineString", coordinates: annotation.coordinates },
+      })),
     };
 
     const draftData: GeoJSON.FeatureCollection = {
@@ -1215,7 +1455,7 @@ export function IntelWatchMap() {
         },
       });
     }
-  }, [annotations, draft, layerMap, mapReady, selection]);
+  }, [annotations, draft, mapReady, selection]);
 
   // Analyst pins — severity-coloured circle layer with a selection ring.
   useEffect(() => {
@@ -1225,17 +1465,15 @@ export function IntelWatchMap() {
 
     const pinData: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
-      features: pins
-        .filter((pin) => layerMap.get(pin.layer)?.visible ?? true)
-        .map((pin) => ({
-          type: "Feature",
-          properties: {
-            id: pin.id,
-            severity: pin.severity,
-            selected: selection?.type === "pin" && selection.id === pin.id,
-          },
-          geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
-        })),
+      features: pins.map((pin) => ({
+        type: "Feature",
+        properties: {
+          id: pin.id,
+          severity: pin.severity,
+          selected: selection?.type === "pin" && selection.id === pin.id,
+        },
+        geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
+      })),
     };
 
     const pinSource = map.getSource(PINS_SOURCE);
@@ -1288,7 +1526,57 @@ export function IntelWatchMap() {
         },
       });
     }
-  }, [pins, layerMap, mapReady, selection]);
+  }, [pins, mapReady, selection]);
+
+  // Drag-to-move for analyst pins: with the select tool, mousedown on a pin
+  // grabs it; the map pan is suppressed for that gesture via preventDefault.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    let draggingId: string | null = null;
+    let moved = false;
+    let dragSnapshot: WorkspaceSnapshot | null = null;
+
+    const onMove = (event: maplibregl.MapMouseEvent) => {
+      if (!draggingId) return;
+      moved = true;
+      const { lng, lat } = event.lngLat;
+      setPins((current) =>
+        current.map((pin) =>
+          pin.id === draggingId ? { ...pin, lng, lat, updated: "Now" } : pin,
+        ),
+      );
+    };
+    const onUp = () => {
+      if (!draggingId) return;
+      if (moved && dragSnapshot) pushHistory(dragSnapshot);
+      draggingId = null;
+      dragSnapshot = null;
+      map.off("mousemove", onMove);
+      map.getCanvas().style.cursor = toolCursor(toolRef.current);
+    };
+    const onDown = (event: maplibregl.MapLayerMouseEvent) => {
+      if (toolRef.current !== "select") return;
+      const id = event.features?.[0]?.properties?.id;
+      if (!id) return;
+      event.preventDefault(); // keep dragPan from grabbing this gesture
+      draggingId = String(id);
+      moved = false;
+      dragSnapshot = workspaceRef.current;
+      map.getCanvas().style.cursor = "grabbing";
+      map.on("mousemove", onMove);
+    };
+
+    map.on("mousedown", PINS_LAYER, onDown);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      map.off("mousedown", PINS_LAYER, onDown);
+      map.off("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [mapReady, pushHistory]);
 
   // Pointer cursor over selectable pins/drawings while the select tool is on.
   useEffect(() => {
@@ -1326,32 +1614,30 @@ export function IntelWatchMap() {
     annotationMarkersRef.current.forEach((marker) => marker.remove());
     annotationMarkersRef.current = [];
 
-    annotations
-      .filter((annotation) => layerMap.get(annotation.layer)?.visible ?? true)
-      .forEach((annotation) => {
-        const element = document.createElement("button");
-        element.type = "button";
-        element.className = "iw-anno-label";
-        element.style.setProperty("--anno-color", annotation.color);
-        element.textContent = annotation.name
-          ? `${annotation.name} · ${annotationMeasurement(annotation)}`
-          : annotationMeasurement(annotation);
-        element.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (toolRef.current !== "select") return;
-          setSelection({ type: "annotation", id: annotation.id });
-        });
-        const marker = new maplibregl.Marker({ element, anchor: "center" })
-          .setLngLat(annotationAnchor(annotation.coordinates))
-          .addTo(map);
-        annotationMarkersRef.current.push(marker);
+    annotations.forEach((annotation) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = "iw-anno-label";
+      element.style.setProperty("--anno-color", annotation.color);
+      element.textContent = annotation.name
+        ? `${annotation.name} · ${annotationMeasurement(annotation)}`
+        : annotationMeasurement(annotation);
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (toolRef.current !== "select") return;
+        setSelection({ type: "annotation", id: annotation.id });
       });
+      const marker = new maplibregl.Marker({ element, anchor: "center" })
+        .setLngLat(annotationAnchor(annotation.coordinates))
+        .addTo(map);
+      annotationMarkersRef.current.push(marker);
+    });
 
     return () => {
       annotationMarkersRef.current.forEach((marker) => marker.remove());
       annotationMarkersRef.current = [];
     };
-  }, [annotations, layerMap, mapReady]);
+  }, [annotations, mapReady]);
 
   const mapReadout = formatCoordinate(cursorCoordinate[1], cursorCoordinate[0]);
 
@@ -1380,92 +1666,6 @@ export function IntelWatchMap() {
           font: inherit;
         }
 
-        .iw-topbar {
-          position: absolute;
-          inset: 0 0 auto 0;
-          z-index: 30;
-          height: 48px;
-          display: grid;
-          grid-template-columns: minmax(280px, 1fr) minmax(180px, 360px) minmax(250px, 1fr);
-          align-items: center;
-          gap: 12px;
-          padding: 0 14px;
-          background: var(--iw-black);
-          border-bottom: 1px solid var(--c-border-1);
-        }
-
-        .iw-top-left,
-        .iw-top-right,
-        .iw-brand,
-        .iw-live-pill,
-        .iw-analyst,
-        .iw-clock,
-        .iw-search {
-          display: flex;
-          align-items: center;
-        }
-
-        .iw-top-left {
-          gap: 16px;
-          min-width: 0;
-        }
-
-        .iw-brand {
-          gap: 9px;
-          flex: 0 0 auto;
-        }
-
-        .iw-logo {
-          width: 26px;
-          height: 26px;
-          display: grid;
-          place-items: center;
-          border-radius: 6px;
-          background: linear-gradient(150deg, #ff2b3d, #b3121f);
-          box-shadow: 0 0 16px rgba(255, 43, 61, 0.45);
-          color: var(--c-panel-bg);
-        }
-
-        .iw-wordmark {
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 15px;
-          font-weight: 700;
-          letter-spacing: 0.16em;
-          color: var(--c-t1);
-        }
-
-        .iw-divider {
-          width: 1px;
-          height: 18px;
-          flex: 0 0 auto;
-          background: var(--c-border-1);
-        }
-
-        .iw-kicker {
-          overflow: hidden;
-          color: var(--c-t4);
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 11.5px;
-          font-weight: 500;
-          letter-spacing: 0.05em;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .iw-live-pill {
-          gap: 6px;
-          padding: 3px 8px;
-          border: 1px solid rgba(255, 43, 61, 0.30);
-          border-radius: 5px;
-          background: rgba(255, 43, 61, 0.08);
-          color: #ff6470;
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8.5px;
-          font-weight: 500;
-          letter-spacing: 0.14em;
-          line-height: 1;
-        }
-
         .iw-dot {
           width: 6px;
           height: 6px;
@@ -1477,7 +1677,8 @@ export function IntelWatchMap() {
 
         .iw-search {
           position: relative;
-          justify-self: center;
+          display: flex;
+          align-items: center;
           width: 100%;
           max-width: 420px;
           height: 30px;
@@ -1536,65 +1737,76 @@ export function IntelWatchMap() {
           color: var(--c-t4);
         }
 
-        .iw-top-right {
-          justify-content: flex-end;
-          gap: 18px;
+        /* Panel search results — inline list under the search input. */
+        .iw-search-results {
+          flex: 0 0 auto;
+          display: grid;
+          gap: 2px;
+          max-height: 218px;
+          overflow-y: auto;
+          margin: 0 11px 8px;
+          padding: 4px;
+          border: 1px solid var(--c-border-2);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.014);
+        }
+
+        .iw-search-hit {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          width: 100%;
+          padding: 5px 7px;
+          border: 0;
+          border-radius: 6px;
+          background: transparent;
+          color: var(--c-t3);
+          cursor: pointer;
+          text-align: left;
+          transition: background 140ms ease;
+        }
+
+        .iw-search-hit:hover {
+          background: rgba(255, 43, 61, 0.08);
+        }
+
+        .iw-search-hit-dot {
+          width: 7px;
+          height: 7px;
+          flex: 0 0 auto;
+          border-radius: 50%;
+        }
+
+        .iw-search-hit-copy {
+          display: grid;
           min-width: 0;
+          gap: 2px;
         }
 
-        .iw-clock {
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 4px;
-          min-width: 0;
+        .iw-search-hit-label {
+          overflow: hidden;
+          color: var(--c-t2);
+          font-size: 9.6px;
+          font-weight: 600;
+          line-height: 1.15;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
-        .iw-clock strong {
-          color: var(--c-t1);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 11.5px;
-          font-weight: 500;
-          line-height: 1;
-        }
-
-        .iw-caption {
-          color: var(--c-t5);
-          font-family: var(--font-mono), "JetBrains Mono", monospace;
-          font-size: 8.5px;
-          font-weight: 500;
-          letter-spacing: 0.12em;
+        .iw-search-hit-sub {
+          color: var(--c-t4);
+          font-size: 7.6px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
           line-height: 1;
           text-transform: uppercase;
-          white-space: nowrap;
         }
 
-        .iw-analyst {
-          gap: 9px;
-          min-width: 0;
-        }
-
-        .iw-avatar {
-          width: 26px;
-          height: 26px;
-          display: grid;
-          flex: 0 0 auto;
-          place-items: center;
-          border: 1px solid var(--c-border-1);
-          border-radius: 7px;
-          background: var(--iw-black);
-          color: #c4ccd6;
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 10.5px;
-          font-weight: 600;
-        }
-
-        .iw-analyst strong {
-          display: block;
-          color: #c4ccd6;
-          font-size: 10.5px;
-          font-weight: 600;
-          line-height: 1;
-          white-space: nowrap;
+        .iw-search-empty {
+          padding: 7px;
+          color: var(--c-t4);
+          font-size: 9px;
+          text-align: center;
         }
 
         .iw-map-area {
@@ -1816,8 +2028,7 @@ export function IntelWatchMap() {
           background: var(--c-border-1);
         }
 
-        .iw-panel-header,
-        .iw-panel-stats {
+        .iw-panel-header {
           display: flex;
           align-items: center;
         }
@@ -1913,41 +2124,6 @@ export function IntelWatchMap() {
           letter-spacing: 0.06em;
         }
 
-        .iw-panel-stats {
-          gap: 5px;
-        }
-
-        .iw-stat-chip {
-          display: grid;
-          min-width: 40px;
-          gap: 2px;
-          padding: 4px 6px;
-          border: 1px solid var(--c-border-2);
-          border-radius: 8px;
-          background: rgba(255,255,255,0.02);
-        }
-
-        .iw-stat-chip strong {
-          color: var(--c-t1);
-          font-family: var(--iw-panel-font);
-          font-size: 9.8px;
-          font-weight: 700;
-          line-height: 1;
-        }
-
-        .iw-stat-chip[data-critical="true"] strong {
-          color: #ff2b3d;
-        }
-
-        .iw-stat-chip span {
-          color: var(--c-t4);
-          font-family: var(--iw-panel-font);
-          font-size: 7.6px;
-          font-weight: 700;
-          letter-spacing: 0.08em;
-          line-height: 1;
-        }
-
         .iw-panel-mode-title {
           display: flex;
           align-items: center;
@@ -1964,6 +2140,42 @@ export function IntelWatchMap() {
           text-transform: uppercase;
         }
 
+        /* Panel tabs (Layers / Workspace) — same ribbon height as the
+           DETAILS mode title so switching selection doesn't shift the layout. */
+        .iw-panel-tabs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          flex: 0 0 auto;
+          height: 22px;
+          border-bottom: 1px solid var(--c-border-2);
+        }
+
+        .iw-panel-tab {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          border: 0;
+          background: transparent;
+          color: var(--c-t4);
+          cursor: pointer;
+          font-family: var(--iw-panel-font);
+          font-size: 7.2px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+        }
+
+        .iw-panel-tab:hover {
+          color: var(--c-t2);
+        }
+
+        .iw-panel-tab[data-active="true"] {
+          background: rgba(255, 43, 61, 0.06);
+          box-shadow: inset 0 -1px 0 rgba(255, 43, 61, 0.55);
+          color: #ff6470;
+        }
+
         .iw-panel-body {
           flex: 1 1 auto;
           min-height: 0;
@@ -1972,12 +2184,6 @@ export function IntelWatchMap() {
 
         .iw-layers-body {
           padding: 9px 10px 13px;
-        }
-
-        .iw-data-layer-section {
-          margin-bottom: 12px;
-          padding-bottom: 10px;
-          border-bottom: 1px solid var(--c-border-2);
         }
 
         .iw-data-layer-list {
@@ -2064,11 +2270,84 @@ export function IntelWatchMap() {
           color: #ff6470;
         }
 
-        .iw-hue {
-          width: 8px;
-          height: 8px;
-          border-radius: 2px;
-          background: #ff2b3d;
+        /* Workspace tab — saved-item counters + GeoJSON transfer. */
+        .iw-workspace-stats {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 5px;
+          margin-top: 7px;
+        }
+
+        .iw-workspace-stat {
+          display: grid;
+          gap: 4px;
+          padding: 8px 10px;
+          border: 1px solid var(--c-border-2);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .iw-workspace-stat strong {
+          color: var(--c-t1);
+          font-family: var(--iw-panel-font);
+          font-size: 12.5px;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .iw-workspace-stat span {
+          color: var(--c-t4);
+          font-family: var(--iw-panel-font);
+          font-size: 7.4px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          line-height: 1;
+        }
+
+        .iw-transfer-section {
+          margin-top: 13px;
+        }
+
+        .iw-transfer-buttons {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 5px;
+          margin-top: 7px;
+        }
+
+        .iw-transfer-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          min-height: 29px;
+          padding: 5px 7px;
+          border: 1px solid var(--c-border-3);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.014);
+          color: var(--c-t3);
+          cursor: pointer;
+          font-size: 9.2px;
+          font-weight: 600;
+          transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+        }
+
+        .iw-transfer-button:hover:not(:disabled) {
+          border-color: rgba(255, 43, 61, 0.34);
+          background: rgba(255, 43, 61, 0.08);
+          color: #ff6470;
+        }
+
+        .iw-transfer-button:disabled {
+          opacity: 0.42;
+          cursor: not-allowed;
+        }
+
+        .iw-transfer-note {
+          margin-top: 7px;
+          color: var(--c-t4);
+          font-size: 8.6px;
+          line-height: 1.4;
         }
 
         /* Floating tool config for line/area draw palette. */
@@ -2252,16 +2531,6 @@ export function IntelWatchMap() {
           font-size: 7.8px;
         }
 
-        .iw-detail-title {
-          margin: 9px 0 0;
-          color: var(--c-t1);
-          font-family: var(--font-display), "Space Grotesk", sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          line-height: 1.25;
-          text-wrap: pretty;
-        }
-
         .iw-detail-coord {
           color: var(--c-t3);
           font-family: var(--font-mono), "JetBrains Mono", monospace;
@@ -2296,31 +2565,6 @@ export function IntelWatchMap() {
         .iw-meta-row span {
           color: var(--c-t2);
           font-size: 9px;
-          font-weight: 600;
-        }
-
-        .iw-note-card {
-          padding: 9px;
-          border: 1px solid var(--c-border-2);
-          border-left: 2px solid var(--detail-color, #ff2b3d);
-          border-radius: 9px;
-          background: rgba(255, 255, 255, 0.02);
-          color: var(--c-t3);
-          font-size: 9.6px;
-          line-height: 1.55;
-          white-space: pre-line;
-        }
-
-        .iw-layer-ref {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          color: var(--c-t4);
-          font-size: 9px;
-        }
-
-        .iw-layer-ref strong {
-          color: var(--c-t2);
           font-weight: 600;
         }
 
@@ -2419,28 +2663,12 @@ export function IntelWatchMap() {
           50% { opacity: 0.28; }
         }
 
-        @media (max-width: 1020px) {
-          .iw-topbar {
-            grid-template-columns: minmax(220px, 1fr) minmax(160px, 280px) auto;
-          }
-          .iw-clock .iw-caption,
-          .iw-analyst div:not(.iw-avatar) {
-            display: none;
-          }
-        }
-
         @media (max-width: 820px) {
           .iw-panel {
             width: 300px;
           }
           .iw-map-area {
             right: 300px;
-          }
-          .iw-topbar {
-            grid-template-columns: 1fr auto;
-          }
-          .iw-topbar .iw-search {
-            display: none;
           }
         }
       `}</style>
@@ -2458,43 +2686,46 @@ export function IntelWatchMap() {
 
         <div className="iw-left-stack">
         <aside className="iw-glass iw-tool-rail" aria-label="Map tools">
-          <div className="iw-rail-label">ARAÇ</div>
+          <div className="iw-rail-label">TOOLS</div>
           <div className="iw-tool-stack">
             <ToolButton
               active={tool === "select"}
               icon={MousePointer2}
-              label="Seç"
+              label="Select"
               onClick={() => setActiveTool("select")}
             />
             <ToolButton
               active={tool === "pin"}
               icon={MapPin}
-              label="İşaret"
+              label="Marker"
               onClick={() => setActiveTool("pin")}
             />
             <ToolButton
               active={tool === "line"}
               icon={Route}
-              label="Çizgi"
+              label="Line"
               onClick={() => setActiveTool("line")}
             />
             <ToolButton
               active={tool === "area"}
               icon={Pentagon}
-              label="Alan"
+              label="Area"
               onClick={() => setActiveTool("area")}
             />
             <div className="iw-tool-divider" />
             <ToolButton
-              disabled={draft.length === 0 && annotations.length === 0}
+              disabled={draft.length === 0 && history.length === 0}
               icon={Undo2}
-              label="Geri Al"
+              label="Undo"
               onClick={handleUndo}
             />
             <ToolButton
-              disabled={draft.length === 0 && annotations.length === 0}
+              active={confirmClear}
+              disabled={
+                draft.length === 0 && annotations.length === 0 && pins.length === 0
+              }
               icon={Trash2}
-              label="Temizle"
+              label={confirmClear ? "Confirm?" : "Clear"}
               onClick={handleClear}
             />
           </div>
@@ -2503,14 +2734,14 @@ export function IntelWatchMap() {
         </div>
 
         {(tool === "line" || tool === "area") && (
-          <div className="iw-glass iw-tool-config" role="toolbar" aria-label="Çizim ayarları">
+          <div className="iw-glass iw-tool-config" role="toolbar" aria-label="Drawing settings">
             <div className="iw-config-row">
-              <span className="iw-config-label">RENK</span>
+              <span className="iw-config-label">COLOR</span>
               <div className="iw-swatch-row">
                 {DRAW_PALETTE.map((color) => (
                   <button
                     key={color}
-                    aria-label={`Çizim rengi ${color}`}
+                    aria-label={`Drawing color ${color}`}
                     className="iw-swatch"
                     data-active={drawColor === color}
                     style={{ "--swatch-color": color } as CSSProperties}
@@ -2523,8 +2754,8 @@ export function IntelWatchMap() {
             <div className="iw-config-hint">
               <span className="iw-dot" aria-hidden="true" />
               {tool === "line"
-                ? "Noktaları tıklayın · bitirmek için çift tıklayın · Esc iptal"
-                : "Köşeleri tıklayın · 3+ nokta · bitirmek için çift tıklayın · Esc iptal"}
+                ? "Click points - double-click to finish - Esc cancels"
+                : "Click vertices - 3+ points - double-click to finish - Esc cancels"}
               {draftMeasurement && (
                 <b className="iw-config-measure">{draftMeasurement}</b>
               )}
@@ -2570,36 +2801,77 @@ export function IntelWatchMap() {
 
       <aside className="iw-panel" aria-label="Intel Watch status panel">
         <div className="iw-panel-header">
-          <div className="iw-panel-title">DURUM PANELİ</div>
-          <div className="iw-panel-stats">
-            <div className="iw-stat-chip">
-              <strong>{totalPins}</strong>
-              <span>OLAY</span>
-            </div>
-            <div className="iw-stat-chip" data-critical="true">
-              <strong>{criticalPins}</strong>
-              <span>KRİTİK</span>
-            </div>
-          </div>
+          <div className="iw-panel-title">STATUS PANEL</div>
         </div>
 
         <label className="iw-search iw-panel-search">
           <Search size={14} strokeWidth={1.8} />
           <input
             value={searchQuery}
-            placeholder="İçerik ara…"
-            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search: marker, base, port, facility..."
+            onChange={(event) => {
+              ensureOverlayIndex();
+              setSearchQuery(event.target.value);
+            }}
+            onFocus={ensureOverlayIndex}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && searchResults[0]) {
+                handleSearchHit(searchResults[0]);
+              }
+              if (event.key === "Escape") setSearchQuery("");
+            }}
           />
         </label>
 
-        <div className="iw-panel-mode-title">
-          {hasSelection ? (
+        {searchQuery.trim().length >= 2 && (
+          <div className="iw-search-results" aria-label="Search results">
+            {searchResults.length ? (
+              searchResults.map((hit) => (
+                <SearchHitRow
+                  key={`${hit.kind}-${hit.id}`}
+                  hit={hit}
+                  onSelect={handleSearchHit}
+                />
+              ))
+            ) : (
+              <div className="iw-search-empty">
+                {overlayIndex ? "No results found." : "Building index..."}
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasSelection ? (
+          <div className="iw-panel-mode-title">
             <Info size={10} strokeWidth={1.8} />
-          ) : (
-            <Layers size={10} strokeWidth={1.8} />
-          )}
-          {hasSelection ? "DETAY" : "KATMANLAR"}
-        </div>
+            DETAILS
+          </div>
+        ) : (
+          <div className="iw-panel-tabs" role="tablist" aria-label="Panel tabs">
+            <button
+              aria-selected={panelTab === "layers"}
+              className="iw-panel-tab"
+              data-active={panelTab === "layers"}
+              role="tab"
+              type="button"
+              onClick={() => setPanelTab("layers")}
+            >
+              <Layers size={10} strokeWidth={1.8} />
+              Layers
+            </button>
+            <button
+              aria-selected={panelTab === "workspace"}
+              className="iw-panel-tab"
+              data-active={panelTab === "workspace"}
+              role="tab"
+              type="button"
+              onClick={() => setPanelTab("workspace")}
+            >
+              <FolderOpen size={10} strokeWidth={1.8} />
+              Workspace
+            </button>
+          </div>
+        )}
 
         <div className="iw-panel-body intel-watch-scrollbar tm-scrollbar">
           {selectedPin ? (
@@ -2618,113 +2890,79 @@ export function IntelWatchMap() {
                   onClick={() => setSelection(null)}
                 >
                   <ChevronLeft size={11} strokeWidth={2.2} />
-                  KATMANLAR
+                  BACK
                 </button>
 
-                {selectedPin.userCreated ? (
-                  <>
-                    <div className="iw-detail-section" style={{ marginTop: 0 }}>
-                      <div className="iw-detail-label">TÜR</div>
-                      <div className="iw-detail-chips">
-                        {PIN_TYPE_ORDER.map((type) => {
-                          const meta = TYPE_META[type];
-                          return (
-                            <button
-                              key={type}
-                              className="iw-chip"
-                              data-active={selectedPin.type === type}
-                              style={{ "--chip-color": "#ff6470" } as CSSProperties}
-                              type="button"
-                              onClick={() => updatePin(selectedPin.id, { type })}
-                            >
-                              <meta.Icon size={10} strokeWidth={2} />
-                              {meta.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                <div className="iw-detail-section" style={{ marginTop: 0 }}>
+                  <div className="iw-detail-label">TYPE</div>
+                  <div className="iw-detail-chips">
+                    {PIN_TYPE_ORDER.map((type) => {
+                      const meta = TYPE_META[type];
+                      return (
+                        <button
+                          key={type}
+                          className="iw-chip"
+                          data-active={selectedPin.type === type}
+                          style={{ "--chip-color": "#ff6470" } as CSSProperties}
+                          type="button"
+                          onClick={() => updatePin(selectedPin.id, { type })}
+                        >
+                          <meta.Icon size={10} strokeWidth={2} />
+                          {meta.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                    <div className="iw-detail-section">
-                      <div className="iw-detail-label">BAŞLIK</div>
-                      <input
-                        className="iw-edit-input"
-                        value={selectedPin.title}
-                        onChange={(event) =>
-                          updatePin(selectedPin.id, { title: event.target.value })
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">TITLE</div>
+                  <input
+                    className="iw-edit-input"
+                    value={selectedPin.title}
+                    onChange={(event) =>
+                      updatePin(selectedPin.id, { title: event.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">PRIORITY</div>
+                  <div className="iw-detail-chips">
+                    {SEVERITY_ORDER.map((severity) => (
+                      <button
+                        key={severity}
+                        className="iw-chip"
+                        data-active={selectedPin.severity === severity}
+                        style={
+                          {
+                            "--chip-color": SEVERITY_META[severity].color,
+                          } as CSSProperties
                         }
-                      />
-                    </div>
+                        type="button"
+                        onClick={() => updatePin(selectedPin.id, { severity })}
+                      >
+                        {SEVERITY_META[severity].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                    <div className="iw-detail-section">
-                      <div className="iw-detail-label">ÖNEM</div>
-                      <div className="iw-detail-chips">
-                        {SEVERITY_ORDER.map((severity) => (
-                          <button
-                            key={severity}
-                            className="iw-chip"
-                            data-active={selectedPin.severity === severity}
-                            style={
-                              {
-                                "--chip-color": SEVERITY_META[severity].color,
-                              } as CSSProperties
-                            }
-                            type="button"
-                            onClick={() => updatePin(selectedPin.id, { severity })}
-                          >
-                            {SEVERITY_META[severity].label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="iw-detail-section">
-                      <div className="iw-detail-label">NOT</div>
-                      <textarea
-                        className="iw-edit-textarea"
-                        value={selectedPin.note}
-                        onChange={(event) =>
-                          updatePin(selectedPin.id, { note: event.target.value })
-                        }
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="iw-type-chip">
-                      {(() => {
-                        const meta = TYPE_META[selectedPin.type];
-                        return (
-                          <>
-                            <meta.Icon size={11} strokeWidth={2.2} />
-                            {meta.label}
-                          </>
-                        );
-                      })()}
-                      <b style={{ color: SEVERITY_META[selectedPin.severity].color }}>
-                        {SEVERITY_META[selectedPin.severity].label}
-                      </b>
-                    </div>
-                    <h2 className="iw-detail-title">{selectedPin.title}</h2>
-                    <div className="iw-detail-section">
-                      <div className="iw-meta-row">
-                        <div className="iw-detail-label" style={{ marginBottom: 0 }}>
-                          SON GÜNCELLEME
-                        </div>
-                        <span>{selectedPin.updated}</span>
-                      </div>
-                    </div>
-                    <div className="iw-detail-section">
-                      <div className="iw-detail-label">DURUM NOTU</div>
-                      <div className="iw-note-card">{selectedPin.note}</div>
-                    </div>
-                  </>
-                )}
+                <div className="iw-detail-section">
+                  <div className="iw-detail-label">NOTE</div>
+                  <textarea
+                    className="iw-edit-textarea"
+                    value={selectedPin.note}
+                    onChange={(event) =>
+                      updatePin(selectedPin.id, { note: event.target.value })
+                    }
+                  />
+                </div>
 
                 <div className="iw-detail-section">
                   <div className="iw-meta-row">
                     <div className="iw-detail-label" style={{ marginBottom: 0 }}>
-                      KONUM
+                      LOCATION
                     </div>
                     <span className="iw-detail-coord">
                       {formatCoordinate(selectedPin.lat, selectedPin.lng)}
@@ -2733,30 +2971,10 @@ export function IntelWatchMap() {
                 </div>
 
                 <div className="iw-detail-section">
-                  <div className="iw-detail-label">KAYNAK</div>
+                  <div className="iw-detail-label">SOURCE</div>
                   <div className="iw-source-row">
                     <Globe2 size={13} strokeWidth={1.8} />
                     <span>{selectedPin.source}</span>
-                  </div>
-                </div>
-
-                <div className="iw-detail-section">
-                  <div className="iw-layer-ref">
-                    <span
-                      className="iw-hue"
-                      style={
-                        {
-                          background:
-                            layerMap.get(selectedPin.layer)?.hue ?? "#c4ccd6",
-                        } as CSSProperties
-                      }
-                    />
-                    <span>
-                      Katman:{" "}
-                      <strong>
-                        {layerMap.get(selectedPin.layer)?.name ?? "Bilinmeyen"}
-                      </strong>
-                    </span>
                   </div>
                 </div>
 
@@ -2766,10 +2984,10 @@ export function IntelWatchMap() {
                     type="button"
                     onClick={handleFocusSelection}
                   >
-                    Odakla
+                    Focus
                   </button>
                   <button
-                    aria-label="İşareti sil"
+                    aria-label="Delete marker"
                     className="iw-delete-action"
                     type="button"
                     onClick={() => handleDeletePin(selectedPin.id)}
@@ -2791,7 +3009,7 @@ export function IntelWatchMap() {
                   onClick={() => setSelection(null)}
                 >
                   <ChevronLeft size={11} strokeWidth={2.2} />
-                  KATMANLAR
+                  BACK
                 </button>
 
                 <div className="iw-type-chip">
@@ -2800,14 +3018,14 @@ export function IntelWatchMap() {
                   ) : (
                     <Route size={11} strokeWidth={2.2} />
                   )}
-                  {selectedAnnotation.kind === "area" ? "Alan" : "Çizgi"}
+                  {selectedAnnotation.kind === "area" ? "Area" : "Line"}
                 </div>
 
                 <div className="iw-detail-section">
-                  <div className="iw-detail-label">İSİM ETİKETİ</div>
+                  <div className="iw-detail-label">NAME LABEL</div>
                   <input
                     className="iw-edit-input"
-                    placeholder="örn. Tatbikat sahası"
+                    placeholder="e.g. Exercise area"
                     value={selectedAnnotation.name ?? ""}
                     onChange={(event) =>
                       updateAnnotation(selectedAnnotation.id, {
@@ -2820,19 +3038,19 @@ export function IntelWatchMap() {
                 <div className="iw-detail-section">
                   <div className="iw-meta-row">
                     <div className="iw-detail-label" style={{ marginBottom: 0 }}>
-                      {selectedAnnotation.kind === "area" ? "YÜZÖLÇÜMÜ" : "UZUNLUK"}
+                      {selectedAnnotation.kind === "area" ? "AREA" : "LENGTH"}
                     </div>
                     <span>{annotationMeasurement(selectedAnnotation)}</span>
                   </div>
                 </div>
 
                 <div className="iw-detail-section">
-                  <div className="iw-detail-label">RENK</div>
+                  <div className="iw-detail-label">COLOR</div>
                   <div className="iw-swatch-row">
                     {DRAW_PALETTE.map((color) => (
                       <button
                         key={color}
-                        aria-label={`Çizim rengi ${color}`}
+                        aria-label={`Drawing color ${color}`}
                         className="iw-swatch"
                         data-active={selectedAnnotation.color === color}
                         style={{ "--swatch-color": color } as CSSProperties}
@@ -2845,36 +3063,16 @@ export function IntelWatchMap() {
                   </div>
                 </div>
 
-                <div className="iw-detail-section">
-                  <div className="iw-layer-ref">
-                    <span
-                      className="iw-hue"
-                      style={
-                        {
-                          background:
-                            layerMap.get(selectedAnnotation.layer)?.hue ?? "#c4ccd6",
-                        } as CSSProperties
-                      }
-                    />
-                    <span>
-                      Katman:{" "}
-                      <strong>
-                        {layerMap.get(selectedAnnotation.layer)?.name ?? "Bilinmeyen"}
-                      </strong>
-                    </span>
-                  </div>
-                </div>
-
                 <div className="iw-detail-actions">
                   <button
                     className="iw-primary-action"
                     type="button"
                     onClick={handleFocusSelection}
                   >
-                    Odakla
+                    Focus
                   </button>
                   <button
-                    aria-label="Çizimi sil"
+                    aria-label="Delete drawing"
                     className="iw-delete-action"
                     type="button"
                     onClick={() => handleDeleteAnnotation(selectedAnnotation.id)}
@@ -2884,10 +3082,10 @@ export function IntelWatchMap() {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : panelTab === "layers" ? (
             <div className="iw-layers-body">
               <div className="iw-data-layer-section">
-                <div className="iw-section-label">VERİ KATMANLARI</div>
+                <div className="iw-section-label">DATA LAYERS</div>
                 <div className="iw-data-layer-list">
                   {MAP_OVERLAYS.map((overlay) => {
                     const Icon = overlay.Icon;
@@ -2907,7 +3105,7 @@ export function IntelWatchMap() {
                         <span className="iw-data-layer-copy">
                           <span className="iw-data-layer-name">{overlay.label}</span>
                           <span className="iw-data-layer-meta">
-                            {isVisible ? "Gösteriliyor" : "Gizli"}
+                            {isVisible ? "Visible" : "Hidden"}
                           </span>
                         </span>
                         {isVisible ? (
@@ -2920,7 +3118,51 @@ export function IntelWatchMap() {
                   })}
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="iw-layers-body">
+              <div className="iw-section-label">SAVED ITEMS</div>
+              <div className="iw-workspace-stats">
+                <div className="iw-workspace-stat">
+                  <strong>{pins.length}</strong>
+                  <span>MARKERS</span>
+                </div>
+                <div className="iw-workspace-stat">
+                  <strong>{annotations.length}</strong>
+                  <span>DRAWINGS</span>
+                </div>
+              </div>
 
+              <div className="iw-transfer-section">
+                <div className="iw-section-label">TRANSFER</div>
+                <div className="iw-transfer-buttons">
+                  <button
+                    className="iw-transfer-button"
+                    disabled={pins.length === 0 && annotations.length === 0}
+                    type="button"
+                    onClick={handleExport}
+                  >
+                    <Download size={12} strokeWidth={1.9} />
+                    Export
+                  </button>
+                  <button
+                    className="iw-transfer-button"
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    <Upload size={12} strokeWidth={1.9} />
+                    Import
+                  </button>
+                </div>
+                {transferNote && <div className="iw-transfer-note">{transferNote}</div>}
+                <input
+                  ref={importInputRef}
+                  accept=".geojson,.json,application/geo+json,application/json"
+                  hidden
+                  type="file"
+                  onChange={handleImportFile}
+                />
+              </div>
             </div>
           )}
         </div>

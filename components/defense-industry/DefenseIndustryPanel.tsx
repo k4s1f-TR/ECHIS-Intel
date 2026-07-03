@@ -7,6 +7,7 @@ import { IndustryContextPanel } from "./IndustryContextPanel";
 import { KeySegmentsPanel } from "./KeySegmentsPanel";
 import { SupplyChainPressurePanel } from "./SupplyChainPressurePanel";
 import { defenseFeedItems } from "@/data/defenseIndustryMockData";
+import { useDefenseIndustryFeed } from "./useDefenseIndustryFeed";
 
 function MapLegend() {
   return (
@@ -48,7 +49,17 @@ function MapLegend() {
 }
 
 export function DefenseIndustryPanel() {
-  const [selectedItemId, setSelectedItemId] = useState(defenseFeedItems[0].id);
+  const feed = useDefenseIndustryFeed();
+  const hasError = Boolean(feed.error);
+  // Effective list mirrors the Feed panel's own fallback so selection + context
+  // stay aligned: live items when present; mock only when idle (not loading/errored).
+  const showMock = !feed.isLoading && !hasError && feed.items.length === 0;
+  const listItems = feed.items.length > 0 ? feed.items : showMock ? defenseFeedItems : [];
+
+  const [requestedId, setRequestedId] = useState("");
+  const selectedItemId = listItems.some((i) => i.id === requestedId)
+    ? requestedId
+    : (listItems[0]?.id ?? "");
 
   return (
     <main
@@ -97,22 +108,28 @@ export function DefenseIndustryPanel() {
         {/* Bottom row */}
         <div className="flex gap-2.5 flex-shrink-0" style={{ height: "220px" }}>
           <div className="min-w-0" style={{ flex: "0 0 320px" }}>
-            <KeySegmentsPanel />
+            <KeySegmentsPanel segments={feed.segments} />
           </div>
           <div className="flex-1 min-w-0">
-            <SupplyChainPressurePanel />
+            <SupplyChainPressurePanel rows={feed.supplyChain} />
           </div>
         </div>
       </div>
 
       {/* CENTER */}
       <div style={{ flex: "1.1 1 0%" }} className="min-h-0">
-        <DefenseIndustryFeedPanel selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
+        <DefenseIndustryFeedPanel
+          selectedItemId={selectedItemId}
+          onSelectItem={setRequestedId}
+          items={feed.items}
+          isLoading={feed.isLoading}
+          hasError={hasError}
+        />
       </div>
 
       {/* RIGHT */}
       <div style={{ flex: "1 1 0%" }} className="min-h-0">
-        <IndustryContextPanel selectedItemId={selectedItemId} />
+        <IndustryContextPanel selectedItemId={selectedItemId} items={listItems} />
       </div>
     </main>
   );
