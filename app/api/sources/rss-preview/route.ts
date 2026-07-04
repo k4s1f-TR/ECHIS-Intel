@@ -22,12 +22,12 @@ const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   "reliefweb-crises",
   // Cyber security
   "the-hacker-news",
+  "securityweek",
+  "cisa-news",
   "defense-news-global",
   "dod-news",
   // ── Defense Industry screen feeds ───────────────────────────────────────
   "breaking-defense",
-  "securityweek",
-  "cisa-news",
   "defensenews-all",
   "the-war-zone",
   "the-aviationist",

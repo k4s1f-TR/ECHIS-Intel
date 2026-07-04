@@ -55,15 +55,41 @@ const EYEBROW: CSSProperties = {
 export function PolicyDetail({
   report,
   related,
+  isLoading,
+  error,
   onSelectRelated,
 }: {
   report: PolicyReport | null;
   related: PolicyReport[];
+  isLoading: boolean;
+  error: string | null;
   onSelectRelated: (id: string) => void;
 }) {
+  const sourceUrl =
+    report && "url" in report && typeof report.url === "string" ? report.url : undefined;
+
   return (
     <div className="tm-scrollbar flex-1 min-w-0 overflow-y-auto">
-      {report && (
+      {!report ? (
+        <div
+          className="flex h-full flex-col items-center justify-center gap-2 px-10 text-center"
+          style={{ color: "var(--c-t5)" }}
+        >
+          <div
+            className="c-mono uppercase"
+            style={{ fontSize: "10px", letterSpacing: ".16em", color: "var(--c-t4)" }}
+          >
+            {isLoading ? "Loading Dossier" : error ? "Feed Error" : "No Report Selected"}
+          </div>
+          <div style={{ maxWidth: "360px", fontSize: "13px", lineHeight: 1.5 }}>
+            {isLoading
+              ? "Waiting for live RSS reports."
+              : error
+                ? "All configured policy sources failed to respond."
+                : "No reports match the active filters."}
+          </div>
+        </div>
+      ) : (
         <div style={{ maxWidth: "880px", margin: "0 auto", padding: "48px 64px 56px 64px", zoom: 0.93 }}>
           {/* eyebrow */}
           <div className="flex items-center gap-[11px]" style={{ marginBottom: "26px" }}>
@@ -176,8 +202,11 @@ export function PolicyDetail({
 
           {/* actions */}
           <div className="flex" style={{ marginTop: "30px", gap: "10px" }}>
-            <button
-              type="button"
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!sourceUrl}
               className="flex items-center"
               style={{
                 gap: "8px",
@@ -189,11 +218,12 @@ export function PolicyDetail({
                 color: "var(--c-accent-text)",
                 fontSize: "12.5px",
                 fontWeight: 500,
-                cursor: "pointer",
+                cursor: sourceUrl ? "pointer" : "default",
+                opacity: sourceUrl ? 1 : 0.54,
               }}
             >
               Open Source ↗
-            </button>
+            </a>
             <button
               type="button"
               style={{

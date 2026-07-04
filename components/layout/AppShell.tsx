@@ -34,9 +34,12 @@ import { SocmintDetailModal } from "@/components/signals/SocmintDetailModal";
 import { SignalsFloatingCard } from "@/components/signals/SignalsFloatingCard";
 import { SourcesScreen } from "@/components/sources/SourcesScreen";
 import { PolicyDossierScreen } from "@/components/policy/PolicyDossierScreen";
+import { prefetchPolicyFeed } from "@/components/policy/usePolicyFeed";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
+import { prefetchCyberNewsFeed } from "@/components/cyber/useCyberNewsFeed";
 import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
 import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
+import { prefetchDefenseIndustryFeed } from "@/components/defense-industry/useDefenseIndustryFeed";
 import { ContactScreen } from "@/components/contact/ContactScreen";
 import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
@@ -221,6 +224,14 @@ export function AppShell() {
   const handleMapSystemChange = useCallback((next: MapSystem) => {
     if (next === "luxe") setShouldMountLuxe(true);
     setMapSystem(next);
+  }, []);
+
+  // Warm the Cyber News + Defense Industry feed caches at app open so those
+  // tabs render instantly instead of re-fetching on first visit.
+  useEffect(() => {
+    prefetchCyberNewsFeed();
+    prefetchDefenseIndustryFeed();
+    prefetchPolicyFeed();
   }, []);
   const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarks(mockEvents, socmintReports);

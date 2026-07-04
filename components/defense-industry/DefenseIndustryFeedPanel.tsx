@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { Factory } from "lucide-react";
-import { defenseFeedItems } from "@/data/defenseIndustryMockData";
 import type { DefenseFeedItemLive } from "@/lib/defense";
 
 const PRIORITY: Record<string, { text: string; bg: string; border: string }> = {
@@ -116,7 +115,7 @@ export function DefenseIndustryFeedPanel({
   isLoading?: boolean;
   hasError?: boolean;
 }) {
-  const feedItems = items && items.length > 0 ? items : isLoading || hasError ? [] : defenseFeedItems;
+  const feedItems = items ?? [];
   return (
     <div
       className="flex flex-col h-full"

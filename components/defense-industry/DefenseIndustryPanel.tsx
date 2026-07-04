@@ -1,49 +1,43 @@
 "use client";
 import { useState } from "react";
 import { Factory } from "lucide-react";
-import { DefenseIndustryMap } from "./DefenseIndustryMap";
+import {
+  DefenseIndustryMap,
+  activeDefenseHighlightRoles,
+  DEFENSE_ROLE_LABEL,
+  DEFENSE_ROLE_SWATCH,
+} from "./DefenseIndustryMap";
 import { DefenseIndustryFeedPanel } from "./DefenseIndustryFeedPanel";
 import { IndustryContextPanel } from "./IndustryContextPanel";
 import { KeySegmentsPanel } from "./KeySegmentsPanel";
 import { SupplyChainPressurePanel } from "./SupplyChainPressurePanel";
-import { defenseFeedItems } from "@/data/defenseIndustryMockData";
 import { useDefenseIndustryFeed } from "./useDefenseIndustryFeed";
+import type { DefenseFeedItemLive } from "@/lib/defense";
 
-function MapLegend() {
+function MapLegend({ items }: { items: DefenseFeedItemLive[] }) {
+  const legendRoles = activeDefenseHighlightRoles(items);
   return (
     <div
       className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
       style={{ borderTop: "1px solid var(--c-border-2)", background: "rgba(4,3,5,0.65)" }}
     >
-      <span
-        style={{
-          fontSize: "var(--fs-xs)",
-          fontWeight: 600,
-          color: "var(--c-t5)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-        }}
-      >
-        Static View
-      </span>
-      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
-      <div className="flex items-center gap-1.5">
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "rgba(255,210,31,0.98)",
-            boxShadow: "0 0 6px rgba(255,210,31,0.38)",
-            flexShrink: 0,
-          }}
-        />
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--c-t4)" }}>Industry Hub</span>
-      </div>
-      <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-dim)" }}>•</span>
-      <span style={{ fontSize: "var(--fs-xs)", color: "var(--c-t5)" }}>
-        Public-source markers — no live tracking
-      </span>
+      {legendRoles.map((role) => (
+        <div key={role} className="flex items-center gap-1.5">
+          <span
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: 2,
+              background: DEFENSE_ROLE_SWATCH[role],
+              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--c-t4)" }}>
+            {DEFENSE_ROLE_LABEL[role]}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -51,15 +45,11 @@ function MapLegend() {
 export function DefenseIndustryPanel() {
   const feed = useDefenseIndustryFeed();
   const hasError = Boolean(feed.error);
-  // Effective list mirrors the Feed panel's own fallback so selection + context
-  // stay aligned: live items when present; mock only when idle (not loading/errored).
-  const showMock = !feed.isLoading && !hasError && feed.items.length === 0;
-  const listItems = feed.items.length > 0 ? feed.items : showMock ? defenseFeedItems : [];
 
   const [requestedId, setRequestedId] = useState("");
-  const selectedItemId = listItems.some((i) => i.id === requestedId)
+  const selectedItemId = feed.items.some((i) => i.id === requestedId)
     ? requestedId
-    : (listItems[0]?.id ?? "");
+    : (feed.items[0]?.id ?? "");
 
   return (
     <main
@@ -100,18 +90,18 @@ export function DefenseIndustryPanel() {
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-hidden" style={{ background: "var(--c-bg-deep)" }}>
-            <DefenseIndustryMap />
+            <DefenseIndustryMap items={feed.items} />
           </div>
-          <MapLegend />
+          <MapLegend items={feed.items} />
         </div>
 
         {/* Bottom row */}
         <div className="flex gap-2.5 flex-shrink-0" style={{ height: "220px" }}>
           <div className="min-w-0" style={{ flex: "0 0 320px" }}>
-            <KeySegmentsPanel segments={feed.segments} />
+            <KeySegmentsPanel segments={feed.segments} isLoading={feed.isLoading} />
           </div>
           <div className="flex-1 min-w-0">
-            <SupplyChainPressurePanel rows={feed.supplyChain} />
+            <SupplyChainPressurePanel rows={feed.supplyChain} isLoading={feed.isLoading} />
           </div>
         </div>
       </div>
@@ -129,7 +119,7 @@ export function DefenseIndustryPanel() {
 
       {/* RIGHT */}
       <div style={{ flex: "1 1 0%" }} className="min-h-0">
-        <IndustryContextPanel selectedItemId={selectedItemId} items={listItems} />
+        <IndustryContextPanel selectedItemId={selectedItemId} items={feed.items} />
       </div>
     </main>
   );

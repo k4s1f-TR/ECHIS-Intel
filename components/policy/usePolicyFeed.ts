@@ -3,19 +3,24 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NormalizedSourceItem } from "@/data/sources/sourceTypes";
 import {
-  analyzeDefenseSignals,
-  type DefenseFeedItemLive,
-  type DefenseSegmentMetric,
-  type DefenseSupplyChainMetric,
-  type DefenseSignalInput,
-} from "@/lib/defense";
+  analyzePolicySignals,
+  type PolicyRegionMetric,
+  type PolicyReportLive,
+  type PolicySignalInput,
+  type PolicyTopicMetric,
+} from "@/lib/policy";
 
-/** RSS sources feeding the Defense Industry screen (allowlisted in the route). */
-export const DEFENSE_SOURCE_IDS = [
-  "breaking-defense",
-  "defensenews-all",
-  "the-war-zone",
-  "the-aviationist",
+/** RSS sources feeding the Policy Dossier screen (allowlisted in the route). */
+export const POLICY_SOURCE_IDS = [
+  "skynews-politics",
+  "presstv-politics",
+  "mehr-politics",
+  "saba-politics",
+  "tanjug-politika",
+  "gazetauz-politics",
+  "aljazeera-middle-east",
+  "tass-world",
+  "euronews-world",
 ] as const;
 
 interface RssResponse {
@@ -24,10 +29,10 @@ interface RssResponse {
   reason?: string;
 }
 
-export interface DefenseIndustryFeedState {
-  items: DefenseFeedItemLive[];
-  segments: DefenseSegmentMetric[];
-  supplyChain: DefenseSupplyChainMetric[];
+export interface PolicyFeedState {
+  items: PolicyReportLive[];
+  topics: PolicyTopicMetric[];
+  regions: PolicyRegionMetric[];
   isLoading: boolean;
   error: string | null;
   relevantItems: number;
@@ -37,12 +42,6 @@ export interface DefenseIndustryFeedState {
 function itemTime(item: NormalizedSourceItem): number {
   return new Date(item.publishedAt || item.collectedAt || 0).getTime();
 }
-
-// ── Module-level feed cache ─────────────────────────────────────────────────
-// The Defense Industry screen unmounts on every tab switch. Keeping the fetched
-// feed in module scope means returning to the tab renders instantly from memory
-// and only refreshes in the background once the snapshot is stale. Mirrors the
-// server route's 5-minute RSS cache TTL.
 
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -57,7 +56,7 @@ let feedInFlight: Promise<FeedSnapshot> | null = null;
 
 async function fetchAllSources(): Promise<FeedSnapshot> {
   const results = await Promise.allSettled(
-    DEFENSE_SOURCE_IDS.map(async (sourceId) => {
+    POLICY_SOURCE_IDS.map(async (sourceId) => {
       const res = await fetch(
         `/api/sources/rss-preview?sourceId=${encodeURIComponent(sourceId)}`,
         { cache: "no-store" },
@@ -73,10 +72,10 @@ async function fetchAllSources(): Promise<FeedSnapshot> {
   const merged: NormalizedSourceItem[] = [];
   const seen = new Set<string>();
   let anyOk = false;
-  for (const r of results) {
-    if (r.status !== "fulfilled") continue;
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
     anyOk = true;
-    for (const item of r.value) {
+    for (const item of result.value) {
       const key = item.id || item.url || item.title;
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -101,7 +100,6 @@ function loadFeed(): Promise<FeedSnapshot> {
         feedCacheAt = Date.now();
         return snapshot;
       }
-      // All sources failed: keep serving the last good snapshot if we have one.
       return feedCache ?? snapshot;
     })
     .finally(() => {
@@ -111,13 +109,11 @@ function loadFeed(): Promise<FeedSnapshot> {
 }
 
 /** Warm the feed cache without mounting the screen (called once at app open). */
-export function prefetchDefenseIndustryFeed(): void {
+export function prefetchPolicyFeed(): void {
   void loadFeed().catch(() => {});
 }
 
-export function useDefenseIndustryFeed(): DefenseIndustryFeedState {
-  // Any cached snapshot (even stale) renders immediately; a stale one is
-  // refreshed in the background by the effect below.
+export function usePolicyFeed(): PolicyFeedState {
   const [snapshot, setSnapshot] = useState<FeedSnapshot | null>(feedCache);
   const [isLoading, setIsLoading] = useState(feedCache === null);
 
@@ -137,7 +133,7 @@ export function useDefenseIndustryFeed(): DefenseIndustryFeedState {
 
   const rawItems = snapshot?.items;
   const analysis = useMemo(() => {
-    const inputs: DefenseSignalInput[] = (rawItems ?? []).map((item) => ({
+    const inputs: PolicySignalInput[] = (rawItems ?? []).map((item) => ({
       id: item.id,
       title: item.title,
       summary: item.summary,
@@ -148,13 +144,13 @@ export function useDefenseIndustryFeed(): DefenseIndustryFeedState {
       verificationStatus: item.verificationStatus,
       sourceType: item.sourceName,
     }));
-    return analyzeDefenseSignals(inputs);
+    return analyzePolicySignals(inputs);
   }, [rawItems]);
 
   return {
     items: analysis.items,
-    segments: analysis.segments,
-    supplyChain: analysis.supplyChain,
+    topics: analysis.topics,
+    regions: analysis.regions,
     isLoading,
     error: snapshot?.error ?? null,
     relevantItems: analysis.relevantItems,

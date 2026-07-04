@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { policyReports } from "@/data/policyReports";
 import {
   POLICY_TIME_WINDOWS,
   type PolicyTimeWindow,
   type PolicyTopicKey,
 } from "@/types/policy";
 import { computePolicyView } from "./policyView";
+import { usePolicyFeed } from "./usePolicyFeed";
 import { PolicyFeed } from "./PolicyFeed";
 import { PolicyDetail } from "./PolicyDetail";
 import { PolicyMetaColumn } from "./PolicyMetaColumn";
@@ -17,11 +17,12 @@ export function PolicyDossierScreen() {
   const [time, setTime] = useState<PolicyTimeWindow>(24);
   const [topic, setTopic] = useState<PolicyTopicKey>("all");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>("n01");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const feed = usePolicyFeed();
 
   const view = useMemo(
-    () => computePolicyView(policyReports, time, topic, query, selectedId),
-    [time, topic, query, selectedId],
+    () => computePolicyView(feed.items, time, topic, query, selectedId),
+    [feed.items, time, topic, query, selectedId],
   );
 
   const selected = view.selected;
@@ -155,7 +156,7 @@ export function PolicyDossierScreen() {
                 animation: "liveBlink 1.8s infinite",
               }}
             />
-            {view.list.length}
+            {feed.relevantItems}/{feed.totalItems}
           </span>
         </div>
       </div>
@@ -219,11 +220,15 @@ export function PolicyDossierScreen() {
           items={view.list}
           selectedId={selected?.id ?? null}
           time={time}
+          isLoading={feed.isLoading}
+          error={feed.error}
           onSelect={setSelectedId}
         />
         <PolicyDetail
           report={selected}
           related={view.related}
+          isLoading={feed.isLoading}
+          error={feed.error}
           onSelectRelated={setSelectedId}
         />
         <PolicyMetaColumn
@@ -231,6 +236,8 @@ export function PolicyDossierScreen() {
           sources={view.sources}
           trend={view.trend}
           time={time}
+          isLoading={feed.isLoading}
+          error={feed.error}
         />
       </div>
     </div>

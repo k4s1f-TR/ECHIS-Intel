@@ -1,7 +1,6 @@
 "use client";
 import { useMemo } from "react";
 import { Layers } from "lucide-react";
-import { defenseKeySegments } from "@/data/defenseIndustryMockData";
 import type { DefenseSegmentMetric } from "@/lib/defense";
 
 function SegmentRow({ item, maxCount }: { item: DefenseSegmentMetric; maxCount: number }) {
@@ -64,8 +63,14 @@ function SegmentRow({ item, maxCount }: { item: DefenseSegmentMetric; maxCount: 
   );
 }
 
-export function KeySegmentsPanel({ segments }: { segments?: DefenseSegmentMetric[] }) {
-  const rows = segments && segments.length > 0 ? segments : defenseKeySegments;
+export function KeySegmentsPanel({
+  segments,
+  isLoading = false,
+}: {
+  segments?: DefenseSegmentMetric[];
+  isLoading?: boolean;
+}) {
+  const rows = useMemo(() => segments ?? [], [segments]);
   const maxCount = useMemo(() => Math.max(1, ...rows.map((s) => s.count)), [rows]);
   return (
     <div
@@ -97,9 +102,17 @@ export function KeySegmentsPanel({ segments }: { segments?: DefenseSegmentMetric
         </span>
       </div>
       <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-2.5 py-1 defense-scrollbar">
-        {rows.map((s) => (
-          <SegmentRow key={s.segment} item={s} maxCount={maxCount} />
-        ))}
+        {rows.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+              {isLoading ? "Syncing segments…" : "No segment signals detected."}
+            </span>
+          </div>
+        ) : (
+          rows.map((s) => (
+            <SegmentRow key={s.segment} item={s} maxCount={maxCount} />
+          ))
+        )}
       </div>
     </div>
   );

@@ -8,7 +8,6 @@ import {
   Boxes,
   FileText,
 } from "lucide-react";
-import { defenseFeedItems } from "@/data/defenseIndustryMockData";
 import type { DefenseFeedItemLive } from "@/lib/defense";
 
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
@@ -132,8 +131,48 @@ export function IndustryContextPanel({
   selectedItemId?: string;
   items?: DefenseFeedItemLive[];
 }) {
-  const source: DefenseFeedItemLive[] = items && items.length > 0 ? items : defenseFeedItems;
-  const selected = source.find((d) => d.id === selectedItemId) || source[0];
+  const source: DefenseFeedItemLive[] = items ?? [];
+  const selected = source.find((d) => d.id === selectedItemId) ?? source[0];
+
+  if (!selected) {
+    return (
+      <div
+        className="flex flex-col h-full"
+        style={{
+          background: "var(--bg-panel)",
+          border: "1px solid var(--c-border-1)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-inset-highlight), 0 14px 40px rgba(0,0,0,0.4)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          className="flex items-center gap-2 flex-shrink-0 px-4 py-2.5"
+          style={{ borderBottom: "1px solid var(--c-border-2)" }}
+        >
+          <Factory size={12} style={{ color: "var(--c-silver-dim)" }} />
+          <span
+            style={{
+              fontFamily: "var(--font-disp)",
+              fontSize: "var(--fs-sm)",
+              fontWeight: 600,
+              color: "var(--c-t4)",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase" as const,
+            }}
+          >
+            Industry Context
+          </span>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-4 text-center">
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+            No item selected.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const ctx = selected.context;
 
   return (

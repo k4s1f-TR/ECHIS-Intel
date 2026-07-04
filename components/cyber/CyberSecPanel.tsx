@@ -13,7 +13,7 @@ import { CyberNewsPanel } from "./CyberNewsPanel";
 import { ThreatContextPanel } from "./ThreatContextPanel";
 import { MostMentionedRegionsPanel } from "./MostMentionedRegionsPanel";
 import { AffectedSectorsPanel } from "./AffectedSectorsPanel";
-import { useCyberNewsFeed } from "./useCyberNewsFeed";
+import { useCyberNewsFeed, CYBER_NEWS_SOURCE_LABEL } from "./useCyberNewsFeed";
 import { analyzeCyberSignals } from "@/lib/cyber";
 
 function MapInfoStrip({
@@ -58,7 +58,7 @@ function MapInfoStrip({
             color: "var(--c-t5)",
           }}
         >
-          Source
+          Sources
         </span>
         <span
           className="c-mono"
@@ -68,7 +68,7 @@ function MapInfoStrip({
             color: "var(--c-t3)",
           }}
         >
-          The Hacker News
+          {CYBER_NEWS_SOURCE_LABEL}
         </span>
       </div>
       <span

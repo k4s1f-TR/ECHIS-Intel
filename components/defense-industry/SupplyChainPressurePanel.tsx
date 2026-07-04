@@ -1,6 +1,5 @@
 "use client";
 import { Boxes } from "lucide-react";
-import { defenseSupplyChainPressure } from "@/data/defenseIndustryMockData";
 import type { DefenseSupplyChainMetric } from "@/lib/defense";
 
 const STATUS_COLOR: Record<string, { tag: string; fill: string }> = {
@@ -10,8 +9,14 @@ const STATUS_COLOR: Record<string, { tag: string; fill: string }> = {
   Moderate: { tag: "var(--c-elev)", fill: "linear-gradient(90deg, rgba(150,160,172,0.3), var(--c-elev))" },
 };
 
-export function SupplyChainPressurePanel({ rows }: { rows?: DefenseSupplyChainMetric[] }) {
-  const data = rows && rows.length > 0 ? rows : defenseSupplyChainPressure;
+export function SupplyChainPressurePanel({
+  rows,
+  isLoading = false,
+}: {
+  rows?: DefenseSupplyChainMetric[];
+  isLoading?: boolean;
+}) {
+  const data = rows ?? [];
   return (
     <div
       className="flex flex-col h-full"
@@ -42,6 +47,13 @@ export function SupplyChainPressurePanel({ rows }: { rows?: DefenseSupplyChainMe
         </span>
       </div>
       <div className="tm-scrollbar flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-4 flex flex-col gap-3.5 defense-scrollbar">
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-t5)" }}>
+              {isLoading ? "Syncing supply-chain signals…" : "No supply-chain pressure detected."}
+            </span>
+          </div>
+        ) : null}
         {data.map((row) => {
           const tone = STATUS_COLOR[row.status] ?? STATUS_COLOR.Moderate;
           return (

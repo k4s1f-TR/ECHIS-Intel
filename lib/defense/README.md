@@ -49,10 +49,11 @@ analyzeDefenseSignals(items)
 
 ## Data flow
 
-`useDefenseIndustryFeed` fetches the 6 defense RSS sources via
+`useDefenseIndustryFeed` fetches the 4 defense RSS sources via
 `/api/sources/rss-preview` (allowlisted), merges/dedupes/sorts, runs
-`analyzeDefenseSignals`, and feeds the panels. Mock
-(`data/defenseIndustryMockData`) remains only as an idle fallback.
+`analyzeDefenseSignals`, and feeds the panels. The screen is fully live:
+panels render only feed-derived data plus empty/loading/error states
+(the old `data/defenseIndustryMockData` fallback was removed).
 
 ## Tests (dependency-free)
 

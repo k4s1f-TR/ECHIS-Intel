@@ -10,10 +10,9 @@
 // Everything here is INFERRED from open-source text (OSINT-safe, no verified
 // attribution). The `provenance` flag makes that explicit.
 //
-// Output shapes are structurally compatible with data/defenseIndustryMockData
-// (DefenseFeedItem / DefenseSegmentMention / DefenseSupplyChainPressure) so the
-// existing panels accept live data with the mock kept as a fallback — but the
-// types are declared here to keep the engine self-contained and unit-testable.
+// Output shapes match what the Defense Industry panels render directly
+// (feed items / segment mentions / supply-chain pressure). The types are
+// declared here to keep the engine self-contained and unit-testable.
 // ---------------------------------------------------------------------------
 
 import type { RegionId } from "../cyber/types";

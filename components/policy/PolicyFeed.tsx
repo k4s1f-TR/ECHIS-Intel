@@ -74,11 +74,15 @@ export function PolicyFeed({
   items,
   selectedId,
   time,
+  isLoading,
+  error,
   onSelect,
 }: {
   items: PolicyReport[];
   selectedId: string | null;
   time: number;
+  isLoading: boolean;
+  error: string | null;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -112,7 +116,23 @@ export function PolicyFeed({
         className="tm-scrollbar flex-1 min-h-0 overflow-y-auto"
         style={{ padding: "4px 0 20px 0" }}
       >
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center"
+            style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
+          >
+            <span style={{ color: "var(--c-t4)", fontWeight: 600 }}>Loading live policy feed</span>
+            <span>Collecting public RSS reports.</span>
+          </div>
+        ) : error ? (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center"
+            style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
+          >
+            <span style={{ color: "var(--c-t4)", fontWeight: 600 }}>Live feed unavailable</span>
+            <span>All configured sources failed to respond.</span>
+          </div>
+        ) : items.length === 0 ? (
           <div
             className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center"
             style={{ fontSize: "11.5px", color: "var(--c-t5)" }}

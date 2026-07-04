@@ -25,16 +25,31 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+function PanelState({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="flex min-h-[54px] items-center"
+      style={{ fontSize: "11px", lineHeight: 1.45, color: "var(--c-t5)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function PolicyMetaColumn({
   regions,
   sources,
   trend,
   time,
+  isLoading,
+  error,
 }: {
   regions: RegionStat[];
   sources: SourceStat[];
   trend: TrendBucket[];
   time: number;
+  isLoading: boolean;
+  error: string | null;
 }) {
   return (
     <div
@@ -56,35 +71,43 @@ export function PolicyMetaColumn({
           Geo-tagged from each report&apos;s text &amp; source metadata, ranked by mentions in the
           current view.
         </div>
-        <div className="flex flex-col" style={{ gap: "13px" }}>
-          {regions.map((r) => (
-            <div key={r.region}>
-              <div className="flex justify-between" style={{ marginBottom: "6px" }}>
-                <span style={{ fontSize: "12px", color: "var(--c-t3)" }}>{r.region}</span>
-                <span className="c-mono" style={{ fontSize: "10px", color: "var(--c-t5)" }}>
-                  {r.count}
-                </span>
-              </div>
-              <div
-                style={{
-                  height: "3px",
-                  borderRadius: "2px",
-                  background: "rgba(255,255,255,0.05)",
-                  overflow: "hidden",
-                }}
-              >
+        {isLoading ? (
+          <PanelState>Loading region signals.</PanelState>
+        ) : error ? (
+          <PanelState>Region signals unavailable.</PanelState>
+        ) : regions.length === 0 ? (
+          <PanelState>No regions in the active view.</PanelState>
+        ) : (
+          <div className="flex flex-col" style={{ gap: "13px" }}>
+            {regions.map((r) => (
+              <div key={r.region}>
+                <div className="flex justify-between" style={{ marginBottom: "6px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--c-t3)" }}>{r.region}</span>
+                  <span className="c-mono" style={{ fontSize: "10px", color: "var(--c-t5)" }}>
+                    {r.count}
+                  </span>
+                </div>
                 <div
                   style={{
-                    height: "100%",
-                    width: `${r.pct}%`,
+                    height: "3px",
                     borderRadius: "2px",
-                    background: "linear-gradient(90deg, var(--c-accent-2), var(--c-accent))",
+                    background: "rgba(255,255,255,0.05)",
+                    overflow: "hidden",
                   }}
-                />
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${r.pct}%`,
+                      borderRadius: "2px",
+                      background: "linear-gradient(90deg, var(--c-accent-2), var(--c-accent))",
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Source Breakdown */}
@@ -99,27 +122,33 @@ export function PolicyMetaColumn({
         <div style={{ ...CAPTION, marginBottom: "16px" }}>
           Share of in-view signals by collection channel.
         </div>
-        <div className="flex flex-col" style={{ gap: "13px" }}>
-          {sources.map((s) => (
-            <div key={s.type} className="flex items-center" style={{ gap: "10px" }}>
-              <span
-                className="flex-none"
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "2px",
-                  background: POLICY_CHANNEL_COLOR[s.type],
-                }}
-              />
-              <span className="flex-1" style={{ fontSize: "12px", color: "var(--c-t3)" }}>
-                {s.type}
-              </span>
-              <span className="c-mono" style={{ fontSize: "10px", color: "var(--c-t4)" }}>
-                {s.pct}%
-              </span>
-            </div>
-          ))}
-        </div>
+        {isLoading ? (
+          <PanelState>Loading source mix.</PanelState>
+        ) : error ? (
+          <PanelState>Source breakdown unavailable.</PanelState>
+        ) : (
+          <div className="flex flex-col" style={{ gap: "13px" }}>
+            {sources.map((s) => (
+              <div key={s.type} className="flex items-center" style={{ gap: "10px" }}>
+                <span
+                  className="flex-none"
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "2px",
+                    background: POLICY_CHANNEL_COLOR[s.type],
+                  }}
+                />
+                <span className="flex-1" style={{ fontSize: "12px", color: "var(--c-t3)" }}>
+                  {s.type}
+                </span>
+                <span className="c-mono" style={{ fontSize: "10px", color: "var(--c-t4)" }}>
+                  {s.pct}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Signal Volume */}
@@ -134,21 +163,27 @@ export function PolicyMetaColumn({
         <div style={{ ...CAPTION, marginBottom: "14px" }}>
           Reports collected per interval · last {time}h.
         </div>
-        <div className="flex items-end" style={{ height: "54px", gap: "2px" }}>
-          {trend.map((b, ix) => (
-            <div key={ix} className="flex flex-1 items-end" style={{ height: "100%" }}>
-              <div
-                style={{
-                  width: "100%",
-                  height: `${b.pct}%`,
-                  borderRadius: "2px",
-                  background: "linear-gradient(180deg, var(--c-accent), var(--c-accent-2))",
-                  opacity: b.opacity,
-                }}
-              />
-            </div>
-          ))}
-        </div>
+        {isLoading ? (
+          <PanelState>Loading signal volume.</PanelState>
+        ) : error ? (
+          <PanelState>Signal volume unavailable.</PanelState>
+        ) : (
+          <div className="flex items-end" style={{ height: "54px", gap: "2px" }}>
+            {trend.map((b, ix) => (
+              <div key={ix} className="flex flex-1 items-end" style={{ height: "100%" }}>
+                <div
+                  style={{
+                    width: "100%",
+                    height: `${b.pct}%`,
+                    borderRadius: "2px",
+                    background: "linear-gradient(180deg, var(--c-accent), var(--c-accent-2))",
+                    opacity: b.opacity,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

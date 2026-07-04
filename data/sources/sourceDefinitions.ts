@@ -242,7 +242,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.securityweek.com/feed/",
     language: "en",
     regionScope: "global",
-    targetScreens: ["defense_industry", "sources"],
+    targetScreens: ["cyber_news", "sources"],
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes: "SecurityWeek — cyber/defense security news RSS feed.",
@@ -261,7 +261,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.cisa.gov/news.xml",
     language: "en",
     regionScope: "north_america",
-    targetScreens: ["defense_industry", "sources"],
+    targetScreens: ["cyber_news", "sources"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     notes: "CISA — U.S. Cybersecurity & Infrastructure Security Agency news RSS.",
@@ -434,7 +434,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.aljazeera.com/xml/rss/all.xml",
     language: "en",
     regionScope: "middle_east",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     notes:
@@ -573,7 +573,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://tass.com/rss/v2.xml",
     language: "en",
     regionScope: "global",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -625,7 +625,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.euronews.com/rss?format=mrss&level=theme&name=news",
     language: "en",
     regionScope: "europe",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "general_news",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -728,7 +728,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://feeds.skynews.com/feeds/rss/politics.xml",
     language: "en",
     regionScope: "europe",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -860,7 +860,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://en.mehrnews.com/rss/tp/577",
     language: "en",
     regionScope: "middle_east",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -1162,7 +1162,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.presstv.ir/rss/rss-10106.xml",
     language: "en",
     regionScope: "global",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -1266,7 +1266,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.saba.ye/en/rsscatfeed14.htm",
     language: "en",
     regionScope: "middle_east",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -1626,7 +1626,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.tanjug.rs/rss/srbija/politika",
     language: "sr",
     regionScope: "europe",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {
@@ -2014,7 +2014,7 @@ export const candidateSourceDefinitions: SourceDefinition[] = [
     candidateFeedUrl: "https://www.gazeta.uz/en/rss/?section=politics",
     language: "en",
     regionScope: "asia_pacific",
-    targetScreens: ["monitor", "intel_watch"],
+    targetScreens: ["monitor", "intel_watch", "policy"],
     sourceProfile: "official_diplomatic",
     markerLocationStrategy: "item_location",
     sourceLocation: {

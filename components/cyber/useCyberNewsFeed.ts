@@ -4,7 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { NormalizedSourceItem } from "@/data/sources/sourceTypes";
 import type { CyberNewsContext, CyberNewsItem } from "@/types/cyberNews";
 
-export const CYBER_NEWS_SOURCE_ID = "the-hacker-news";
+/** RSS sources feeding the Cyber News screen (allowlisted in the route). */
+export const CYBER_NEWS_SOURCE_IDS = [
+  "the-hacker-news",
+  "securityweek",
+  "cisa-news",
+] as const;
+
+/** Human-readable source label for the map info strip. */
+export const CYBER_NEWS_SOURCE_LABEL = "The Hacker News · SecurityWeek · CISA";
 
 type CyberNewsFeedResponse = {
   sourceId?: string;
@@ -77,9 +85,9 @@ function toCyberNewsItem(item: NormalizedSourceItem, index: number): CyberNewsIt
   const publishedAt = item.publishedAt || item.collectedAt;
 
   return {
-    id: item.id || `${CYBER_NEWS_SOURCE_ID}-${index}`,
+    id: item.id || `cyber-news-${index}`,
     headline: item.title,
-    source: item.sourceName || "The Hacker News",
+    source: item.sourceName || "RSS Source",
     timeAgo: formatRelativeTime(publishedAt),
     summary: item.summary || "The source RSS item did not include a summary.",
     categoryTag: item.category || "Cyber Security",
@@ -93,57 +101,126 @@ function toCyberNewsItem(item: NormalizedSourceItem, index: number): CyberNewsIt
   };
 }
 
+function itemTime(item: NormalizedSourceItem): number {
+  return new Date(item.publishedAt || item.collectedAt || 0).getTime();
+}
+
+// ── Module-level feed cache ─────────────────────────────────────────────────
+// The Cyber News screen unmounts on every tab switch. Keeping the fetched feed
+// in module scope means returning to the tab renders instantly from memory and
+// only refreshes in the background once the snapshot is stale. Mirrors the
+// server route's 5-minute RSS cache TTL.
+
+const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type FeedSnapshot = {
+  items: NormalizedSourceItem[];
+  error: string | null;
+  collectedAt: string | null;
+};
+
+let feedCache: FeedSnapshot | null = null;
+let feedCacheAt = 0;
+let feedInFlight: Promise<FeedSnapshot> | null = null;
+
+async function fetchAllSources(): Promise<FeedSnapshot> {
+  const results = await Promise.allSettled(
+    CYBER_NEWS_SOURCE_IDS.map(async (sourceId) => {
+      const response = await fetch(
+        `/api/sources/rss-preview?sourceId=${encodeURIComponent(sourceId)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as CyberNewsFeedResponse;
+
+      if (!response.ok || payload.error) {
+        throw new Error(
+          payload.reason ?? payload.error ?? `source_${response.status}`,
+        );
+      }
+
+      return Array.isArray(payload.items) ? payload.items : [];
+    }),
+  );
+
+  const merged: NormalizedSourceItem[] = [];
+  const seen = new Set<string>();
+  let anyOk = false;
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    anyOk = true;
+    for (const item of result.value) {
+      const key = item.id || item.url || item.title;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  merged.sort((a, b) => itemTime(b) - itemTime(a));
+  return {
+    items: merged,
+    error: anyOk ? null : "feed_fetch_failed",
+    collectedAt: anyOk ? new Date().toISOString() : null,
+  };
+}
+
+function loadFeed(): Promise<FeedSnapshot> {
+  if (feedCache && !feedCache.error && Date.now() - feedCacheAt < FEED_CACHE_TTL_MS) {
+    return Promise.resolve(feedCache);
+  }
+  if (feedInFlight) return feedInFlight;
+
+  feedInFlight = fetchAllSources()
+    .then((snapshot) => {
+      if (!snapshot.error) {
+        feedCache = snapshot;
+        feedCacheAt = Date.now();
+        return snapshot;
+      }
+      // All sources failed: keep serving the last good snapshot if we have one.
+      return feedCache ?? snapshot;
+    })
+    .finally(() => {
+      feedInFlight = null;
+    });
+  return feedInFlight;
+}
+
+/** Warm the feed cache without mounting the screen (called once at app open). */
+export function prefetchCyberNewsFeed(): void {
+  void loadFeed().catch(() => {});
+}
+
 export function useCyberNewsFeed(): CyberNewsFeedState {
-  const [items, setItems] = useState<NormalizedSourceItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [collectedAt, setCollectedAt] = useState<string | null>(null);
+  // Any cached snapshot (even stale) renders immediately; a stale one is
+  // refreshed in the background by the effect below.
+  const [snapshot, setSnapshot] = useState<FeedSnapshot | null>(feedCache);
+  const [isLoading, setIsLoading] = useState(feedCache === null);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let cancelled = false;
 
-    async function loadFeed() {
-      setIsLoading(true);
-      setError(null);
+    loadFeed().then((next) => {
+      if (cancelled) return;
+      setSnapshot(next);
+      setIsLoading(false);
+    });
 
-      try {
-        const response = await fetch(
-          `/api/sources/rss-preview?sourceId=${encodeURIComponent(CYBER_NEWS_SOURCE_ID)}`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        const payload = (await response.json()) as CyberNewsFeedResponse;
-
-        if (!response.ok || payload.error) {
-          throw new Error(
-            payload.reason ?? payload.error ?? `source_${response.status}`,
-          );
-        }
-
-        setItems(Array.isArray(payload.items) ? payload.items : []);
-        setCollectedAt(payload.collectedAt ?? new Date().toISOString());
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : "feed_fetch_failed");
-        setItems([]);
-        setCollectedAt(null);
-      } finally {
-        if (!controller.signal.aborted) setIsLoading(false);
-      }
-    }
-
-    void loadFeed();
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  const items = snapshot?.items;
   const cyberItems = useMemo(
-    () => items.map(toCyberNewsItem),
+    () => (items ?? []).map(toCyberNewsItem),
     [items],
   );
 
   return {
     items: cyberItems,
     isLoading,
-    error,
-    collectedAt,
+    error: snapshot?.error ?? null,
+    collectedAt: snapshot?.collectedAt ?? null,
   };
 }
