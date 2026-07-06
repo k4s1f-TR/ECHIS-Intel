@@ -1,5 +1,6 @@
 import http from "http";
 import https from "https";
+import zlib from "zlib";
 import type {
   NormalizedSourceItem,
   SourceDefinition,
@@ -185,6 +186,24 @@ function safeIsoDate(value: string): string {
 }
 
 /**
+ * Decode a feed response body by its Content-Encoding. Unknown or empty
+ * encodings are treated as identity (plain UTF-8). Throws on malformed
+ * compressed payloads so the caller can surface a fetch diagnostic.
+ */
+function decodeFeedBody(raw: Buffer, encoding: string): string {
+  switch (encoding) {
+    case "gzip":
+      return zlib.gunzipSync(raw).toString("utf8");
+    case "deflate":
+      return zlib.inflateSync(raw).toString("utf8");
+    case "br":
+      return zlib.brotliDecompressSync(raw).toString("utf8");
+    default:
+      return raw.toString("utf8");
+  }
+}
+
+/**
  * Fetch a feed URL using Node.js native http/https modules.
  * The undici-backed global fetch used by Next.js has a TLS fingerprint that
  * some CDN WAFs (e.g. HDX/ReliefWeb) flag as bot traffic. Native modules
@@ -224,6 +243,7 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
             "User-Agent": "ECHIS/1.0",
             Accept:
               "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
           },
         },
         (res) => {
@@ -255,8 +275,21 @@ function fetchFeed(feedUrl: string): Promise<FeedResponse> {
             chunks.push(chunk);
           });
           res.on("end", () => {
+            // Some feed servers (e.g. UN News) return a compressed body even
+            // without an Accept-Encoding request; Node's http module never
+            // decompresses, so decode by the declared Content-Encoding here.
+            const encoding = String(resHeaders["content-encoding"] ?? "")
+              .trim()
+              .toLowerCase();
+            let body: string;
+            try {
+              body = decodeFeedBody(Buffer.concat(chunks), encoding);
+            } catch {
+              reject(new Error("upstream_decode_failed"));
+              return;
+            }
             resolve({
-              body: Buffer.concat(chunks).toString("utf8"),
+              body,
               status: statusCode ?? 0,
               finalUrl: url,
               contentType: String(resHeaders["content-type"] ?? ""),

@@ -7,12 +7,17 @@ import type { CyberNewsContext, CyberNewsItem } from "@/types/cyberNews";
 /** RSS sources feeding the Cyber News screen (allowlisted in the route). */
 export const CYBER_NEWS_SOURCE_IDS = [
   "the-hacker-news",
+  "bleeping-computer",
+  "the-record",
+  "dark-reading",
+  "cyberscoop",
   "securityweek",
   "cisa-news",
 ] as const;
 
 /** Human-readable source label for the map info strip. */
-export const CYBER_NEWS_SOURCE_LABEL = "The Hacker News · SecurityWeek · CISA";
+export const CYBER_NEWS_SOURCE_LABEL =
+  "The Hacker News · BleepingComputer · The Record · Dark Reading · CyberScoop · SecurityWeek · CISA";
 
 type CyberNewsFeedResponse = {
   sourceId?: string;
@@ -59,25 +64,19 @@ function formatContextTime(value: string): string {
   });
 }
 
+// Fallback values only — the Threat Context panel overrides country / sector /
+// actor with per-item engine annotations (lib/cyber) when they exist.
 function buildContext(item: NormalizedSourceItem): CyberNewsContext {
   const publishedAt = item.publishedAt || item.collectedAt;
 
   return {
     country: item.relatedCountries[0] ?? "Global",
-    affectedEntity: "Not specified by RSS source",
     hackIncident: item.title,
-    attackTypeVector: "RSS source item",
-    threatActorGroup: "Not specified by RSS source",
-    targetAsset: "Not specified by RSS source",
     targetSector: item.category || "Cyber Security",
     contextSummary:
       item.summary || "The source RSS item did not include a summary.",
     firstSeen: formatContextTime(publishedAt),
     lastUpdate: formatContextTime(item.collectedAt || publishedAt),
-    confidence: "Medium",
-    impact: "Low",
-    confidenceLevel: 3,
-    impactLevel: 2,
   };
 }
 
@@ -91,9 +90,6 @@ function toCyberNewsItem(item: NormalizedSourceItem, index: number): CyberNewsIt
     timeAgo: formatRelativeTime(publishedAt),
     summary: item.summary || "The source RSS item did not include a summary.",
     categoryTag: item.category || "Cyber Security",
-    severityTag: "RSS",
-    severityLevel: "low",
-    accentColor: "#38a869",
     url: item.url,
     publishedAt,
     isLive: true,

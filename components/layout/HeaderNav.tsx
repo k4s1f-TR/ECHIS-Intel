@@ -18,19 +18,33 @@ const NAV_TABS: { label: string; key?: TopNavTab }[] = [
 function IconBtn({
   children,
   className = "",
+  soon = false,
+  label,
 }: {
   children: ReactNode;
   className?: string;
+  /** Planned control — dimmed, non-interactive, "coming soon" tooltip. */
+  soon?: boolean;
+  label?: string;
 }) {
   return (
     <button
+      title={soon && label ? `${label} — coming soon` : label}
+      aria-label={soon && label ? `${label} (coming soon)` : label}
+      aria-disabled={soon || undefined}
       className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors duration-150 ${className}`}
-      style={{ color: "var(--icon-default)" }}
+      style={{
+        color: "var(--icon-default)",
+        opacity: soon ? 0.5 : 1,
+        cursor: soon ? "default" : "pointer",
+      }}
       onMouseEnter={(e) => {
+        if (soon) return;
         (e.currentTarget as HTMLElement).style.color = "var(--icon-hover)";
         (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
       }}
       onMouseLeave={(e) => {
+        if (soon) return;
         (e.currentTarget as HTMLElement).style.color = "var(--icon-default)";
         (e.currentTarget as HTMLElement).style.background = "transparent";
       }}
@@ -135,12 +149,13 @@ export function HeaderNav({
           <GeoLiveClock />
         </div>
 
-        <IconBtn>
+        <IconBtn soon label="Theme">
           <Sun size={14} />
         </IconBtn>
 
         <div
-          className="ml-1.5 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer select-none"
+          title="Account — coming soon"
+          className="ml-1.5 w-7 h-7 rounded-full flex items-center justify-center select-none"
           style={{
             fontSize: "var(--fs-sm)",
             fontWeight: 700,

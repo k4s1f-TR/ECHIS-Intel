@@ -26,7 +26,6 @@ import {
   buildSourceFilterOptions,
 } from "@/components/source-intelligence/SourceGlobalFeedPanel";
 import { useSourceIntelligenceItems } from "@/components/source-intelligence/useSourceIntelligenceItems";
-import { EventDetailModal } from "@/components/events/EventDetailModal";
 import { BookmarksView } from "@/components/events/BookmarksView";
 import { useBookmarks } from "@/components/events/useBookmarks";
 import { SignalsPanel } from "@/components/signals/SignalsPanel";
@@ -38,12 +37,12 @@ import { prefetchPolicyFeed } from "@/components/policy/usePolicyFeed";
 import { CyberSecPanel } from "@/components/cyber/CyberSecPanel";
 import { prefetchCyberNewsFeed } from "@/components/cyber/useCyberNewsFeed";
 import { IntelWatchPanel } from "@/components/intel-watch/IntelWatchPanel";
+import { sendToIntelWatch } from "@/components/intel-watch/workspaceStore";
 import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
 import { prefetchDefenseIndustryFeed } from "@/components/defense-industry/useDefenseIndustryFeed";
 import { ContactScreen } from "@/components/contact/ContactScreen";
-import { mockEvents } from "@/data/mockEvents";
 import { socmintReports } from "@/data/socmintReports";
-import type { EventCategory, RegionKey } from "@/types/event";
+import type { RegionKey } from "@/types/event";
 import { socmintMatchesConfidenceFilter } from "@/types/socmint";
 import { domainTags } from "@/data/source-intelligence/filters/geopoliticalFilterRules";
 import type { SourceFilterDomain } from "@/data/source-intelligence/sourceIntelligenceTypes";
@@ -166,7 +165,6 @@ export function AppShell() {
   const luxeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const mapLibreGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [eventDetailOpen, setEventDetailOpen] = useState(false);
   const [markerPopup, setMarkerPopup] = useState<MarkerPopupState>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
@@ -178,7 +176,6 @@ export function AppShell() {
   );
   const [activeView, setActiveView] = useState<ViewMode>("situation");
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
-  const [activeCategory, setActiveCategory] = useState<EventCategory | "all">("all");
   const [activeSourceCategory, setActiveSourceCategory] = useState<SourceFilterDomain | "all">("all");
   const [activeSignalRegion, setActiveSignalRegion] = useState<SignalCoverage>("global");
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
@@ -233,8 +230,15 @@ export function AppShell() {
     prefetchDefenseIndustryFeed();
     prefetchPolicyFeed();
   }, []);
-  const { bookmarkedItems, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
-    useBookmarks(mockEvents, socmintReports);
+  const {
+    bookmarkedItems,
+    isBookmarked,
+    toggleBookmark,
+    isSourceBookmarked,
+    toggleSourceBookmark,
+    removeBookmark,
+    clearBookmarks,
+  } = useBookmarks(socmintReports);
 
   // Same accepted source-intelligence candidates drive the feed and map pins.
   const {
@@ -325,15 +329,6 @@ export function AppShell() {
   const activeRailModeRef = useRef(activeRailMode);
   useEffect(() => { activeRailModeRef.current = activeRailMode; }, [activeRailMode]);
 
-  // When a Global View event is selected (from panel click or marker click),
-  // smoothly pan the globe to that marker's coordinates.
-  useEffect(() => {
-    if (!selectedId || activeRailModeRef.current !== "global") return;
-    const event = mockEvents.find((e) => e.id === selectedId);
-    if (!event?.coordinates) return;
-    getActiveGlobe()?.focusMarker(event.coordinates.lng, event.coordinates.lat);
-  }, [getActiveGlobe, selectedId]);
-
   // When a SOCMINT report is selected, pan to its marker coordinates.
   useEffect(() => {
     if (!selectedSignalId || activeRailModeRef.current !== "signals") return;
@@ -368,42 +363,14 @@ export function AppShell() {
   const mapControlPanelOffset =
     activeMapRailMode === "global" ? 390 : activeMapRailMode === "signals" ? 390 : 0;
 
-  const baseEvents = useMemo(
-    () =>
-      activeView === "global"
-        ? mockEvents
-        : mockEvents.filter((e) => e.region === activeRegion),
-    [activeView, activeRegion],
-  );
-
-  const displayedEvents = useMemo(
-    () =>
-      activeCategory === "all"
-        ? baseEvents
-        : baseEvents.filter((e) => e.category === activeCategory),
-    [baseEvents, activeCategory],
-  );
-
-  const selectedGlobalEvent = useMemo(
-    () => displayedEvents.find((event) => event.id === selectedId) ?? null,
-    [displayedEvents, selectedId],
-  );
-  const markerPopupEvent = useMemo(
-    () =>
-      markerPopup?.kind === "global"
-        ? displayedEvents.find((event) => event.id === markerPopup.id) ?? null
-        : null,
-    [displayedEvents, markerPopup],
-  );
-
-  // Source marker popup — used when the clicked marker belongs to a source
-  // intelligence item rather than a mock event.
+  // Source marker popup — Global View markers all come from the source
+  // intelligence pipeline.
   const markerPopupSourceMarker = useMemo(
     () =>
-      markerPopup?.kind === "global" && markerPopupEvent === null
+      markerPopup?.kind === "global"
         ? (displayedSourceMarkers.find((m) => m.id === markerPopup.id) ?? null)
         : null,
-    [displayedSourceMarkers, markerPopup, markerPopupEvent],
+    [displayedSourceMarkers, markerPopup],
   );
   // Derive the pager index from selectedSourceItemId so the feed highlight and
   // the popup "REPORT XX / NN" label always agree.  Falls back to 0 when the
@@ -425,9 +392,8 @@ export function AppShell() {
     [markerPopupSourceMarker, markerPopupSourceItemIndex],
   );
 
-  // Global View markers — source-intelligence candidates only.
-  // Mock event markers are not shown in Global View; the globe renders only
-  // items that have a deterministic location match in the source pipeline.
+  // Global View markers — source-intelligence candidates only; the globe
+  // renders items that have a deterministic location match in the pipeline.
   // SOCMINT markers are untouched (separate signalsMarkers array below).
   const globalMarkers = useMemo<MarkerFeature[]>(
     () => displayedSourceMarkers,
@@ -461,11 +427,9 @@ export function AppShell() {
     setActiveSection("dashboard");
     setActiveTopTab("situation");
     setActiveView(view);
-    setActiveCategory("all");
     setActiveSourceCategory("all");
     setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
     setSelectedSignalId(null);
     setSignalDetailOpen(false);
@@ -487,11 +451,9 @@ export function AppShell() {
     setActiveRailMode(null);
     setActiveView("situation");
     setActiveRegion("middle-east");
-    setActiveCategory("all");
     setActiveSourceCategory("all");
     setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
     setSelectedSignalId(null);
     setSignalDetailOpen(false);
@@ -502,7 +464,6 @@ export function AppShell() {
     setActiveTopTab("situation");
     setActiveRailMode(null);
     setSelectedId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
     setSelectedSignalId(null);
     setSignalDetailOpen(false);
@@ -516,7 +477,6 @@ export function AppShell() {
     setActiveView("situation");
     setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
   }
 
@@ -527,7 +487,6 @@ export function AppShell() {
     setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
     setSelectedSourceItemId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
   }
 
@@ -535,7 +494,6 @@ export function AppShell() {
     setSelectedSourceFilterId(sourceId);
     setSelectedId(null);
     setSelectedSourceItemId(null);
-    setEventDetailOpen(false);
     setMarkerPopup(null);
   }
 
@@ -546,7 +504,6 @@ export function AppShell() {
       setActiveRailMode(null);
       setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
-      setEventDetailOpen(false);
       setMarkerPopup(null);
       setSelectedSignalId(null);
       setSignalDetailOpen(false);
@@ -559,10 +516,8 @@ export function AppShell() {
       setActiveRailMode("global");
       setActiveView("global");
       setActiveRegion("middle-east");
-      setActiveCategory("politics");
       setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
-      setEventDetailOpen(false);
       setMarkerPopup(null);
       setSelectedSignalId(null);
       setSignalDetailOpen(false);
@@ -573,11 +528,9 @@ export function AppShell() {
       setActiveSection("dashboard");
       setActiveTopTab(tab);
       setActiveRailMode(null);
-      setActiveCategory("all");
       setActiveSourceCategory("all");
       setSelectedSourceFilterId(ALL_SOURCES_FILTER);
       setSelectedId(null);
-      setEventDetailOpen(false);
       setMarkerPopup(null);
       setSelectedSignalId(null);
       setSignalDetailOpen(false);
@@ -608,7 +561,6 @@ export function AppShell() {
 
   function handleGlobalMarkerSelect(id: string) {
     setSelectedId(id);
-    setEventDetailOpen(false);
     setMarkerPopup({ kind: "global", id });
     // For source markers: default to the first item unless the currently selected
     // item already belongs to this marker (e.g. user re-clicks the same pin).
@@ -641,12 +593,6 @@ export function AppShell() {
     setMarkerPopup(null);
   }
 
-  function handleGlobalDetailClose() {
-    setEventDetailOpen(false);
-    setSelectedId(null);
-    setMarkerPopup(null);
-  }
-
   function handleSignalDetailClose() {
     setSignalDetailOpen(false);
     setSelectedSignalId(null);
@@ -654,14 +600,6 @@ export function AppShell() {
   }
 
   const getMarkerPopupPosition = useCallback(() => {
-    if (markerPopup?.kind === "global" && markerPopupEvent?.coordinates) {
-      return (
-        getActiveGlobe()?.projectMarker(
-          markerPopupEvent.coordinates.lng,
-          markerPopupEvent.coordinates.lat,
-        ) ?? null
-      );
-    }
     // Source marker: use pipeline-resolved coordinates directly.
     if (markerPopup?.kind === "global" && markerPopupSourceMarker) {
       return (
@@ -683,7 +621,6 @@ export function AppShell() {
   }, [
     getActiveGlobe,
     markerPopup,
-    markerPopupEvent,
     markerPopupSourceMarker,
     markerPopupSignal,
   ]);
@@ -877,6 +814,18 @@ export function AppShell() {
                   selectedItemId={selectedSourceItemId}
                   items={displayedSourceItems}
                   selectedSourceId={effectiveSourceFilterId}
+                  isItemBookmarked={isSourceBookmarked}
+                  onToggleItemBookmark={(item) =>
+                    toggleSourceBookmark({
+                      id: item.id,
+                      title: item.title,
+                      summary: item.summary,
+                      sourceName: item.sourceName,
+                      url: item.url,
+                      publishedAt: item.publishedAt,
+                      domainLabel: domainTags[item.primaryDomain],
+                    })
+                  }
                   onItemSelect={(itemId) => {
                     const entry = sourceItemKeyToMarker.get(itemId);
                     if (entry) {
@@ -889,7 +838,6 @@ export function AppShell() {
                       );
                       if (grouped) {
                         setSelectedId(entry.markerId);
-                        setEventDetailOpen(false);
                         setMarkerPopup({ kind: "global", id: entry.markerId });
                         getActiveGlobe()?.focusMarker(
                           grouped.lng,
@@ -905,24 +853,6 @@ export function AppShell() {
                 />
               )}
             </div>
-            {activeMapRailMode === "global" && eventDetailOpen && selectedGlobalEvent && (
-              <EventDetailModal
-                event={selectedGlobalEvent}
-                onClose={handleGlobalDetailClose}
-              />
-            )}
-            {activeMapRailMode === "global" && markerPopupEvent && (
-              <MarkerInfoPopup
-                title={markerPopupEvent.title}
-                location={markerPopupEvent.location}
-                summary={markerPopupEvent.summary}
-                source={markerPopupEvent.sourceId}
-                time={markerPopupEvent.time}
-                accent="var(--accent-blue-text)"
-                getPosition={getMarkerPopupPosition}
-                onClose={handleMarkerPopupClose}
-              />
-            )}
             {activeMapRailMode === "global" && markerPopupSourceItem && markerPopupSourceMarker && (
               <MarkerInfoPopup
                 title={markerPopupSourceItem.title}
@@ -933,6 +863,17 @@ export function AppShell() {
                 accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
+                onSendToIntelWatch={() =>
+                  sendToIntelWatch({
+                    itemId: markerPopupSourceItem.id,
+                    lng: markerPopupSourceMarker.lng,
+                    lat: markerPopupSourceMarker.lat,
+                    title: markerPopupSourceItem.title,
+                    source: markerPopupSourceItem.sourceName,
+                    updated: markerPopupSourceItem.publishedAt ?? "—",
+                    note: markerPopupSourceItem.summary,
+                  })
+                }
                 itemIndex={markerPopupSourceItemIndex}
                 itemCount={markerPopupSourceMarker.items.length}
                 onPrev={() => {
@@ -988,6 +929,17 @@ export function AppShell() {
                 accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
+                onSendToIntelWatch={() =>
+                  sendToIntelWatch({
+                    itemId: markerPopupSignal.id,
+                    lng: markerPopupSignal.coordinates[0],
+                    lat: markerPopupSignal.coordinates[1],
+                    title: markerPopupSignal.title,
+                    source: markerPopupSignal.sourceName,
+                    updated: markerPopupSignal.timestamp,
+                    note: markerPopupSignal.summary,
+                  })
+                }
               />
             )}
           </div>

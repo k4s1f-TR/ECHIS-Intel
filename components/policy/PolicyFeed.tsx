@@ -60,10 +60,32 @@ function FeedCard({
           {item.title}
         </div>
         <div
-          className="c-mono"
-          style={{ fontSize: "9.5px", letterSpacing: ".04em", color: "var(--c-silver-dim)" }}
+          className="c-mono flex items-center"
+          style={{ gap: "7px", fontSize: "9.5px", letterSpacing: ".04em", color: "var(--c-silver-dim)" }}
         >
-          {item.source} · {item.sourceType}
+          <span>
+            {item.source} · {item.sourceType}
+          </span>
+          {item.stateAffiliated && (
+            <span
+              title="Publicly documented as state-owned or state-funded"
+              className="uppercase"
+              style={{
+                fontSize: "8px",
+                fontWeight: 700,
+                letterSpacing: ".09em",
+                lineHeight: 1,
+                padding: "2.5px 5px",
+                borderRadius: "4px",
+                color: "var(--c-t4)",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              State
+            </span>
+          )}
         </div>
       </div>
     </div>

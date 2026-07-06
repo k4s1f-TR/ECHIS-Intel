@@ -27,13 +27,14 @@ export type VerificationStatus =
 
 export type EventScope = "regional" | "global";
 
-export type RegionKey = "middle-east" | "europe" | "asia-pacific" | "americas";
+export type RegionKey = "middle-east" | "europe" | "africa" | "asia-pacific" | "americas";
 
 export type EventMarkerVariant = "turkey-focus";
 
 export const REGION_OPTIONS: { key: RegionKey; label: string }[] = [
   { key: "middle-east", label: "Middle East" },
   { key: "europe", label: "Europe" },
+  { key: "africa", label: "Africa" },
   { key: "asia-pacific", label: "Asia-Pacific" },
   { key: "americas", label: "Americas" },
 ];

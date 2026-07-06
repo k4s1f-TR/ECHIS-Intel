@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Luxe Globe — faithful port of `Luxe Globe.dc.html` (Claude Design handoff).
 //
-// A premium Three.js globe: vivid deep-red ocean, black continents, clean
+// A premium Three.js globe: vivid crimson ocean, black continents, clean
 // white country borders, rendered with a physical/clearcoat material under a
 // soft studio environment. Drag to rotate (with momentum), wheel to zoom.
 //
@@ -17,6 +17,9 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { feature } from "topojson-client";
 import type { Feature, Geometry, Position } from "geojson";
+
+const LUXE_CRIMSON_DARK = "#b3121f";
+const LUXE_CRIMSON_BRIGHT = "#ff2b3d";
 
 export interface LuxeGlobeProps {
   /** Spin the globe on its own when the user isn't dragging. */
@@ -181,8 +184,10 @@ export function LuxeGlobe({
       const h = eng.H;
       const ctx = eng.colorCtx!;
       ctx.clearRect(0, 0, w, h);
-      // deep red ocean — a touch brighter/vivid
-      ctx.fillStyle = "#bf1626";
+      const ocean = ctx.createLinearGradient(0, 0, w, 0);
+      ocean.addColorStop(0, LUXE_CRIMSON_DARK);
+      ocean.addColorStop(1, LUXE_CRIMSON_BRIGHT);
+      ctx.fillStyle = ocean;
       ctx.fillRect(0, 0, w, h);
       // faint deep-red tonal depth toward poles
       const og = ctx.createLinearGradient(0, 0, 0, h);

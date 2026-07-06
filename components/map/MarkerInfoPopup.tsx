@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { MapPin, X } from "lucide-react";
+import type { SendToIntelWatchResult } from "@/components/intel-watch/workspaceStore";
 
 interface MarkerInfoPopupProps {
   title: string;
@@ -12,12 +13,20 @@ interface MarkerInfoPopupProps {
   accent?: string;
   getPosition: () => { x: number; y: number } | null;
   onClose: () => void;
+  /** Writes the item into the Intel Watch workspace; enables the action row. */
+  onSendToIntelWatch?: () => SendToIntelWatchResult;
   /** Pager props — only rendered when itemCount > 1. */
   itemIndex?: number;
   itemCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
 }
+
+const SEND_RESULT_LABEL: Record<SendToIntelWatchResult, string> = {
+  added: "Added to Intel Watch",
+  exists: "Already in Intel Watch",
+  unavailable: "Could not save",
+};
 
 export function MarkerInfoPopup({
   title,
@@ -28,6 +37,7 @@ export function MarkerInfoPopup({
   accent = "var(--accent-blue-text)",
   getPosition,
   onClose,
+  onSendToIntelWatch,
   itemIndex,
   itemCount,
   onPrev,
@@ -38,6 +48,15 @@ export function MarkerInfoPopup({
   const isFirst = (itemIndex ?? 0) === 0;
   const isLast = itemCount !== undefined && (itemIndex ?? 0) >= itemCount - 1;
   const [position, setPosition] = useState(() => getPosition());
+  const [sendResult, setSendResult] = useState<SendToIntelWatchResult | null>(null);
+  // Reset the "sent" feedback when the popup switches to another item —
+  // adjust-during-render pattern (no setState inside an effect).
+  const itemKey = `${title}|${location}`;
+  const [sendResultKey, setSendResultKey] = useState(itemKey);
+  if (sendResultKey !== itemKey) {
+    setSendResultKey(itemKey);
+    setSendResult(null);
+  }
 
   useEffect(() => {
     let frame = 0;
@@ -140,6 +159,38 @@ export function MarkerInfoPopup({
               {source && <span className="truncate">{source}</span>}
               {time && <span className="flex-shrink-0">{time}</span>}
             </div>
+          )}
+
+          {onSendToIntelWatch && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSendResult(onSendToIntelWatch());
+              }}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 uppercase"
+              style={{
+                padding: "5px 8px",
+                borderRadius: 6,
+                fontSize: 8.5,
+                fontWeight: 800,
+                letterSpacing: "0.09em",
+                lineHeight: 1,
+                color: sendResult === "added" ? accent : "var(--c-t4)",
+                background:
+                  sendResult === "added"
+                    ? "var(--accent-blue-bg)"
+                    : "rgba(255,255,255,0.04)",
+                border:
+                  sendResult === "added"
+                    ? "1px solid var(--accent-blue-border)"
+                    : "1px solid rgba(255,255,255,0.1)",
+                cursor: sendResult ? "default" : "pointer",
+              }}
+            >
+              <MapPin size={10} />
+              {sendResult ? SEND_RESULT_LABEL[sendResult] : "Send to Intel Watch"}
+            </button>
           )}
         </div>
 

@@ -154,7 +154,14 @@ export function PolicyDetail({
               marginBottom: "30px",
             }}
           >
-            <MetaField label="Source" value={report.source} />
+            <MetaField
+              label="Source"
+              value={
+                report.stateAffiliated
+                  ? `${report.source} · State-affiliated`
+                  : report.source
+              }
+            />
             <MetaDivider />
             <MetaField label="Channel" value={report.sourceType} />
             <MetaDivider />

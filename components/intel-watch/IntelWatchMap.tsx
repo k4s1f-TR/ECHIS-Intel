@@ -41,6 +41,7 @@ import {
   buildEchisCommandStyle,
 } from "./echisCommandBasemap";
 import IntelMapLoader from "./IntelMapLoader";
+import { INTEL_WATCH_STORAGE_KEY } from "./workspaceStore";
 
 const PANEL_WIDTH = 318;
 
@@ -73,8 +74,9 @@ type Annotation = {
 /** Pins + drawings snapshot — the unit of undo history and localStorage. */
 type WorkspaceSnapshot = { pins: Pin[]; annotations: Annotation[] };
 
-/** Persisted analyst workspace (survives tab switches / reloads). */
-const STORAGE_KEY = "echis.intel-watch.v1";
+// Persisted analyst workspace key lives in workspaceStore.ts so other screens
+// ("Send to Intel Watch") can write pins without importing this module.
+const STORAGE_KEY = INTEL_WATCH_STORAGE_KEY;
 const HISTORY_LIMIT = 50;
 
 type Selection =

@@ -161,6 +161,7 @@ export function CyberSecPanel() {
 
   // Region + sector metrics inferred from the live RSS title+summary text.
   // No mock data: panels render only what the open-source feed text yields.
+  // Per-item annotations feed the Threat Context panel (country/actor/sector).
   const signals = useMemo(
     () =>
       analyzeCyberSignals(
@@ -169,8 +170,14 @@ export function CyberSecPanel() {
           title: item.headline,
           summary: item.summary,
         })),
+        { includeAnnotations: true },
       ),
     [displayedNewsItems],
+  );
+
+  const annotationsById = useMemo(
+    () => new Map((signals.annotations ?? []).map((a) => [a.id, a])),
+    [signals.annotations],
   );
 
   return (
@@ -237,6 +244,7 @@ export function CyberSecPanel() {
           <ThreatContextPanel
             selectedNewsId={selectedNewsId}
             items={displayedNewsItems}
+            annotations={annotationsById}
           />
         </div>
       </main>

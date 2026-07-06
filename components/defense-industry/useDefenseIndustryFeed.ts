@@ -16,6 +16,9 @@ export const DEFENSE_SOURCE_IDS = [
   "defensenews-all",
   "the-war-zone",
   "the-aviationist",
+  "defense-one",
+  "naval-news",
+  "edr-magazine",
 ] as const;
 
 interface RssResponse {

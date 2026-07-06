@@ -1,14 +1,13 @@
 "use client";
 
-import { Bookmark } from "lucide-react";
+import { Bookmark, ExternalLink } from "lucide-react";
 import {
   SOCMINT_PLATFORM_LABELS,
   SOCMINT_STATUS_LABELS,
   SOCMINT_TYPE_BADGE_LABELS,
 } from "@/types/socmint";
-import { EventCard } from "./EventCard";
 import { BookmarkToggleButton } from "./BookmarkToggleButton";
-import type { BookmarkedItem } from "./useBookmarks";
+import type { BookmarkedItem, SourceBookmarkSnapshot } from "./useBookmarks";
 
 const SOCMINT_STATUS_COLORS = {
   unverified: "rgba(248,113,113,0.9)",
@@ -16,6 +15,120 @@ const SOCMINT_STATUS_COLORS = {
   corroborated: "var(--c-elev)",
   "needs-review": "rgba(150,170,196,0.9)",
 } as const;
+
+function formatSavedDate(iso?: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function SourceBookmarkCard({
+  item,
+  index,
+  onRemove,
+}: {
+  item: SourceBookmarkSnapshot;
+  index: number;
+  onRemove: () => void;
+}) {
+  return (
+    <article
+      className="relative rounded-lg transition-all duration-150"
+      style={{
+        padding: "10px 11px",
+        border: "1px solid rgba(255,255,255,0.055)",
+        background: "rgba(255,255,255,0.018)",
+      }}
+    >
+      <div className="mb-1.5 flex items-start gap-2">
+        <span
+          className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
+          style={{
+            fontSize: "9px",
+            fontWeight: 700,
+            background: "rgba(255,255,255,0.07)",
+            color: "var(--c-t5)",
+          }}
+        >
+          {index}
+        </span>
+        <p
+          className="flex-1 pr-1 font-medium leading-snug"
+          style={{ fontSize: "12.5px", color: "var(--c-t3)" }}
+        >
+          {item.title}
+        </p>
+        {item.url && (
+          <button
+            type="button"
+            aria-label="Open source in new tab"
+            onClick={() => window.open(item.url, "_blank", "noopener,noreferrer")}
+            className="mt-0.5 flex flex-shrink-0 items-center justify-center rounded p-0.5"
+            style={{ color: "var(--c-t6)" }}
+          >
+            <ExternalLink size={11} />
+          </button>
+        )}
+        <div className="mt-0.5">
+          <BookmarkToggleButton bookmarked onToggle={onRemove} />
+        </div>
+      </div>
+
+      <div
+        className="mb-1.5 flex flex-wrap items-center gap-2"
+        style={{ fontSize: "10.5px", color: "var(--c-t5)" }}
+      >
+        <span style={{ color: "var(--c-silver-dim)", fontWeight: 500 }}>
+          {item.sourceName}
+        </span>
+        {item.publishedAt && <span>{formatSavedDate(item.publishedAt)}</span>}
+        <span>Saved {formatSavedDate(item.savedAt)}</span>
+      </div>
+
+      <div className="mb-1.5 flex flex-wrap gap-1">
+        <span
+          className="rounded px-1.5 py-0.5 uppercase tracking-wide"
+          style={{
+            fontSize: "9px",
+            fontWeight: 700,
+            background: "var(--accent-blue-bg)",
+            color: "var(--accent-blue-text)",
+          }}
+        >
+          Source Intel
+        </span>
+        {item.domainLabel && (
+          <span
+            className="rounded px-1.5 py-0.5 uppercase tracking-wide"
+            style={{
+              fontSize: "9px",
+              fontWeight: 700,
+              background: "rgba(255,255,255,0.045)",
+              color: "var(--c-t4)",
+            }}
+          >
+            {item.domainLabel}
+          </span>
+        )}
+      </div>
+
+      {item.summary && (
+        <p
+          className="line-clamp-2 leading-relaxed"
+          style={{ fontSize: "11.5px", color: "var(--c-t5)" }}
+        >
+          {item.summary}
+        </p>
+      )}
+    </article>
+  );
+}
 
 export function BookmarksView({
   items,
@@ -45,7 +158,7 @@ export function BookmarksView({
                 className="font-semibold uppercase"
                 style={{ color: "var(--c-t4)", fontSize: "10.5px", letterSpacing: "0.12em" }}
               >
-                Saved Events
+                Saved Items
               </span>
             </div>
             <h1 className="font-semibold" style={{ color: "var(--c-t1)", fontSize: "22px" }}>
@@ -70,7 +183,7 @@ export function BookmarksView({
               className="font-semibold uppercase"
               style={{ color: "var(--c-t4)", fontSize: "10px", letterSpacing: "0.12em" }}
             >
-              Bookmarked Events
+              Bookmarked Items
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -108,21 +221,19 @@ export function BookmarksView({
               className="flex flex-1 items-center justify-center text-center"
               style={{ color: "var(--c-t5)", fontSize: "12px" }}
             >
-              No bookmarked events yet.
+              No bookmarked items yet.
             </div>
           ) : (
             <div
               className="tm-scrollbar politics-feed-scrollbar grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-3 lg:grid-cols-2"
             >
               {items.map((item, index) =>
-                item.type === "event" ? (
-                  <EventCard
-                    key={item.event.id}
-                    event={item.event}
+                item.type === "source" ? (
+                  <SourceBookmarkCard
+                    key={item.item.id}
+                    item={item.item}
                     index={index + 1}
-                    selected={false}
-                    bookmarked
-                    onToggleBookmark={onRemoveBookmark}
+                    onRemove={() => onRemoveBookmark(item.item.id)}
                   />
                 ) : (
                   <article

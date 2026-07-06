@@ -1,18 +1,12 @@
 export type CyberNewsContext = {
+  /** Fallback country label from the RSS item itself (engine hits win in UI). */
   country: string;
-  affectedEntity: string;
   hackIncident: string;
-  attackTypeVector: string;
-  threatActorGroup: string;
-  targetAsset: string;
+  /** Fallback sector label from the RSS category (engine hits win in UI). */
   targetSector: string;
   contextSummary: string;
   firstSeen: string;
   lastUpdate: string;
-  confidence: "High" | "Medium" | "Low";
-  impact: "High" | "Medium" | "Low";
-  confidenceLevel: number;
-  impactLevel: number;
 };
 
 export type CyberNewsItem = {
@@ -22,9 +16,6 @@ export type CyberNewsItem = {
   timeAgo: string;
   summary: string;
   categoryTag: string;
-  severityTag: string;
-  severityLevel: "critical" | "high" | "medium" | "low";
-  accentColor: string;
   url?: string;
   publishedAt?: string;
   isLive?: boolean;

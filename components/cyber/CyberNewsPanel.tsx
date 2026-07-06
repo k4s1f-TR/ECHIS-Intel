@@ -3,17 +3,8 @@ import { useState, type MouseEvent } from "react";
 import { ExternalLink, Newspaper } from "lucide-react";
 import type { CyberNewsItem } from "@/types/cyberNews";
 
-/* Severity → UI badge token map (red-dominant family; low folds into Elevated/silver) */
-const SEV_BADGE: Record<string, { text: string; bg: string; border: string }> = {
-  critical: { text: "var(--c-crit)", bg: "var(--c-crit-bg)", border: "var(--c-crit-border)" },
-  high: { text: "var(--c-high)", bg: "var(--c-high-bg)", border: "var(--c-high-border)" },
-  medium: { text: "var(--c-med)", bg: "var(--c-med-bg)", border: "var(--c-med-border)" },
-  low: { text: "var(--c-elev)", bg: "var(--c-elev-bg)", border: "var(--c-elev-border)" },
-};
-
 function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelected: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
-  const sev = SEV_BADGE[item.severityLevel] ?? SEV_BADGE.low;
   const openItem = item.url
     ? (event: MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -110,25 +101,6 @@ function NewsCard({ item, isSelected, onClick }: { item: CyberNewsItem; isSelect
           }}
         >
           {item.categoryTag}
-        </span>
-        <span
-          className="c-disp"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "2.5px 7px",
-            borderRadius: "var(--c-radius-xs)",
-            fontSize: "var(--c-fs-2xs)",
-            fontWeight: 600,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: sev.text,
-            background: sev.bg,
-            border: `1px solid ${sev.border}`,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {item.severityTag}
         </span>
       </div>
     </div>

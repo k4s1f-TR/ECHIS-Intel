@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import type { OsintEvent } from "@/types/event";
 import type { SocmintReport } from "@/types/socmint";
 
 const STORAGE_KEY = "echis.bookmarks";
+// Live source-intelligence items are transient (the feed rotates), so their
+// bookmarks persist as small snapshots under a separate key.
+const SOURCE_STORAGE_KEY = "echis.bookmarks.sources";
+
 const EMPTY_BOOKMARK_IDS: string[] = [];
 const bookmarkSnapshots = new Map<string, { raw: string | null; ids: string[] }>();
 const bookmarkListeners = new Map<string, Set<() => void>>();
@@ -96,37 +99,157 @@ export function useBookmarkIds(storageKey = STORAGE_KEY) {
   };
 }
 
+// ── Live source-item bookmarks (persisted snapshots) ────────────────────────
+
+export type SourceBookmarkSnapshot = {
+  id: string;
+  title: string;
+  summary?: string;
+  sourceName: string;
+  url?: string;
+  publishedAt?: string;
+  domainLabel?: string;
+  /** ISO timestamp of when the user saved the item. */
+  savedAt: string;
+};
+
+const EMPTY_SOURCE_BOOKMARKS: SourceBookmarkSnapshot[] = [];
+let sourceSnapshotCache: { raw: string | null; items: SourceBookmarkSnapshot[] } | null =
+  null;
+
+function parseStoredSourceBookmarks(raw: string | null): SourceBookmarkSnapshot[] {
+  if (!raw) return EMPTY_SOURCE_BOOKMARKS;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return EMPTY_SOURCE_BOOKMARKS;
+    return parsed.filter(
+      (entry): entry is SourceBookmarkSnapshot =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as SourceBookmarkSnapshot).id === "string" &&
+        typeof (entry as SourceBookmarkSnapshot).title === "string" &&
+        typeof (entry as SourceBookmarkSnapshot).sourceName === "string" &&
+        typeof (entry as SourceBookmarkSnapshot).savedAt === "string",
+    );
+  } catch {
+    return EMPTY_SOURCE_BOOKMARKS;
+  }
+}
+
+function readStoredSourceBookmarks(): SourceBookmarkSnapshot[] {
+  if (typeof window === "undefined") return EMPTY_SOURCE_BOOKMARKS;
+
+  const raw = window.localStorage.getItem(SOURCE_STORAGE_KEY);
+  if (sourceSnapshotCache?.raw === raw) {
+    return sourceSnapshotCache.items;
+  }
+
+  const items = parseStoredSourceBookmarks(raw);
+  sourceSnapshotCache = { raw, items };
+  return items;
+}
+
+function writeStoredSourceBookmarks(items: SourceBookmarkSnapshot[]) {
+  if (typeof window === "undefined") return;
+
+  const raw = JSON.stringify(items);
+  window.localStorage.setItem(SOURCE_STORAGE_KEY, raw);
+  sourceSnapshotCache = { raw, items };
+  bookmarkListeners.get(SOURCE_STORAGE_KEY)?.forEach((listener) => listener());
+}
+
+export function useSourceBookmarks() {
+  const sourceBookmarks = useSyncExternalStore(
+    (listener) => subscribeToBookmarkIds(SOURCE_STORAGE_KEY, listener),
+    () => readStoredSourceBookmarks(),
+    () => EMPTY_SOURCE_BOOKMARKS,
+  );
+
+  const sourceBookmarkIdSet = useMemo(
+    () => new Set(sourceBookmarks.map((item) => item.id)),
+    [sourceBookmarks],
+  );
+
+  function isSourceBookmarked(itemId: string) {
+    return sourceBookmarkIdSet.has(itemId);
+  }
+
+  function toggleSourceBookmark(snapshot: Omit<SourceBookmarkSnapshot, "savedAt">) {
+    const current = readStoredSourceBookmarks();
+    const next = current.some((item) => item.id === snapshot.id)
+      ? current.filter((item) => item.id !== snapshot.id)
+      : [...current, { ...snapshot, savedAt: new Date().toISOString() }];
+    writeStoredSourceBookmarks(next);
+  }
+
+  function removeSourceBookmark(itemId: string) {
+    writeStoredSourceBookmarks(
+      readStoredSourceBookmarks().filter((item) => item.id !== itemId),
+    );
+  }
+
+  function clearSourceBookmarks() {
+    writeStoredSourceBookmarks(EMPTY_SOURCE_BOOKMARKS);
+  }
+
+  return {
+    sourceBookmarks,
+    isSourceBookmarked,
+    toggleSourceBookmark,
+    removeSourceBookmark,
+    clearSourceBookmarks,
+  };
+}
+
+// ── Combined view for the Bookmarks screen ──────────────────────────────────
+
 export type BookmarkedItem =
-  | { type: "event"; event: OsintEvent }
+  | { type: "source"; item: SourceBookmarkSnapshot }
   | { type: "socmint"; report: SocmintReport };
 
-export function useBookmarks(events: OsintEvent[], reports: SocmintReport[] = []) {
+export function useBookmarks(reports: SocmintReport[] = []) {
   const { bookmarkedIds, isBookmarked, toggleBookmark, removeBookmark, clearBookmarks } =
     useBookmarkIds();
+  const {
+    sourceBookmarks,
+    isSourceBookmarked,
+    toggleSourceBookmark,
+    removeSourceBookmark,
+    clearSourceBookmarks,
+  } = useSourceBookmarks();
+
   const bookmarkedIdSet = useMemo(() => new Set(bookmarkedIds), [bookmarkedIds]);
-  const bookmarkedEvents = useMemo(
-    () => events.filter((event) => bookmarkedIdSet.has(event.id)),
-    [bookmarkedIdSet, events],
-  );
   const bookmarkedItems = useMemo<BookmarkedItem[]>(
     () => [
-      ...events
-        .filter((event) => bookmarkedIdSet.has(event.id))
-        .map((event) => ({ type: "event" as const, event })),
+      ...sourceBookmarks.map((item) => ({ type: "source" as const, item })),
       ...reports
         .filter((report) => bookmarkedIdSet.has(report.id))
         .map((report) => ({ type: "socmint" as const, report })),
     ],
-    [bookmarkedIdSet, events, reports],
+    [bookmarkedIdSet, reports, sourceBookmarks],
   );
+
+  // Id-based removal works across both stores (ids never collide: SOCMINT ids
+  // are soc-*, source ids come from the pipeline).
+  function removeAnyBookmark(id: string) {
+    removeBookmark(id);
+    removeSourceBookmark(id);
+  }
+
+  function clearAllBookmarks() {
+    clearBookmarks();
+    clearSourceBookmarks();
+  }
 
   return {
     bookmarkedIds,
     isBookmarked,
     toggleBookmark,
-    removeBookmark,
-    clearBookmarks,
-    bookmarkedEvents,
+    isSourceBookmarked,
+    toggleSourceBookmark,
+    removeBookmark: removeAnyBookmark,
+    clearBookmarks: clearAllBookmarks,
     bookmarkedItems,
   };
 }

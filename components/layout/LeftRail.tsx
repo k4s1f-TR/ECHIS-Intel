@@ -16,35 +16,40 @@ type RailItem = {
   label: string;
   viewKey?: ViewMode;
   action?: "bookmarks";
+  /** Planned feature — rendered dimmed with a SOON badge, not clickable. */
+  soon?: boolean;
 };
 
 const topIcons: RailItem[] = [
   { icon: Globe, label: "Global View", viewKey: "global" },
   { icon: Radio, label: "SOCMINT Watch", viewKey: "signals" },
-  { icon: Plane, label: "Air Track" },
-  { icon: Ship, label: "Ship Track" },
+  { icon: Plane, label: "Air Track", soon: true },
+  { icon: Ship, label: "Ship Track", soon: true },
   { icon: Bookmark, label: "Bookmarks", action: "bookmarks" },
-  { icon: BarChart2, label: "Analytics" },
+  { icon: BarChart2, label: "Analytics", soon: true },
 ];
 
-const bottomIcons = [{ icon: LogOut, label: "Exit" }];
+const bottomIcons: RailItem[] = [{ icon: LogOut, label: "Exit", soon: true }];
 
 function RailIcon({
   icon: Icon,
   label,
   active = false,
+  soon = false,
   onClick,
 }: {
   icon: React.ElementType;
   label: string;
   active?: boolean;
+  soon?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
-      title={label}
-      aria-label={label}
-      onClick={onClick}
+      title={soon ? `${label} — coming soon` : label}
+      aria-label={soon ? `${label} (coming soon)` : label}
+      aria-disabled={soon || undefined}
+      onClick={soon ? undefined : onClick}
       className="relative w-full flex items-center justify-center h-10 rounded-lg transition-all duration-200 group"
       style={
         active
@@ -54,16 +59,18 @@ function RailIcon({
             }
           : {
               color: "var(--icon-default)",
+              opacity: soon ? 0.55 : 1,
+              cursor: soon ? "default" : "pointer",
             }
       }
       onMouseEnter={(e) => {
-        if (!active) {
+        if (!active && !soon) {
           (e.currentTarget as HTMLElement).style.color = "var(--icon-hover)";
           (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
         }
       }}
       onMouseLeave={(e) => {
-        if (!active) {
+        if (!active && !soon) {
           (e.currentTarget as HTMLElement).style.color = "var(--icon-default)";
           (e.currentTarget as HTMLElement).style.background = "transparent";
         }
@@ -77,6 +84,27 @@ function RailIcon({
         />
       )}
       <Icon size={16} strokeWidth={active ? 1.8 : 1.5} />
+      {soon && (
+        <span
+          aria-hidden
+          className="absolute select-none uppercase"
+          style={{
+            top: "3px",
+            right: "3px",
+            fontSize: "6.5px",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            lineHeight: 1,
+            padding: "2px 3px",
+            borderRadius: "4px",
+            color: "var(--c-t5)",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          Soon
+        </span>
+      )}
     </button>
   );
 }
@@ -129,6 +157,7 @@ export function LeftRail({
             key={item.label}
             icon={item.icon}
             label={item.label}
+            soon={item.soon}
             active={
               item.action === "bookmarks"
                 ? activeBookmarks

@@ -35,6 +35,12 @@ export type PolicyReport = {
   sourceType: PolicyChannel;
   /** Display name, e.g. "Reuters" or "@frontline_intel". */
   source: string;
+  /**
+   * True when the outlet is publicly documented as state-owned / state-funded
+   * (assigned per source id in `usePolicyFeed`). Shown as a transparency badge;
+   * it is not a judgement on the item itself.
+   */
+  stateAffiliated?: boolean;
   sev: PolicySeverity;
   /** Mock freshness. Real ingestion replaces this with a `publishedAt` timestamp. */
   minsAgo: number;

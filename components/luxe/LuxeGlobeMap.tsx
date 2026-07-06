@@ -2,7 +2,7 @@
 
 // ---------------------------------------------------------------------------
 // LuxeGlobeMap — the Luxe Globe (Three.js) wired up as the dashboard's main,
-// fully interactive globe. It reuses the approved Luxe rendering core (deep-red
+// fully interactive globe. It reuses the approved Luxe rendering core (crimson
 // ocean, black continents, white borders, physical/clearcoat material) and
 // layers on the data/interaction features the dashboard depends on:
 //
@@ -60,6 +60,7 @@ import {
 const REGION_GLOBE_VIEWS: Record<RegionKey, { center: [number, number]; zoom: number }> = {
   "middle-east": { center: [35, 31], zoom: 2.45 },
   europe: { center: [15, 51], zoom: 2.45 },
+  africa: { center: [17, 3], zoom: 2.0 },
   "asia-pacific": { center: [112, 18], zoom: 2.15 },
   americas: { center: [-74, 15], zoom: 2.05 },
 };
@@ -88,19 +89,17 @@ const BUTTON_ZOOM_ANIM_MS = 350;
 const AUTO_ROTATE_DEG_PER_SEC = 1.5;
 const AUTO_ROTATE_MAX_DT_S = 0.05;
 
-const ECHIS_GRAD_DARK = "#3b0509";
-const ECHIS_GRAD_BRIGHT = "#a80d18";
-const ECHIS_GRAD_MID = "#6f0710";
+const ECHIS_GRAD_DARK = "#b3121f";
+const ECHIS_GRAD_BRIGHT = "#ff2b3d";
 
 // Shared premium pin — Global View and SOCMINT use the same icon so both
 // modes read as one marker system.
 const GLOBAL_PIN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">' +
   "<defs>" +
-  '<linearGradient id="pinBody" x1="7.5" y1="3" x2="21" y2="30" gradientUnits="userSpaceOnUse">' +
-  `<stop offset="0" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
-  `<stop offset="0.56" stop-color="${ECHIS_GRAD_MID}"/>` +
-  `<stop offset="1" stop-color="${ECHIS_GRAD_DARK}"/>` +
+  '<linearGradient id="pinBody" x1="5.28" y1="12.85" x2="22.72" y2="12.85" gradientUnits="userSpaceOnUse">' +
+  `<stop offset="0" stop-color="${ECHIS_GRAD_DARK}"/>` +
+  `<stop offset="1" stop-color="${ECHIS_GRAD_BRIGHT}"/>` +
   "</linearGradient>" +
   '<linearGradient id="pinShade" x1="14" y1="4" x2="14" y2="31" gradientUnits="userSpaceOnUse">' +
   '<stop offset="0" stop-color="#ffffff" stop-opacity=".07"/>' +
@@ -531,7 +530,10 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
       };
       const drawColor = (ctx: CanvasRenderingContext2D) => {
         ctx.clearRect(0, 0, TEX_W, TEX_H);
-        ctx.fillStyle = "#bf1626";
+        const ocean = ctx.createLinearGradient(0, 0, TEX_W, 0);
+        ocean.addColorStop(0, ECHIS_GRAD_DARK);
+        ocean.addColorStop(1, ECHIS_GRAD_BRIGHT);
+        ctx.fillStyle = ocean;
         ctx.fillRect(0, 0, TEX_W, TEX_H);
         const og = ctx.createLinearGradient(0, 0, 0, TEX_H);
         og.addColorStop(0, "rgba(10,2,4,0.6)");
@@ -1686,10 +1688,10 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             --pin-w: 22.4px;
             --pin-h: 27.2px;
             --glow-offset: 16px;
-            --bloom-color: #6f0710;
+            --bloom-color: #b3121f;
             --bloom-opacity: 0.24;
             --glow-size: 22px;
-            --glow-fill: rgba(168,13,24,0.22);
+            --glow-fill: rgba(255,43,61,0.22);
             --glow-opacity: 0.42;
             --glow-stroke-width: 1.2px;
             --glow-stroke-opacity: 0.68;
@@ -1740,14 +1742,14 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             width: var(--glow-size);
             height: var(--glow-size);
             background: var(--glow-fill);
-            border: var(--glow-stroke-width) solid #a80d18;
+            border: var(--glow-stroke-width) solid #ff2b3d;
             opacity: 0;
             z-index: 1;
           }
           .luxe-marker-hover-glow {
             width: 30px;
             height: 30px;
-            background: #a80d18;
+            background: #ff2b3d;
             filter: blur(10px);
             opacity: 0;
             z-index: 2;
@@ -1760,7 +1762,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
           }
           .luxe-marker[data-selected="true"] .luxe-marker-glow {
             opacity: var(--glow-opacity);
-            border-color: rgba(168,13,24,var(--glow-stroke-opacity));
+            border-color: rgba(255,43,61,var(--glow-stroke-opacity));
           }
           .luxe-marker-badge {
             position: absolute;
@@ -1773,7 +1775,7 @@ export const LuxeGlobeMap = forwardRef<MapLibreGlobeHandle, LuxeGlobeMapProps>(
             align-items: center;
             justify-content: center;
             border-radius: 999px;
-            border: 1.25px solid #a80d18;
+            border: 1.25px solid #ff2b3d;
             background: rgba(7,9,15,0.94);
             color: #f4f7fb;
             font-family: Arial, Helvetica, sans-serif;

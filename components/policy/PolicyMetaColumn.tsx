@@ -1,7 +1,6 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { POLICY_CHANNEL_COLOR } from "@/types/policy";
 import type { RegionStat, SourceStat, TrendBucket } from "./policyView";
 
 const EYEBROW: CSSProperties = {
@@ -120,7 +119,8 @@ export function PolicyMetaColumn({
       >
         <Eyebrow>Source Breakdown</Eyebrow>
         <div style={{ ...CAPTION, marginBottom: "16px" }}>
-          Share of in-view signals by collection channel.
+          Share of in-view signals by source affiliation (publicly documented
+          ownership / funding).
         </div>
         {isLoading ? (
           <PanelState>Loading source mix.</PanelState>
@@ -129,18 +129,18 @@ export function PolicyMetaColumn({
         ) : (
           <div className="flex flex-col" style={{ gap: "13px" }}>
             {sources.map((s) => (
-              <div key={s.type} className="flex items-center" style={{ gap: "10px" }}>
+              <div key={s.label} className="flex items-center" style={{ gap: "10px" }}>
                 <span
                   className="flex-none"
                   style={{
                     width: "8px",
                     height: "8px",
                     borderRadius: "2px",
-                    background: POLICY_CHANNEL_COLOR[s.type],
+                    background: s.color,
                   }}
                 />
                 <span className="flex-1" style={{ fontSize: "12px", color: "var(--c-t3)" }}>
-                  {s.type}
+                  {s.label}
                 </span>
                 <span className="c-mono" style={{ fontSize: "10px", color: "var(--c-t4)" }}>
                   {s.pct}%

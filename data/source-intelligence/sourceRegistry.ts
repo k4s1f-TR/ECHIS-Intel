@@ -129,6 +129,9 @@ export const SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS = [
   "balkan-serbia",
   // ── Africa / North Africa ─────────────────────────────────────────────────
   "lana-en",
+  "allafrica-latest",
+  "daily-maverick",
+  "premium-times-ng",
   // ── Central Asia ──────────────────────────────────────────────────────────
   "gazetauz-politics",
   "gazetauz-society",

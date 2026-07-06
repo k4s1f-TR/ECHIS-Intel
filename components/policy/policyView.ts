@@ -1,7 +1,5 @@
 import {
-  POLICY_CHANNELS,
   POLICY_TOPICS,
-  type PolicyChannel,
   type PolicyReport,
   type PolicyTopicKey,
 } from "@/types/policy";
@@ -36,19 +34,28 @@ export function buildRegions(list: PolicyReport[]): RegionStat[] {
 }
 
 // ── Source Breakdown ───────────────────────────────────────────────
-export type SourceStat = { type: PolicyChannel; count: number; pct: number };
+// Split by source affiliation (transparency), not by collection channel:
+// every current source is RSS/News, so a channel split carried no signal.
+export type SourceStat = { label: string; count: number; pct: number; color: string };
 
 export function buildSources(list: PolicyReport[]): SourceStat[] {
-  const counts = new Map<PolicyChannel, number>();
-  for (const channel of POLICY_CHANNELS) counts.set(channel, 0);
-  for (const item of list) {
-    if (counts.has(item.sourceType)) counts.set(item.sourceType, counts.get(item.sourceType)! + 1);
-  }
   const total = list.length || 1;
-  return POLICY_CHANNELS.map((type) => {
-    const count = counts.get(type) ?? 0;
-    return { type, count, pct: Math.round((count / total) * 100) };
-  });
+  const state = list.filter((item) => item.stateAffiliated).length;
+  const independent = list.length - state;
+  return [
+    {
+      label: "Independent / commercial",
+      count: independent,
+      pct: Math.round((independent / total) * 100),
+      color: "var(--c-accent)",
+    },
+    {
+      label: "State-affiliated",
+      count: state,
+      pct: Math.round((state / total) * 100),
+      color: "rgba(196,202,212,0.72)",
+    },
+  ];
 }
 
 // ── Signal Volume ──────────────────────────────────────────────────

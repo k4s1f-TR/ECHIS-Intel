@@ -334,20 +334,6 @@ export function FloatingMonitoringCard({
           >
             {eventCount}
           </span>
-          <div className="flex flex-col pb-0.5">
-            <span
-              className="font-semibold leading-tight"
-              style={{ fontSize: "11px", color: "var(--c-elev)" }}
-            >
-              ↑ 12%
-            </span>
-            <span
-              className="leading-tight"
-              style={{ fontSize: "9.5px", color: "var(--c-t5)" }}
-            >
-              vs last 24h
-            </span>
-          </div>
         </div>
       </div>
     </div>

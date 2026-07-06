@@ -122,6 +122,22 @@ const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   // ── Citizen media / global ──────────────────────────────────────────────
   "globalvoices-main",
   "globalvoices-filtered",
+  // ── Cyber News expansion (verified 2026-07-06) ──────────────────────────
+  "bleeping-computer",
+  "the-record",
+  "dark-reading",
+  "cyberscoop",
+  // ── Defense Industry expansion (verified 2026-07-06) ────────────────────
+  "edr-magazine",
+  "defense-one",
+  "naval-news",
+  // ── Policy balancing (verified 2026-07-06) ──────────────────────────────
+  "france24-world",
+  "un-news",
+  // ── Africa region (verified 2026-07-06) ─────────────────────────────────
+  "allafrica-latest",
+  "daily-maverick",
+  "premium-times-ng",
 ]);
 
 const RSS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

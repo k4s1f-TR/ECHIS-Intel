@@ -21,7 +21,23 @@ export const POLICY_SOURCE_IDS = [
   "aljazeera-middle-east",
   "tass-world",
   "euronews-world",
+  "france24-world",
+  "un-news",
 ] as const;
+
+/**
+ * Sources publicly documented as state-owned or state-funded. Drives the
+ * transparency badge on feed cards / detail and the Source Breakdown split.
+ * Maintain together with POLICY_SOURCE_IDS when adding sources.
+ */
+export const STATE_AFFILIATED_SOURCE_IDS: ReadonlySet<string> = new Set([
+  "presstv-politics", // Press TV — Iranian state broadcaster
+  "mehr-politics", // Mehr News — Iranian state-linked agency
+  "saba-politics", // SABA — Yemeni state news agency
+  "tanjug-politika", // Tanjug — Serbian state news agency
+  "tass-world", // TASS — Russian state news agency
+  "aljazeera-middle-east", // Al Jazeera — funded by the Qatari state
+]);
 
 interface RssResponse {
   items?: NormalizedSourceItem[];
@@ -147,8 +163,21 @@ export function usePolicyFeed(): PolicyFeedState {
     return analyzePolicySignals(inputs);
   }, [rawItems]);
 
+  // Stamp the state-affiliation transparency flag (keyed by the raw item's
+  // sourceId; report ids are carried through the engine unchanged).
+  const items = useMemo(() => {
+    const stateItemIds = new Set(
+      (rawItems ?? [])
+        .filter((item) => STATE_AFFILIATED_SOURCE_IDS.has(item.sourceId))
+        .map((item) => item.id),
+    );
+    return analysis.items.map((item) =>
+      stateItemIds.has(item.id) ? { ...item, stateAffiliated: true } : item,
+    );
+  }, [analysis.items, rawItems]);
+
   return {
-    items: analysis.items,
+    items,
     topics: analysis.topics,
     regions: analysis.regions,
     isLoading,

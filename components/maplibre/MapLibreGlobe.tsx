@@ -378,6 +378,7 @@ const REGION_GLOBE_VIEWS: Record<
 > = {
   "middle-east": { center: [35, 31], zoom: 2.45 },
   europe: { center: [15, 51], zoom: 2.45 },
+  africa: { center: [17, 3], zoom: 2.0 },
   "asia-pacific": { center: [112, 18], zoom: 2.15 },
   americas: { center: [-74, 15], zoom: 2.05 },
 };

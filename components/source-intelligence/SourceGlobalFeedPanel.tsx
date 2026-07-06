@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { IntelligenceEventCandidate } from "@/data/source-intelligence/sourceIntelligenceTypes";
+import { BookmarkToggleButton } from "@/components/events/BookmarkToggleButton";
 import { useSourceIntelligenceItems } from "./useSourceIntelligenceItems";
 import { useSourceIntelligenceStore } from "./SourceIntelligenceProvider";
 import { useSourceFeedAutoRefresh } from "./useSourceFeedAutoRefresh";
@@ -440,6 +441,8 @@ function SourceFeedCard({
   confidence,
   corroborationCount,
   corroborationSources,
+  bookmarked = false,
+  onToggleBookmark,
 }: {
   item: IntelligenceEventCandidate;
   index: number;
@@ -451,6 +454,8 @@ function SourceFeedCard({
   confidence?: { level: ConfidenceLevel; label: string };
   corroborationCount?: number;
   corroborationSources?: string[];
+  bookmarked?: boolean;
+  onToggleBookmark?: () => void;
 }) {
   const activeBorder = isSelected
     ? "var(--c-accent-border)"
@@ -507,6 +512,11 @@ function SourceFeedCard({
         >
           {item.title}
         </p>
+        {onToggleBookmark && (
+          <div style={{ marginTop: 2 }}>
+            <BookmarkToggleButton bookmarked={bookmarked} onToggle={onToggleBookmark} />
+          </div>
+        )}
         <button
           type="button"
           aria-label={isOpen ? "Close details" : "Open details"}
@@ -940,11 +950,15 @@ export function SourceGlobalFeedPanel({
   onItemSelect,
   items: filteredItems,
   selectedSourceId: controlledSelectedSourceId,
+  isItemBookmarked,
+  onToggleItemBookmark,
 }: {
   selectedItemId?: string | null;
   onItemSelect?: (id: string) => void;
   items?: IntelligenceEventCandidate[];
   selectedSourceId?: string;
+  isItemBookmarked?: (id: string) => boolean;
+  onToggleItemBookmark?: (item: IntelligenceEventCandidate) => void;
 }) {
   const { items: allItems, loadState } = useSourceIntelligenceItems();
   const items = filteredItems ?? allItems;
@@ -1184,6 +1198,12 @@ export function SourceGlobalFeedPanel({
                       confidence={confidenceTier(primary)}
                       corroborationCount={cluster.sourceCount}
                       corroborationSources={cluster.sourceNames}
+                      bookmarked={isItemBookmarked?.(primary.id) ?? false}
+                      onToggleBookmark={
+                        onToggleItemBookmark
+                          ? () => onToggleItemBookmark(primary)
+                          : undefined
+                      }
                     />
                   );
                 })}
