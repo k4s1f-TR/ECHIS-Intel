@@ -309,7 +309,7 @@ const CARTO_DARK_MATTER_STYLE_URL =
 // America out of frame.  Tune center.lat slightly higher to pull Europe in,
 // slightly lower to expose more of southern Africa.
 // ---------------------------------------------------------------------------
-const DEFAULT_GLOBE_VIEW = {
+export const DEFAULT_GLOBE_VIEW = {
   // Türkiye / Eastern Mediterranean as the strategic focus, but the camera
   // center sits south of Türkiye so Anatolia lands in the upper-center of
   // the framed globe rather than dead center.  Longitude held around 35.
@@ -330,7 +330,7 @@ const ZOOM_STEP = 0.75;
 // extent but not into street/building clutter (that detail lives in Intel
 // Watch). Layers that would only appear past this never render, which also
 // keeps the globe visually clean.
-const GLOBE_MAX_ZOOM = 9.5;
+export const GLOBE_MAX_ZOOM = 9.5;
 
 // ---------------------------------------------------------------------------
 // GLOBE_SCREEN_FRAMING — screen-space padding per view mode.
@@ -1120,7 +1120,7 @@ function getLuxeOutlineGeoJson(): GeoJSON.FeatureCollection {
   return luxeOutlineGeoJsonCache;
 }
 
-function setupLuxeOutline(map: maplibregl.Map): void {
+export function setupLuxeOutline(map: maplibregl.Map): void {
   try {
     if (!map.getSource(LUXE_OUTLINE_SOURCE)) {
       map.addSource(LUXE_OUTLINE_SOURCE, {
@@ -1170,6 +1170,63 @@ const LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
 const LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
 const LABEL_WATER = "rgba(140, 150, 166, 0.50)";
 const LABEL_HALO = "rgba(5, 3, 5, 0.85)";
+
+// ---------------------------------------------------------------------------
+// Shared globe foundation — consumed by this component AND by AirTrackGlobe,
+// which renders a second, independent MapLibre instance with the exact same
+// accepted cartography.  These helpers are the single source of truth for
+// the style input and the atmosphere halo so the two globes can never drift.
+// ---------------------------------------------------------------------------
+export function createEchisGlobeStyle():
+  | maplibregl.StyleSpecification
+  | string {
+  return USE_ECHIS_OSM_BASEMAP
+    ? createEchisOsmGlobeStyle({
+        landFill: LUXE_LAND_FILL,
+        landOverlay: LUXE_LAND_OVERLAY,
+        waterFill: LUXE_WATER_FILL,
+        waterwayFill: LUXE_WATERWAY_FILL,
+        borderCountry: LUXE_BORDER_COUNTRY,
+        borderAdmin: LUXE_BORDER_ADMIN,
+        showBoundaries: false,
+        // National border comes from the luxe outline. The OSM
+        // sub-national admin lines (state/province + district/city)
+        // are kept off — they cluttered the globe.
+        showAdminBoundaries: false,
+        labelHalo: LABEL_HALO,
+      })
+    : CARTO_DARK_MATTER_STYLE_URL;
+}
+
+export function applyEchisGlobeAtmosphere(map: maplibregl.Map): void {
+  // Premium atmosphere halo — a faint reddish glow at the globe's edge
+  // over obsidian space. Wrapped defensively for older MapLibre builds.
+  try {
+    (map as unknown as {
+      setSky?: (sky: Record<string, unknown>) => void;
+    }).setSky?.({
+      "sky-color": "#0B0C0E",
+      "sky-horizon-blend": 0.6,
+      "horizon-color": "#2a0a0d",
+      "horizon-fog-blend": 0.7,
+      "fog-color": "#1a0608",
+      "fog-ground-blend": 0.85,
+      "atmosphere-blend": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        0,
+        0.7,
+        4,
+        0.45,
+        6,
+        0,
+      ],
+    });
+  } catch (e) {
+    console.warn("[MapLibreGlobe] setSky unsupported — skipping halo:", e);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Default-view country whitelist.  At default / Central View zoom only the
@@ -1232,7 +1289,7 @@ const MAPLIBRE_LOADING_ANIMATION_ENABLED = true;
 //   • water_name labels   → cooler muted text
 //   • road labels/shields → hidden
 // ---------------------------------------------------------------------------
-function applyDarkTone(map: maplibregl.Map): void {
+export function applyDarkTone(map: maplibregl.Map): void {
   const style = map.getStyle();
   const layers = style?.layers ?? [];
 
@@ -1380,7 +1437,7 @@ function applyDarkTone(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 const WHITELIST_LAYER_ID = "echis-country-whitelist";
 
-function applyCountryLabelWhitelist(map: maplibregl.Map): void {
+export function applyCountryLabelWhitelist(map: maplibregl.Map): void {
   const style = map.getStyle();
   const layers = style?.layers ?? [];
 
@@ -1725,24 +1782,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       try {
         map = new maplibregl.Map({
           container,
-          style: USE_ECHIS_OSM_BASEMAP
-            ? createEchisOsmGlobeStyle(
-                {
-                  landFill: LUXE_LAND_FILL,
-                  landOverlay: LUXE_LAND_OVERLAY,
-                  waterFill: LUXE_WATER_FILL,
-                  waterwayFill: LUXE_WATERWAY_FILL,
-                  borderCountry: LUXE_BORDER_COUNTRY,
-                  borderAdmin: LUXE_BORDER_ADMIN,
-                  showBoundaries: false,
-                  // National border comes from the luxe outline. The OSM
-                  // sub-national admin lines (state/province + district/city)
-                  // are kept off — they cluttered the globe.
-                  showAdminBoundaries: false,
-                  labelHalo: LABEL_HALO,
-                },
-              )
-            : CARTO_DARK_MATTER_STYLE_URL,
+          style: createEchisGlobeStyle(),
           center: DEFAULT_GLOBE_VIEW.center,
           zoom: DEFAULT_GLOBE_VIEW.zoom,
           bearing: DEFAULT_GLOBE_VIEW.bearing,
@@ -1857,33 +1897,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           );
         }
 
-        // Premium atmosphere halo — a faint reddish glow at the globe's edge
-        // over obsidian space. Wrapped defensively for older MapLibre builds.
-        try {
-          (map as unknown as {
-            setSky?: (sky: Record<string, unknown>) => void;
-          }).setSky?.({
-            "sky-color": "#0B0C0E",
-            "sky-horizon-blend": 0.6,
-            "horizon-color": "#2a0a0d",
-            "horizon-fog-blend": 0.7,
-            "fog-color": "#1a0608",
-            "fog-ground-blend": 0.85,
-            "atmosphere-blend": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              0,
-              0.7,
-              4,
-              0.45,
-              6,
-              0,
-            ],
-          });
-        } catch (e) {
-          console.warn("[MapLibreGlobe] setSky unsupported — skipping halo:", e);
-        }
+        applyEchisGlobeAtmosphere(map);
 
         // Dark refinement pass — only needed for the CARTO basemap.  When the
         // OSM basemap is active the style is pre-built with the correct palette

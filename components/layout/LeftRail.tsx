@@ -15,7 +15,7 @@ type RailItem = {
   icon: React.ElementType;
   label: string;
   viewKey?: ViewMode;
-  action?: "bookmarks";
+  action?: "bookmarks" | "airtrack";
   /** Planned feature — rendered dimmed with a SOON badge, not clickable. */
   soon?: boolean;
 };
@@ -23,7 +23,7 @@ type RailItem = {
 const topIcons: RailItem[] = [
   { icon: Globe, label: "Global View", viewKey: "global" },
   { icon: Radio, label: "SOCMINT Watch", viewKey: "signals" },
-  { icon: Plane, label: "Air Track", soon: true },
+  { icon: Plane, label: "Air Track", action: "airtrack" },
   { icon: Ship, label: "Ship Track", soon: true },
   { icon: Bookmark, label: "Bookmarks", action: "bookmarks" },
   { icon: BarChart2, label: "Analytics", soon: true },
@@ -112,14 +112,18 @@ function RailIcon({
 export function LeftRail({
   activeView,
   activeBookmarks,
+  activeAirTrack,
   onViewChange,
   onBookmarks,
+  onAirTrack,
   onHome,
 }: {
   activeView: ViewMode | null;
   activeBookmarks: boolean;
+  activeAirTrack: boolean;
   onViewChange: (view: ViewMode) => void;
   onBookmarks: () => void;
+  onAirTrack: () => void;
   onHome: () => void;
 }) {
   return (
@@ -161,16 +165,20 @@ export function LeftRail({
             active={
               item.action === "bookmarks"
                 ? activeBookmarks
-                : item.viewKey !== undefined
-                  ? activeView === item.viewKey
-                  : false
+                : item.action === "airtrack"
+                  ? activeAirTrack
+                  : item.viewKey !== undefined
+                    ? activeView === item.viewKey
+                    : false
             }
             onClick={
               item.action === "bookmarks"
                 ? onBookmarks
-                : item.viewKey !== undefined
-                  ? () => onViewChange(item.viewKey!)
-                  : undefined
+                : item.action === "airtrack"
+                  ? onAirTrack
+                  : item.viewKey !== undefined
+                    ? () => onViewChange(item.viewKey!)
+                    : undefined
             }
           />
         ))}

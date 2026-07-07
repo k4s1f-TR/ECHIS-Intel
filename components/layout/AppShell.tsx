@@ -41,6 +41,7 @@ import { sendToIntelWatch } from "@/components/intel-watch/workspaceStore";
 import { DefenseIndustryPanel } from "@/components/defense-industry/DefenseIndustryPanel";
 import { prefetchDefenseIndustryFeed } from "@/components/defense-industry/useDefenseIndustryFeed";
 import { ContactScreen } from "@/components/contact/ContactScreen";
+import { AirTrackScreen } from "@/components/airtrack/AirTrackScreen";
 import { socmintReports } from "@/data/socmintReports";
 import type { RegionKey } from "@/types/event";
 import { socmintMatchesConfidenceFilter } from "@/types/socmint";
@@ -49,7 +50,7 @@ import type { SourceFilterDomain } from "@/data/source-intelligence/sourceIntell
 import type { SourceMarkerFeature } from "@/data/source-intelligence/markers/sourceMarkerTypes";
 
 export type ViewMode = "situation" | "global" | "signals";
-type ActiveSection = "dashboard" | "sources" | "bookmarks";
+type ActiveSection = "dashboard" | "sources" | "bookmarks" | "airtrack";
 type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "sources" | "contact";
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
@@ -469,6 +470,16 @@ export function AppShell() {
     setSignalDetailOpen(false);
   }
 
+  function handleAirTrackOpen() {
+    setActiveSection("airtrack");
+    setActiveTopTab("situation");
+    setActiveRailMode(null);
+    setSelectedId(null);
+    setMarkerPopup(null);
+    setSelectedSignalId(null);
+    setSignalDetailOpen(false);
+  }
+
   function handleRegionChange(region: RegionKey) {
     setActiveSection("dashboard");
     setActiveTopTab("situation");
@@ -639,8 +650,10 @@ export function AppShell() {
         <LeftRail
           activeView={activeSection === "dashboard" && activeTopTab === "situation" ? activeRailMode : null}
           activeBookmarks={activeSection === "bookmarks"}
+          activeAirTrack={activeSection === "airtrack"}
           onViewChange={handleViewChange}
           onBookmarks={handleBookmarksOpen}
+          onAirTrack={handleAirTrackOpen}
           onHome={handleHomeReset}
         />
 
@@ -947,6 +960,11 @@ export function AppShell() {
           {activeSection === "sources" && (
             <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
               <SourcesScreen />
+            </div>
+          )}
+          {activeSection === "airtrack" && (
+            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+              <AirTrackScreen />
             </div>
           )}
           {activeSection === "bookmarks" && (
