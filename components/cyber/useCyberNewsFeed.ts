@@ -13,11 +13,22 @@ export const CYBER_NEWS_SOURCE_IDS = [
   "cyberscoop",
   "securityweek",
   "cisa-news",
+  "talos",
+  "unit42",
+  "krebs-security",
+  "helpnet-security",
+  "infosecurity-mag",
+  "register-security",
+  "welivesecurity",
+  "malwarebytes",
+  "securelist",
+  "ncsc-uk",
+  "schneier",
 ] as const;
 
 /** Human-readable source label for the map info strip. */
 export const CYBER_NEWS_SOURCE_LABEL =
-  "The Hacker News · BleepingComputer · The Record · Dark Reading · CyberScoop · SecurityWeek · CISA";
+  "The Hacker News · BleepingComputer · The Record · Dark Reading · CyberScoop · Talos · Unit 42 · Krebs · SecurityWeek · CISA + more";
 
 type CyberNewsFeedResponse = {
   sourceId?: string;

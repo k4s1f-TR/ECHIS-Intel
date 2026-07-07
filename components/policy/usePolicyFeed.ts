@@ -23,6 +23,12 @@ export const POLICY_SOURCE_IDS = [
   "euronews-world",
   "france24-world",
   "un-news",
+  "bbc-world",
+  "dw-world",
+  "crisis-group",
+  "foreign-policy",
+  "global-times",
+  "apa",
 ] as const;
 
 /**
@@ -37,6 +43,8 @@ export const STATE_AFFILIATED_SOURCE_IDS: ReadonlySet<string> = new Set([
   "tanjug-politika", // Tanjug — Serbian state news agency
   "tass-world", // TASS — Russian state news agency
   "aljazeera-middle-east", // Al Jazeera — funded by the Qatari state
+  "global-times", // Global Times — Chinese state-affiliated outlet
+  "apa", // APA — Azerbaijani state-affiliated agency
 ]);
 
 interface RssResponse {

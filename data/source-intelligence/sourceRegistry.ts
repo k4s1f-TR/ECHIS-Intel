@@ -132,9 +132,17 @@ export const SOURCE_INTELLIGENCE_DEFAULT_SOURCE_IDS = [
   "allafrica-latest",
   "daily-maverick",
   "premium-times-ng",
+  "humangle",
+  "african-arguments",
   // ── Central Asia ──────────────────────────────────────────────────────────
   "gazetauz-politics",
   "gazetauz-society",
+  // ── Latin America ─────────────────────────────────────────────────────────
+  "insight-crime",
+  "mercopress",
+  // ── South / East Asia ─────────────────────────────────────────────────────
+  "yonhap",
+  "dawn",
   // ── Defense ───────────────────────────────────────────────────────────────
   "defense-news-global",
   "dod-news",

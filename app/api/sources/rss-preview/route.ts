@@ -138,6 +138,40 @@ const ALLOWED_PREVIEW_SOURCE_IDS: ReadonlySet<string> = new Set([
   "allafrica-latest",
   "daily-maverick",
   "premium-times-ng",
+  // ── Cyber News wave 2 (verified 2026-07-07) ─────────────────────────────
+  "talos",
+  "unit42",
+  "krebs-security",
+  "helpnet-security",
+  "infosecurity-mag",
+  "register-security",
+  "welivesecurity",
+  "malwarebytes",
+  "securelist",
+  "ncsc-uk",
+  "schneier",
+  // ── Defense Industry wave 2 (verified 2026-07-07) ───────────────────────
+  "usni-news",
+  "dsca-fms",
+  "defensescoop",
+  "airspace-forces",
+  "defence-industry-eu",
+  "defence-blog",
+  "savunmatr",
+  // ── Policy balancing wave 2 (verified 2026-07-07) ───────────────────────
+  "bbc-world",
+  "dw-world",
+  "crisis-group",
+  "foreign-policy",
+  "global-times",
+  "apa",
+  // ── Monitor region depth wave 2 (verified 2026-07-07) ───────────────────
+  "humangle",
+  "insight-crime",
+  "african-arguments",
+  "mercopress",
+  "yonhap",
+  "dawn",
 ]);
 
 const RSS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

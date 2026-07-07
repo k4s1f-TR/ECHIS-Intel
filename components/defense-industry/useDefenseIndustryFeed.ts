@@ -19,6 +19,13 @@ export const DEFENSE_SOURCE_IDS = [
   "defense-one",
   "naval-news",
   "edr-magazine",
+  "usni-news",
+  "dsca-fms",
+  "defensescoop",
+  "airspace-forces",
+  "defence-industry-eu",
+  "defence-blog",
+  "savunmatr",
 ] as const;
 
 interface RssResponse {
