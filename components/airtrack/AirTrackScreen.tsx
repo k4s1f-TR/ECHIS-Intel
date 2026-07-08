@@ -1,21 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plane, X } from "lucide-react";
+import { Plane } from "lucide-react";
 import { MapControls } from "@/components/map/MapControls";
 import {
   AirTrackGlobe,
   type AirTrackGlobeHandle,
 } from "@/components/airtrack/AirTrackGlobe";
-import { useAirTrackFeed } from "@/components/airtrack/useAirTrackFeed";
+import { AirTrackContactCard } from "@/components/airtrack/AirTrackContactCard";
+import { AirTrackListPanel } from "@/components/airtrack/AirTrackListPanel";
+import {
+  useAirTrackFeed,
+  type AirTrackRegion,
+} from "@/components/airtrack/useAirTrackFeed";
 import type { AirTrackContact } from "@/types/airtrack";
 
+// The regional fast lane engages once the operator zooms past this level;
+// the viewport center is sampled every 2 s and rounded to 0.5° so small
+// camera drifts don't restart the poller (the server rounds the same way).
+const REGION_MIN_ZOOM = 5;
+const REGION_SAMPLE_MS = 2_000;
+
 // ---------------------------------------------------------------------------
-// AirTrackScreen — MVP: the ECHIS globe centered full-screen (Monitor Home
-// framing) with the live military air-activity layer from adsb.lol.  A small
-// HUD pill reports layer status; clicking an aircraft opens a compact
-// contact card.  Civil global layer (OpenSky) and watchlists come in later
-// phases per docs/AIR-TRACK-PROVIDERS.md.
+// AirTrackScreen — the ECHIS globe centered full-screen (Monitor Home
+// framing) with the merged live air picture: military layer from adsb.lol
+// plus the global civil background from OpenSky, with CIV / MIL / WL layer
+// toggles in the HUD.  Clicking an aircraft opens the enriched contact card
+// (registry data, route, photo, Send to Intel Watch).
 // ---------------------------------------------------------------------------
 
 const STATUS_META = {
@@ -25,134 +36,84 @@ const STATUS_META = {
   error: { label: "OFFLINE", color: "var(--sev-critical-text, #ff2b3d)" },
 } as const;
 
+// Layer visibility — exclusive buckets: watchlist > military > civil.
+// Emergency squawks stay visible regardless of toggles.
+export type AirTrackLayerToggles = {
+  civil: boolean;
+  military: boolean;
+  watchlist: boolean;
+};
+
+function contactBucket(c: AirTrackContact): keyof AirTrackLayerToggles {
+  if (c.watchlist) return "watchlist";
+  if (c.military) return "military";
+  return "civil";
+}
+
+const LAYER_TOGGLE_META: Array<{
+  key: keyof AirTrackLayerToggles;
+  label: string;
+}> = [
+  { key: "civil", label: "CIV" },
+  { key: "military", label: "MIL" },
+  { key: "watchlist", label: "WL" },
+];
+
 function formatAgo(updatedAt: number | null, nowMs: number): string {
   if (!updatedAt) return "—";
   const sec = Math.max(0, Math.round((nowMs - updatedAt) / 1000));
-  return sec < 60 ? `${sec}s ago` : `${Math.floor(sec / 60)}m ago`;
-}
-
-function ContactRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <span
-        className="uppercase"
-        style={{ fontSize: "9px", letterSpacing: "0.1em", color: "var(--c-t5)" }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: "11.5px",
-          color: "var(--c-t2)",
-          fontFamily: "var(--font-mono), ui-monospace, monospace",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ContactCard({
-  contact,
-  onClose,
-}: {
-  contact: AirTrackContact;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="absolute rounded-lg"
-      style={{
-        top: "64px",
-        right: "14px",
-        width: "228px",
-        zIndex: 16,
-        background: "rgba(7,8,10,0.82)",
-        border: "1px solid var(--accent-blue-border)",
-        boxShadow: "0 14px 36px rgba(0,0,0,0.42)",
-        backdropFilter: "blur(14px)",
-        padding: "12px 14px",
-      }}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <span
-          className="uppercase"
-          style={{
-            fontSize: "11px",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            color: "#ffd9ac",
-            fontFamily: "var(--font-mono), ui-monospace, monospace",
-          }}
-        >
-          {contact.callsign ?? contact.icao24.toUpperCase()}
-        </span>
-        <button
-          type="button"
-          aria-label="Close contact card"
-          onClick={onClose}
-          className="flex h-5 w-5 items-center justify-center rounded"
-          style={{ color: "var(--c-t5)", cursor: "pointer" }}
-        >
-          <X size={12} />
-        </button>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <ContactRow label="Hex" value={contact.icao24.toUpperCase()} />
-        <ContactRow label="Reg" value={contact.registration ?? "—"} />
-        <ContactRow label="Type" value={contact.typeCode ?? "—"} />
-        <ContactRow
-          label="Altitude"
-          value={
-            contact.onGround
-              ? "GROUND"
-              : contact.altitudeFt !== null
-                ? `${contact.altitudeFt.toLocaleString("en-US")} ft`
-                : "—"
-          }
-        />
-        <ContactRow
-          label="Speed"
-          value={
-            contact.groundSpeedKt !== null ? `${contact.groundSpeedKt} kt` : "—"
-          }
-        />
-        <ContactRow
-          label="Track"
-          value={contact.track !== null ? `${Math.round(contact.track)}°` : "—"}
-        />
-        <ContactRow label="Squawk" value={contact.squawk ?? "—"} />
-      </div>
-      <div
-        className="mt-2.5 pt-2 uppercase"
-        style={{
-          borderTop: "1px solid var(--border-subtle)",
-          fontSize: "8.5px",
-          letterSpacing: "0.09em",
-          color: "var(--c-t6)",
-        }}
-      >
-        Military-flagged · adsb.lol
-      </div>
-    </div>
-  );
+  return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m`;
 }
 
 export function AirTrackScreen() {
   const globeRef = useRef<AirTrackGlobeHandle | null>(null);
-  const { contacts, status, updatedAt } = useAirTrackFeed();
+  const [layers, setLayers] = useState<AirTrackLayerToggles>({
+    civil: true,
+    military: true,
+    watchlist: true,
+  });
+  // Regional fast lane — while zoomed in, the viewport area refreshes every
+  // 10 s from adsb.lol point queries on top of the slower global layers.
+  const [region, setRegion] = useState<AirTrackRegion | null>(null);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const view = globeRef.current?.getView();
+      if (!view || view.zoom < REGION_MIN_ZOOM) {
+        setRegion((current) => (current === null ? current : null));
+        return;
+      }
+      const lat = Math.round(Math.max(-85, Math.min(85, view.lat)) * 2) / 2;
+      const lon = Math.round((((view.lon + 540) % 360) - 180) * 2) / 2;
+      setRegion((current) =>
+        current && current.lat === lat && current.lon === lon
+          ? current
+          : { lat, lon },
+      );
+    }, REGION_SAMPLE_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Turning the civil layer off also stops the OpenSky polling entirely —
+  // the shared credit budget is only spent while the layer is on screen.
+  const { contacts, status, civilStatus, updatedAt } = useAirTrackFeed(
+    layers.civil,
+    region,
+  );
+  // What the globe and the list actually see, after the layer toggles.
+  const visibleContacts = useMemo(
+    () => contacts.filter((c) => c.emergency || layers[contactBucket(c)]),
+    [contacts, layers],
+  );
   // Selection is held as the aircraft hex; the card contact is derived from
   // the current frame so it always shows the freshest data and disappears
-  // if the aircraft leaves the feed.
+  // if the aircraft leaves the feed (or its layer is toggled off).
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const selected = useMemo(
     () =>
       selectedHex
-        ? (contacts.find((c) => c.icao24 === selectedHex) ?? null)
+        ? (visibleContacts.find((c) => c.icao24 === selectedHex) ?? null)
         : null,
-    [contacts, selectedHex],
+    [visibleContacts, selectedHex],
   );
   // Re-render the "updated Xs ago" HUD text once per second.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -162,19 +123,41 @@ export function AirTrackScreen() {
   }, []);
 
   const statusMeta = STATUS_META[status];
+  const counts = useMemo(() => {
+    let military = 0;
+    let civil = 0;
+    let watchlist = 0;
+    for (const c of contacts) {
+      if (c.watchlist) watchlist += 1;
+      if (c.military) military += 1;
+      else civil += 1;
+    }
+    return { military, civil, watchlist };
+  }, [contacts]);
+  const emergencies = useMemo(
+    () => contacts.filter((c) => c.emergency),
+    [contacts],
+  );
+
+  function handlePanelSelect(contact: AirTrackContact) {
+    setSelectedHex(contact.icao24);
+    globeRef.current?.focusContact(contact.lon, contact.lat);
+  }
 
   return (
     <div className="relative h-full w-full" style={{ background: "var(--c-bg-base)" }}>
       <AirTrackGlobe
         ref={globeRef}
-        contacts={contacts}
+        contacts={visibleContacts}
         selectedId={selected?.icao24 ?? null}
         onSelect={(contact) => setSelectedHex(contact?.icao24 ?? null)}
       />
 
-      {/* HUD — layer identity + live status */}
+      {/* HUD — one compact row: identity · counts · status · layer toggles.
+          Full source attribution lives in the title tooltip. */}
       <div
-        className="absolute flex items-center gap-3 rounded-lg"
+        className="absolute flex items-center gap-2.5 rounded-lg"
+        title={`Sources: adsb.lol (ODbL)${layers.civil ? " · OpenSky Network" : ""}`}
         style={{
           top: "16px",
           left: "16px",
@@ -183,43 +166,41 @@ export function AirTrackScreen() {
           border: "1px solid var(--accent-blue-border)",
           boxShadow: "0 14px 36px rgba(0,0,0,0.42)",
           backdropFilter: "blur(14px)",
-          padding: "8px 12px",
+          padding: "5px 10px",
         }}
       >
-        <Plane size={13} strokeWidth={1.7} style={{ color: "#ffc46e" }} />
-        <div className="flex flex-col">
-          <span
-            className="uppercase"
-            style={{
-              fontSize: "10.5px",
-              fontWeight: 800,
-              letterSpacing: "0.1em",
-              color: "var(--c-t2)",
-            }}
-          >
-            Air Track — Military Air Activity
-          </span>
-          <span
-            style={{
-              fontSize: "9px",
-              letterSpacing: "0.05em",
-              color: "var(--c-t5)",
-              fontFamily: "var(--font-mono), ui-monospace, monospace",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {contacts.length} aircraft · updated {formatAgo(updatedAt, nowMs)} ·
-            source adsb.lol (ODbL)
-          </span>
-        </div>
+        <Plane size={12} strokeWidth={1.7} style={{ color: "#ffc46e" }} />
         <span
-          className="flex items-center gap-1.5 rounded px-1.5 py-0.5 uppercase"
+          className="uppercase"
+          style={{
+            fontSize: "9.5px",
+            fontWeight: 800,
+            letterSpacing: "0.1em",
+            color: "var(--c-t2)",
+          }}
+        >
+          Air Track
+        </span>
+        <span
           style={{
             fontSize: "8.5px",
+            letterSpacing: "0.04em",
+            color: "var(--c-t5)",
+            fontFamily: "var(--font-mono), ui-monospace, monospace",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {counts.military} MIL · {counts.civil} CIV · {counts.watchlist} WL ·{" "}
+          {formatAgo(updatedAt, nowMs)}
+          {layers.civil && civilStatus === "error" ? " · OPENSKY OFFLINE" : ""}
+        </span>
+        <span
+          className="flex items-center gap-1 uppercase"
+          style={{
+            fontSize: "8px",
             fontWeight: 800,
             letterSpacing: "0.1em",
             color: statusMeta.color,
-            border: "1px solid var(--border-subtle)",
           }}
         >
           <span
@@ -228,10 +209,95 @@ export function AirTrackScreen() {
           />
           {statusMeta.label}
         </span>
+        {/* Layer toggles — CIV / MIL / WL, uniform silver */}
+        <span
+          className="flex items-center gap-1 pl-2"
+          style={{ borderLeft: "1px solid var(--border-subtle)" }}
+        >
+          {LAYER_TOGGLE_META.map(({ key, label }) => {
+            const active = layers[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={active}
+                aria-label={`Toggle ${key} layer`}
+                onClick={() =>
+                  setLayers((current) => ({ ...current, [key]: !current[key] }))
+                }
+                className="rounded px-1.5 py-0.5 uppercase"
+                style={{
+                  fontSize: "8px",
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  color: active ? "var(--c-t3)" : "var(--c-t6)",
+                  border: "1px solid var(--border-subtle)",
+                  background: active
+                    ? "var(--bg-surface-hover)"
+                    : "transparent",
+                  opacity: active ? 1 : 0.5,
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </span>
       </div>
 
+      {/* Emergency chip — quiet glass pill below the HUD; only the dot and
+          the EMERGENCY word carry red so it reads as a signal, not an alarm. */}
+      {emergencies.length > 0 && (
+        <button
+          type="button"
+          onClick={() => handlePanelSelect(emergencies[0])}
+          className="absolute flex items-center gap-1.5 rounded-lg uppercase"
+          style={{
+            top: "74px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 17,
+            background: "rgba(7,8,10,0.72)",
+            border: "1px solid var(--border-subtle)",
+            backdropFilter: "blur(14px)",
+            padding: "4px 10px",
+            fontSize: "8.5px",
+            fontWeight: 800,
+            letterSpacing: "0.09em",
+            cursor: "pointer",
+          }}
+        >
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ background: "#ff2b3d" }}
+          />
+          <span style={{ color: "#ff8c96" }}>Emergency</span>
+          <span
+            style={{
+              color: "var(--c-t4)",
+              fontFamily: "var(--font-mono), ui-monospace, monospace",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {emergencies[0].callsign ?? emergencies[0].icao24.toUpperCase()} ·
+            SQK {emergencies[0].squawk ?? "—"}
+            {emergencies.length > 1 ? ` +${emergencies.length - 1}` : ""}
+          </span>
+        </button>
+      )}
+
+      <AirTrackListPanel
+        contacts={visibleContacts}
+        selectedId={selected?.icao24 ?? null}
+        onSelect={handlePanelSelect}
+      />
+
       {selected && (
-        <ContactCard contact={selected} onClose={() => setSelectedHex(null)} />
+        <AirTrackContactCard
+          contact={selected}
+          onClose={() => setSelectedHex(null)}
+        />
       )}
 
       <MapControls

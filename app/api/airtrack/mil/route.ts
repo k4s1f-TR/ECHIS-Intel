@@ -5,11 +5,12 @@ import type { AirTrackFeedPayload } from "@/types/airtrack";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Cache TTL: 25 seconds.  The Air Track screen polls every 30 seconds, so a
+// Cache TTL: 8 seconds.  The Air Track screen polls every 10 seconds, so a
 // slightly shorter TTL guarantees each client tick gets a fresh upstream
 // frame while burst reloads / multiple open tabs are absorbed by the cache —
-// the whole user base costs adsb.lol at most ~2 requests per minute.
-const MIL_CACHE_TTL_MS = 25_000;
+// the whole user base costs adsb.lol at most ~6 requests per minute, still
+// an order of magnitude under its ~1 req/sec rate-limit class.
+const MIL_CACHE_TTL_MS = 8_000;
 // Floor between sequential outbound requests.  adsb.lol's rate limits are
 // dynamic (~1 req/sec class); a 5-second floor keeps ECHIS a polite client
 // even if the cache is bypassed by racing requests.
@@ -30,13 +31,13 @@ async function fetchMilWithCooldown(): Promise<AirTrackFeedPayload> {
   }
 
   lastMilAttemptAt = Date.now();
-  const { contacts, upstreamTotal } = await fetchAdsbLolMilContacts();
+  const { contacts, upstreamTotal, source } = await fetchAdsbLolMilContacts();
   const payload: AirTrackFeedPayload = {
     contacts,
     upstreamTotal,
     collectedAt: new Date().toISOString(),
     cacheStatus: "fresh",
-    source: "adsblol",
+    source,
   };
   milCache = { payload, fetchedAt: Date.now() };
   return payload;
