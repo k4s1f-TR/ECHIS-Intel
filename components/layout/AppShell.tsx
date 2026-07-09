@@ -12,6 +12,9 @@ import {
   type MapLibreGlobeHandle,
   type MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
+// Opening-screen globe — fully offline (bundled world-atlas data), separate
+// from the Global View / SOCMINT work globes above.
+import { HomeGlobe } from "@/components/map/HomeGlobe";
 import {
   FloatingMonitoringCard,
   type MonitorCategoryOption,
@@ -163,6 +166,7 @@ function filterSourceMarkerItems(
 }
 
 export function AppShell() {
+  const homeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const luxeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const mapLibreGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -190,13 +194,15 @@ export function AppShell() {
     useState(ALL_SOURCES_FILTER);
   const [monitorCardCollapsed, setMonitorCardCollapsed] = useState(false);
   const [sourceFilterCollapsed, setSourceFilterCollapsed] = useState(false);
-  const getActiveGlobe = useCallback(
-    () =>
-      mapSystem === "luxe"
-        ? luxeGlobeRef.current
-        : mapLibreGlobeRef.current,
-    [mapSystem],
-  );
+  // The opening screen (no rail mode) is served by the standalone offline
+  // HomeGlobe; Global View / SOCMINT are served by the Luxe/MapLibre work
+  // globe pair.  Zoom / Center View / focus calls route accordingly.
+  const getActiveGlobe = useCallback(() => {
+    if (activeRailMode === null) return homeGlobeRef.current;
+    return mapSystem === "luxe"
+      ? luxeGlobeRef.current
+      : mapLibreGlobeRef.current;
+  }, [activeRailMode, mapSystem]);
 
   useEffect(() => {
     if (!mapLibreReady || shouldMountLuxe) return;
@@ -685,7 +691,11 @@ export function AppShell() {
                   globalMarkers={globalMarkers}
                   signalsMarkers={signalsMarkers}
                   globalMarkersLoading={globalMarkersLoading}
-                  autoRotatePaused={mapSystem !== "luxe" || !isMapScreen}
+                  autoRotatePaused={
+                    mapSystem !== "luxe" ||
+                    !isMapScreen ||
+                    activeMapRailMode === null
+                  }
                   selectedGlobalId={selectedId}
                   selectedSignalsId={selectedSignalId}
                   onMarkerClick={(id, kind) => {
@@ -713,7 +723,11 @@ export function AppShell() {
                 globalMarkers={globalMarkers}
                 signalsMarkers={signalsMarkers}
                 globalMarkersLoading={globalMarkersLoading}
-                autoRotatePaused={mapSystem !== "maplibre" || !isMapScreen}
+                autoRotatePaused={
+                  mapSystem !== "maplibre" ||
+                  !isMapScreen ||
+                  activeMapRailMode === null
+                }
                 onReady={() => setMapLibreReady(true)}
                 selectedGlobalId={selectedId}
                 selectedSignalsId={selectedSignalId}
@@ -723,11 +737,33 @@ export function AppShell() {
                 }}
               />
             </div>
-            <MapSystemSwitch
-              value={mapSystem}
-              onChange={handleMapSystemChange}
-              dockedToPanel={activeMapRailMode !== null}
-            />
+            {/* Opening-screen globe — offline, standalone.  Sits above the
+                work globes when no rail mode is active; rail modes fade it
+                out and hand the screen to the Luxe/MapLibre pair. */}
+            <div
+              className="absolute inset-0"
+              aria-hidden={activeMapRailMode !== null}
+              style={{
+                zIndex: activeMapRailMode === null ? 3 : 1,
+                opacity: activeMapRailMode === null ? 1 : 0,
+                pointerEvents: activeMapRailMode === null ? "auto" : "none",
+                transition: "opacity 180ms ease",
+              }}
+            >
+              <HomeGlobe
+                ref={homeGlobeRef}
+                autoRotatePaused={!isMapScreen || activeMapRailMode !== null}
+              />
+            </div>
+            {/* Luxe/MapLibre engine switch applies to the work globes only —
+                the opening screen always shows the standalone HomeGlobe. */}
+            {activeMapRailMode !== null && (
+              <MapSystemSwitch
+                value={mapSystem}
+                onChange={handleMapSystemChange}
+                dockedToPanel={activeMapRailMode !== null}
+              />
+            )}
             <div
               style={{
                 opacity: activeMapRailMode === "signals" ? 1 : 0,

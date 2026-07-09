@@ -995,12 +995,14 @@ const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 // --- Premium MapLibre palette ----------------------------------------------
 // Deep obsidian space behind the globe, near-black land, silver-grey borders,
 // and the bright/dark red coastline endpoints from the reference.
-const LUXE_PANEL_BG = "#0B0C0E";
-const LUXE_LAND_FILL = "#050506";
+// Exported: HomeGlobe (the offline opening-screen globe) reuses the same
+// accepted palette so the two globes can never drift apart visually.
+export const LUXE_PANEL_BG = "#0B0C0E";
+export const LUXE_LAND_FILL = "#050506";
 const LUXE_LAND_OVERLAY = "#0d0e10";
-const LUXE_WATER_FILL = "#040405";
+export const LUXE_WATER_FILL = "#040405";
 const LUXE_WATERWAY_FILL = "rgba(120, 130, 146, 0.30)";
-const LUXE_BORDER_COUNTRY = "rgba(255, 43, 61, 0.78)";
+export const LUXE_BORDER_COUNTRY = "rgba(255, 43, 61, 0.78)";
 // Intra-country (state/province) borders. Kept clearly visible but still
 // subordinate to the solid national border — dashed crimson at a higher
 // alpha so provinces read on the dark globe.
