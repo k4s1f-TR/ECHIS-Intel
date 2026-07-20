@@ -305,7 +305,7 @@ parametresiyle üçüne de failover yapar.
 - Zoom < 4'te yoğunluk için `circle` layer'a düş; zoom ≥ 4'te sembol.
 - AGENTS.md §6 kuralları geçerli: tek harita instance'ı, unmount'ta
   `map.remove()`, kamera `DEFAULT_GLOBE_VIEW`'a dokunmaz. Air Track kendi
-  ekranı olduğundan Luxe/MapLibre globe'a dokunmadan, Intel Watch'taki gibi
+  ekranı olduğundan ana/çalışma kürelerine dokunmadan, Intel Watch'taki gibi
   **kendi bağımsız MapLibre instance'ı** ile kurulmalı.
 
 ### 6.5 Yenileme kadansı ve bütçe

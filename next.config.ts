@@ -17,6 +17,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The prototype is opened through the in-app Browser on the loopback IP.
+  // Allow its development client/HMR resources to hydrate normally.
+  allowedDevOrigins: ["127.0.0.1"],
   devIndicators: false,
   async headers() {
     return [

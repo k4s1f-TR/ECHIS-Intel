@@ -7,561 +7,341 @@ import {
   useRef,
   useState,
 } from "react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import { feature } from "topojson-client";
-import countriesAtlas from "world-atlas/countries-50m.json";
-import {
-  DEFAULT_GLOBE_VIEW,
-  LUXE_BORDER_COUNTRY,
-  LUXE_LAND_FILL,
-  LUXE_PANEL_BG,
-  LUXE_WATER_FILL,
-  applyEchisGlobeAtmosphere,
-  type MapLibreGlobeHandle,
-} from "@/components/maplibre/MapLibreGlobe";
+import * as THREE from "three";
+import { mesh } from "topojson-client";
+import countriesAtlas from "world-atlas/countries-110m.json";
+import type { MapLibreGlobeHandle } from "@/components/maplibre/MapLibreGlobe";
 
-// ---------------------------------------------------------------------------
-// HomeGlobe — the opening-screen globe, fully offline.
-//
-// Unlike MapLibreGlobe (the Global View / SOCMINT work globe, which streams
-// OpenFreeMap vector tiles and remote glyphs), this globe is built entirely
-// from data already bundled with the app:
-//   • land polygons + country/coast outlines — world-atlas countries-50m
-//   • atmosphere halo — applyEchisGlobeAtmosphere (shared)
-//
-// Resolution note: the work globe's luxe outline uses countries-10m with
-// tolerance 0, which is right for its deep-zoom cartography but takes the
-// GeoJSON worker seconds to index — borders would pop in late, tile by tile.
-// The home globe is capped at z6, where the 50m dataset (5x smaller, default
-// simplification) is visually identical and indexes near-instantly, so land
-// and borders appear together with the sphere in the first painted frame.
-// Both land and outline are part of the initial style (not added on
-// style.load) for the same reason: one commit, no progressive layering.
-//
-// No tile requests, no glyph requests, no loading animation.  Labels are
-// intentionally absent for now — text would require locally hosted glyphs,
-// which is a separate step.
-//
-// Camera contract: DEFAULT_GLOBE_VIEW stays the single source of truth for
-// initial paint and Center View, and auto-rotate is longitude-based jumpTo,
-// exactly like the work globe (AGENTS.md §6).
-// ---------------------------------------------------------------------------
+type Position = [number, number];
+type GeoLine = { type: "LineString"; coordinates: Position[] };
+type GeoMultiLine = { type: "MultiLineString"; coordinates: Position[][] };
 
-const HOME_LAND_SOURCE = "echis-home-land";
-const HOME_LAND_LAYER = "echis-home-land-fill";
-const HOME_OUTLINE_SOURCE = "echis-home-outline";
-const HOME_OUTLINE_LAYER = "echis-home-outline";
+const RADIUS = 1.54;
+const AUTO_ROTATE_SPEED = 0.055;
+const CRISIS_COUNTRY_IDS = new Set(["275", "376", "729", "804", "887"]);
 
-// Offline data is meaningful to roughly z6; past that there is no detail to
-// reveal, so the cap keeps the globe from zooming into emptiness.
-const HOME_GLOBE_MAX_ZOOM = 6;
-const ZOOM_STEP = 0.75;
-
-// Auto-rotate constants mirror MapLibreGlobe so the two globes feel identical.
-const AUTO_ROTATE_DEG_PER_SEC = 1.5;
-const AUTO_ROTATE_MAX_DT_S = 0.05;
-const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
-const CENTRAL_VIEW_IDLE_DELAY_MS = 3_000;
-const INTERACTION_IDLE_DELAY_MS = 15_000;
-const CENTRAL_VIEW_ANIM_MS = 1200;
-const FOCUS_MARKER_ANIM_MS = 1500;
-
-function easeOutCubic(t: number): number {
-  return 1 - Math.pow(1 - t, 3);
+function spherePoint(lng: number, lat: number, radius = RADIUS) {
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const theta = THREE.MathUtils.degToRad(lng + 90);
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta),
+  );
 }
 
-// Outline segments — same ring-splitting approach as the work globe's luxe
-// outline (independent 2-point pieces so no continuous pen path can connect
-// unrelated ends), with two artifact filters:
-//   • antimeridian closures — the vertical jump edge where a clipped polygon
-//     (Russia, Fiji, Antarctica) wraps from +180 to -180
-//   • polar closure lines — the straight edge polygons use to close along
-//     the poles; never a real border
-// The 10m-specific max-edge-length filter is intentionally NOT applied: 50m
-// data legitimately has long straight border edges (deserts, the 49th
-// parallel) that the 0.75° cap would punch holes into.
-const ANTIMERIDIAN_JUMP_DEG = 180;
-const POLAR_ARTIFACT_LAT = 85;
-
-function isDrawableOutlineEdge(
-  previous: GeoJSON.Position,
-  current: GeoJSON.Position,
-): boolean {
-  if (Math.abs(previous[0] - current[0]) >= ANTIMERIDIAN_JUMP_DEG) return false;
-  if (
-    Math.abs(previous[1]) >= POLAR_ARTIFACT_LAT &&
-    Math.abs(current[1]) >= POLAR_ARTIFACT_LAT
-  ) {
-    return false;
-  }
-  return true;
+function lineCoordinates(geometry: GeoLine | GeoMultiLine): Position[][] {
+  return geometry.type === "LineString"
+    ? [geometry.coordinates]
+    : geometry.coordinates;
 }
 
-function appendRingSegments(
-  ring: GeoJSON.Position[],
-  lines: GeoJSON.Position[][],
-): void {
-  for (let index = 1; index < ring.length; index += 1) {
-    const previous = ring[index - 1];
-    const current = ring[index];
-    if (!previous || !current) continue;
-    if (isDrawableOutlineEdge(previous, current)) lines.push([previous, current]);
-  }
+function addLine(
+  parent: THREE.Object3D,
+  coordinates: Position[],
+  material: THREE.LineBasicMaterial,
+  radius: number,
+) {
+  if (coordinates.length < 2) return;
+  const points = coordinates.map(([lng, lat]) => spherePoint(lng, lat, radius));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  parent.add(new THREE.Line(geometry, material));
 }
 
-function collectOutlineSegments(
-  geometry: GeoJSON.Geometry | null,
-  lines: GeoJSON.Position[][],
-): void {
-  if (!geometry) return;
-  if (geometry.type === "Polygon") {
-    geometry.coordinates.forEach((ring) => appendRingSegments(ring, lines));
-    return;
-  }
-  if (geometry.type === "MultiPolygon") {
-    geometry.coordinates.forEach((polygon) => {
-      polygon.forEach((ring) => appendRingSegments(ring, lines));
-    });
-  }
+function isCrisisGeometry(geometry: unknown): boolean {
+  const id = (geometry as { id?: string | number } | undefined)?.id;
+  return id !== undefined && CRISIS_COUNTRY_IDS.has(String(id).padStart(3, "0"));
 }
 
-type HomeGlobeData = {
-  land: GeoJSON.FeatureCollection;
-  outline: GeoJSON.FeatureCollection;
-};
-
-let homeGlobeDataCache: HomeGlobeData | null = null;
-
-function getHomeGlobeData(): HomeGlobeData {
-  if (homeGlobeDataCache) return homeGlobeDataCache;
-  const topology = countriesAtlas as unknown as TopoJSON.Topology;
-  const land = feature(
-    topology,
-    topology.objects.countries as TopoJSON.GeometryCollection,
-  ) as GeoJSON.FeatureCollection;
-  const lines: GeoJSON.Position[][] = [];
-  land.features.forEach((country) => {
-    collectOutlineSegments(country.geometry, lines);
-  });
-  homeGlobeDataCache = {
-    land,
-    outline: {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { kind: "outline" },
-          geometry: { type: "MultiLineString", coordinates: lines },
-        },
-      ],
-    },
-  };
-  return homeGlobeDataCache;
-}
-
-function createHomeGlobeStyle(): maplibregl.StyleSpecification {
-  const { land, outline } = getHomeGlobeData();
-  return {
-    version: 8,
-    name: "ECHIS Home Offline",
-    sources: {
-      [HOME_LAND_SOURCE]: {
-        type: "geojson",
-        data: land,
-        maxzoom: 6,
-      },
-      [HOME_OUTLINE_SOURCE]: {
-        type: "geojson",
-        data: outline,
-        maxzoom: 6,
-      },
-    },
-    layers: [
-      {
-        id: "background",
-        type: "background",
-        paint: { "background-color": LUXE_WATER_FILL },
-      },
-      {
-        id: HOME_LAND_LAYER,
-        type: "fill",
-        source: HOME_LAND_SOURCE,
-        paint: { "fill-color": LUXE_LAND_FILL, "fill-opacity": 1 },
-      },
-      {
-        id: HOME_OUTLINE_LAYER,
-        type: "line",
-        source: HOME_OUTLINE_SOURCE,
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": LUXE_BORDER_COUNTRY,
-          "line-width": 0.62,
-          "line-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            0,
-            0.9,
-            6,
-            0.95,
-          ],
-        },
-      } as unknown as maplibregl.LayerSpecification,
-    ],
-  };
-}
-
-interface HomeGlobeProps {
-  autoRotatePaused?: boolean;
-}
-
-export const HomeGlobe = forwardRef<MapLibreGlobeHandle, HomeGlobeProps>(
+export const HomeGlobe = forwardRef<MapLibreGlobeHandle, { autoRotatePaused?: boolean }>(
   function HomeGlobe({ autoRotatePaused = false }, ref) {
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const mapRef = useRef<maplibregl.Map | null>(null);
-    const autoRotatePausedPropRef = useRef(autoRotatePaused);
-    const setAutoRotatePausedRef = useRef<(paused: boolean) => void>(() => {});
-    const pauseAutoRotateRef = useRef<(delayMs: number) => void>(() => {});
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const mountRef = useRef<HTMLDivElement | null>(null);
+    const runtimeRef = useRef<{
+      camera: THREE.PerspectiveCamera;
+      globe: THREE.Group;
+      renderer: THREE.WebGLRenderer;
+      targetQuaternion: THREE.Quaternion | null;
+      targetZoom: number;
+      interactionUntil: number;
+    } | null>(null);
+    const pausedRef = useRef(autoRotatePaused);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-      autoRotatePausedPropRef.current = autoRotatePaused;
-      setAutoRotatePausedRef.current(autoRotatePaused);
+      pausedRef.current = autoRotatePaused;
     }, [autoRotatePaused]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        zoomIn: () => {
-          const m = mapRef.current;
-          if (!m) return;
-          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
-          m.zoomTo(m.getZoom() + ZOOM_STEP, { duration: 350 });
-        },
-        zoomOut: () => {
-          const m = mapRef.current;
-          if (!m) return;
-          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
-          m.zoomTo(m.getZoom() - ZOOM_STEP, { duration: 350 });
-        },
-        projectMarker: (lng: number, lat: number) => {
-          const m = mapRef.current;
-          if (!m) return null;
-          try {
-            const point = m.project([lng, lat]);
-            return { x: point.x, y: point.y };
-          } catch {
-            return null;
-          }
-        },
-        setAutoRotatePaused: (paused: boolean) => {
-          autoRotatePausedPropRef.current = paused;
-          setAutoRotatePausedRef.current(paused);
-        },
-        centerView: () => {
-          const m = mapRef.current;
-          if (!m) return;
-          pauseAutoRotateRef.current(
-            CENTRAL_VIEW_ANIM_MS + CENTRAL_VIEW_IDLE_DELAY_MS,
-          );
-          try {
-            m.easeTo({
-              center: DEFAULT_GLOBE_VIEW.center,
-              zoom: DEFAULT_GLOBE_VIEW.zoom,
-              bearing: DEFAULT_GLOBE_VIEW.bearing,
-              pitch: DEFAULT_GLOBE_VIEW.pitch,
-              duration: CENTRAL_VIEW_ANIM_MS,
-              easing: easeOutCubic,
-            });
-          } catch {
-            /* map mid-teardown — ignore */
-          }
-        },
-        focusMarker: (lng: number, lat: number) => {
-          const m = mapRef.current;
-          if (!m) return;
-          pauseAutoRotateRef.current(INTERACTION_IDLE_DELAY_MS);
-          try {
-            m.easeTo({
-              center: [lng, lat],
-              duration: FOCUS_MARKER_ANIM_MS,
-              easing: easeOutCubic,
-            });
-          } catch {
-            /* map mid-teardown — ignore */
-          }
-        },
-      }),
-      [],
-    );
+    useImperativeHandle(ref, () => ({
+      zoomIn: () => {
+        const state = runtimeRef.current;
+        if (!state) return;
+        state.targetZoom = Math.max(3.5, state.targetZoom - 0.45);
+        state.interactionUntil = performance.now() + 12_000;
+      },
+      zoomOut: () => {
+        const state = runtimeRef.current;
+        if (!state) return;
+        state.targetZoom = Math.min(6.4, state.targetZoom + 0.45);
+        state.interactionUntil = performance.now() + 12_000;
+      },
+      centerView: () => {
+        const state = runtimeRef.current;
+        if (!state) return;
+        state.targetQuaternion = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(THREE.MathUtils.degToRad(-12), THREE.MathUtils.degToRad(-18), 0),
+        );
+        state.targetZoom = 4.75;
+        state.interactionUntil = performance.now() + 5_000;
+      },
+      focusMarker: (lng, lat) => {
+        const state = runtimeRef.current;
+        if (!state) return;
+        const localPoint = spherePoint(lng, lat, 1).normalize();
+        state.targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
+          localPoint,
+          new THREE.Vector3(0, 0, 1),
+        );
+        state.targetZoom = 4.15;
+        state.interactionUntil = performance.now() + 12_000;
+      },
+      projectMarker: () => null,
+      setAutoRotatePaused: (paused) => {
+        pausedRef.current = paused;
+      },
+    }), []);
 
     useEffect(() => {
-      const container = containerRef.current;
-      if (!container) return;
+      const mount = mountRef.current;
+      if (!mount) return;
 
-      // WebGL probe — WebGL2 is required for globe projection; WebGL1 still
-      // renders mercator.  Same check as MapLibreGlobe.
-      const probe = document.createElement("canvas");
-      const gl2 = probe.getContext("webgl2");
-      const hasWebGL2 = !!gl2;
-      let hasWebGL1 = false;
-      if (!hasWebGL2) {
-        const gl1 = probe.getContext("webgl");
-        hasWebGL1 = !!gl1;
-        gl1?.getExtension("WEBGL_lose_context")?.loseContext();
-      } else {
-        gl2.getExtension("WEBGL_lose_context")?.loseContext();
-      }
-      probe.remove();
-      if (!hasWebGL2 && !hasWebGL1) {
-        setErrorMsg("WebGL is not available in this browser.");
-        return;
-      }
-
-      let map: maplibregl.Map;
+      let renderer: THREE.WebGLRenderer;
       try {
-        map = new maplibregl.Map({
-          container,
-          style: createHomeGlobeStyle(),
-          center: DEFAULT_GLOBE_VIEW.center,
-          zoom: DEFAULT_GLOBE_VIEW.zoom,
-          bearing: DEFAULT_GLOBE_VIEW.bearing,
-          pitch: DEFAULT_GLOBE_VIEW.pitch,
-          maxZoom: HOME_GLOBE_MAX_ZOOM,
-          attributionControl: false,
-          renderWorldCopies: false,
-          fadeDuration: 0,
-        });
-      } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : "MapLibre constructor threw.";
-        setErrorMsg(msg);
-        console.error("[HomeGlobe] init failed:", err);
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "WebGL is unavailable");
         return;
       }
-      mapRef.current = map;
 
-      map.doubleClickZoom.disable();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.9;
+      renderer.domElement.setAttribute("aria-label", "Interactive strategic globe");
+      mount.appendChild(renderer.domElement);
 
-      const handleStyleLoad = () => {
-        if (hasWebGL2) {
-          try {
-            map.setProjection({ type: "globe" });
-          } catch (e) {
-            console.warn(
-              "[HomeGlobe] setProjection(globe) failed — using mercator:",
-              e,
-            );
-          }
-        }
-        applyEchisGlobeAtmosphere(map);
-        try {
-          map.resize();
-        } catch {
-          /* noop */
-        }
-      };
-      map.on("style.load", handleStyleLoad);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+      camera.position.set(0, 0, 4.75);
 
-      const ro = new ResizeObserver(() => {
-        try {
-          map.resize();
-        } catch {
-          /* noop */
-        }
+      const globe = new THREE.Group();
+      globe.rotation.set(THREE.MathUtils.degToRad(-12), THREE.MathUtils.degToRad(-18), 0);
+      scene.add(globe);
+
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(RADIUS, 128, 128),
+        new THREE.MeshPhysicalMaterial({
+          color: 0x07080a,
+          metalness: 0.72,
+          roughness: 0.54,
+          clearcoat: 0.3,
+          clearcoatRoughness: 0.62,
+        }),
+      );
+      globe.add(sphere);
+
+      const atmosphere = new THREE.Mesh(
+        new THREE.SphereGeometry(RADIUS * 1.055, 96, 96),
+        new THREE.ShaderMaterial({
+          transparent: true,
+          side: THREE.FrontSide,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          uniforms: {
+            horizonColor: { value: new THREE.Color(0x2a0a0d) },
+            fogColor: { value: new THREE.Color(0x1a0608) },
+          },
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            void main() {
+              vNormal = normalize(normalMatrix * normal);
+              vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+              vViewPosition = viewPosition.xyz;
+              gl_Position = projectionMatrix * viewPosition;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            uniform vec3 horizonColor;
+            uniform vec3 fogColor;
+            void main() {
+              vec3 viewDirection = normalize(-vViewPosition);
+              float fresnel = 1.0 - max(dot(normalize(vNormal), viewDirection), 0.0);
+              float horizon = smoothstep(0.42, 0.98, fresnel);
+              float outerFade = pow(horizon, 2.2);
+              vec3 color = mix(fogColor, horizonColor, smoothstep(0.66, 1.0, fresnel));
+              gl_FragColor = vec4(color, outerFade * 0.22);
+            }
+          `,
+        }),
+      );
+      globe.add(atmosphere);
+
+      const borderMaterial = new THREE.LineBasicMaterial({
+        color: 0xd52135,
+        transparent: true,
+        opacity: 0.68,
+        depthWrite: false,
       });
-      ro.observe(container);
+      const atlasCountries = (
+        countriesAtlas as unknown as { objects: { countries: unknown } }
+      ).objects.countries;
+      const geography = mesh(
+        countriesAtlas as never,
+        atlasCountries as never,
+        (a, b) => !isCrisisGeometry(a) && !isCrisisGeometry(b),
+      ) as unknown as GeoLine | GeoMultiLine;
+      lineCoordinates(geography).forEach((line) =>
+        addLine(globe, line, borderMaterial, RADIUS + 0.009),
+      );
 
-      // ── Auto-rotate — longitude-based jumpTo, mirroring MapLibreGlobe ────
-      let rafId = 0;
-      let lastFrameTime: number | null = null;
-      let resumeTimerId: number | null = null;
-      let mapLoaded = false;
-      let userInteracting = false;
-      let disposed = false;
-      let overlayPaused = autoRotatePausedPropRef.current;
+      const crisisBorderMaterial = new THREE.LineBasicMaterial({
+        color: 0xff3f52,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const crisisGeography = mesh(
+        countriesAtlas as never,
+        atlasCountries as never,
+        (a, b) => isCrisisGeometry(a) || isCrisisGeometry(b),
+      ) as unknown as GeoLine | GeoMultiLine;
+      lineCoordinates(crisisGeography).forEach((line) =>
+        addLine(globe, line, crisisBorderMaterial, RADIUS + 0.009),
+      );
 
-      const canRotate = () =>
-        mapLoaded && !overlayPaused && !userInteracting && !disposed;
+      scene.add(new THREE.AmbientLight(0x24272e, 0.46));
+      const northwestLight = new THREE.RectAreaLight(0xe5e8ee, 4.1, 3.4, 3.4);
+      northwestLight.position.set(-3.8, 4.1, 4.8);
+      northwestLight.lookAt(0, 0, 0);
+      scene.add(northwestLight);
+      const rimLight = new THREE.DirectionalLight(0x2a0a0d, 0.34);
+      rimLight.position.set(4, -1, -5);
+      scene.add(rimLight);
 
-      const wrapLng = (lng: number) =>
-        ((((lng + 180) % 360) + 360) % 360) - 180;
+      const state = {
+        camera,
+        globe,
+        renderer,
+        targetQuaternion: null as THREE.Quaternion | null,
+        targetZoom: 4.75,
+        interactionUntil: 0,
+      };
+      runtimeRef.current = state;
 
-      const animate = (now: number) => {
-        rafId = requestAnimationFrame(animate);
-        if (!canRotate()) {
-          lastFrameTime = null;
-          return;
-        }
-        if (lastFrameTime === null) {
-          lastFrameTime = now;
-          return;
-        }
-        const dtSeconds = Math.min(
-          (now - lastFrameTime) / 1000,
-          AUTO_ROTATE_MAX_DT_S,
+      const resize = () => {
+        const { clientWidth: width, clientHeight: height } = mount;
+        if (!width || !height) return;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.setViewOffset(
+          width,
+          height,
+          width < 900 ? 0 : Math.round(-width * 0.105),
+          0,
+          width,
+          height,
         );
+        camera.updateProjectionMatrix();
+      };
+      const observer = new ResizeObserver(resize);
+      observer.observe(mount);
+      resize();
+
+      let dragging = false;
+      let previousX = 0;
+      let previousY = 0;
+      const onPointerDown = (event: PointerEvent) => {
+        dragging = true;
+        previousX = event.clientX;
+        previousY = event.clientY;
+        state.targetQuaternion = null;
+        state.interactionUntil = performance.now() + 12_000;
+        renderer.domElement.setPointerCapture(event.pointerId);
+      };
+      const onPointerMove = (event: PointerEvent) => {
+        if (!dragging) return;
+        const dx = event.clientX - previousX;
+        const dy = event.clientY - previousY;
+        previousX = event.clientX;
+        previousY = event.clientY;
+        const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * 0.0042);
+        const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy * 0.0032);
+        globe.quaternion.premultiply(yaw).premultiply(pitch).normalize();
+      };
+      const onPointerUp = () => { dragging = false; };
+      const onWheel = (event: WheelEvent) => {
+        event.preventDefault();
+        state.targetZoom = THREE.MathUtils.clamp(state.targetZoom + event.deltaY * 0.002, 3.5, 6.4);
+        state.interactionUntil = performance.now() + 12_000;
+      };
+      renderer.domElement.addEventListener("pointerdown", onPointerDown);
+      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("pointerup", onPointerUp);
+      renderer.domElement.addEventListener("pointercancel", onPointerUp);
+      renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+
+      let frameId = 0;
+      let lastFrameTime = performance.now();
+      let elapsed = 0;
+      const animate = (now: number) => {
+        frameId = requestAnimationFrame(animate);
+        const delta = Math.min(Math.max((now - lastFrameTime) / 1000, 0), 0.04);
         lastFrameTime = now;
-        if (dtSeconds <= 0) return;
-        try {
-          const center = map.getCenter();
-          const nextLng = wrapLng(
-            center.lng + AUTO_ROTATE_DEG_PER_SEC * dtSeconds,
-          );
-          map.jumpTo(
-            { center: [nextLng, center.lat] },
-            { [AUTO_ROTATE_EVENT_TAG]: true },
-          );
-        } catch {
-          /* map mid-teardown — ignore */
+        elapsed += delta;
+        if (state.targetQuaternion) {
+          globe.quaternion.slerp(state.targetQuaternion, 0.035);
+          if (globe.quaternion.angleTo(state.targetQuaternion) < 0.004) state.targetQuaternion = null;
+        } else if (!dragging && !pausedRef.current && performance.now() > state.interactionUntil) {
+          const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), delta * AUTO_ROTATE_SPEED);
+          globe.quaternion.premultiply(rotation).normalize();
         }
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, state.targetZoom, 0.055);
+        const breath = (Math.sin(elapsed * 1.28) + 1) / 2;
+        crisisBorderMaterial.opacity = 0.5 + breath * 0.32;
+        renderer.render(scene, camera);
       };
-
-      const clearResumeTimer = () => {
-        if (resumeTimerId !== null) {
-          window.clearTimeout(resumeTimerId);
-          resumeTimerId = null;
-        }
-      };
-
-      const pauseAutoRotate = (delayMs: number) => {
-        userInteracting = true;
-        lastFrameTime = null;
-        clearResumeTimer();
-        resumeTimerId = window.setTimeout(() => {
-          resumeTimerId = null;
-          userInteracting = false;
-          lastFrameTime = null;
-        }, delayMs);
-      };
-
-      pauseAutoRotateRef.current = pauseAutoRotate;
-      setAutoRotatePausedRef.current = (paused: boolean) => {
-        overlayPaused = paused;
-        lastFrameTime = null;
-      };
-      setAutoRotatePausedRef.current(autoRotatePausedPropRef.current);
-
-      const isUserOriginated = (
-        e: { originalEvent?: unknown; [key: string]: unknown } | undefined,
-      ) => {
-        if (!e) return false;
-        if (e[AUTO_ROTATE_EVENT_TAG]) return false;
-        return e.originalEvent != null;
-      };
-      const onMapUserStart = (
-        e: { originalEvent?: unknown; [key: string]: unknown },
-      ) => {
-        if (!isUserOriginated(e)) return;
-        pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
-      };
-      map.on("dragstart", onMapUserStart);
-      map.on("zoomstart", onMapUserStart);
-      map.on("rotatestart", onMapUserStart);
-      map.on("pitchstart", onMapUserStart);
-      map.on("wheel", onMapUserStart);
-
-      const canvas = map.getCanvasContainer();
-      const onDomUserInput = () => pauseAutoRotate(INTERACTION_IDLE_DELAY_MS);
-      canvas.addEventListener("mousedown", onDomUserInput, { passive: true });
-      canvas.addEventListener("pointerdown", onDomUserInput, { passive: true });
-      canvas.addEventListener("touchstart", onDomUserInput, { passive: true });
-      canvas.addEventListener("wheel", onDomUserInput, { passive: true });
-
-      // Local style + local GeoJSON commit within a frame or two, so "load"
-      // fires almost immediately — no loading overlay needed.
-      const onLoadInternal = () => {
-        mapLoaded = true;
-        lastFrameTime = null;
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(animate);
-      };
-      map.on("load", onLoadInternal);
+      frameId = requestAnimationFrame(animate);
 
       return () => {
-        disposed = true;
-        clearResumeTimer();
-        cancelAnimationFrame(rafId);
-        rafId = 0;
-        try {
-          canvas.removeEventListener("mousedown", onDomUserInput);
-          canvas.removeEventListener("pointerdown", onDomUserInput);
-          canvas.removeEventListener("touchstart", onDomUserInput);
-          canvas.removeEventListener("wheel", onDomUserInput);
-        } catch {
-          /* canvas may already be detached */
-        }
-        pauseAutoRotateRef.current = () => {};
-        setAutoRotatePausedRef.current = () => {};
-        ro.disconnect();
-        mapRef.current = null;
-        try {
-          map.off("dragstart", onMapUserStart);
-          map.off("zoomstart", onMapUserStart);
-          map.off("rotatestart", onMapUserStart);
-          map.off("pitchstart", onMapUserStart);
-          map.off("wheel", onMapUserStart);
-          map.off("load", onLoadInternal);
-          map.off("style.load", handleStyleLoad);
-          map.remove();
-        } catch {
-          // Defensive: removal during HMR can race with internal teardown.
-        }
+        cancelAnimationFrame(frameId);
+        observer.disconnect();
+        renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+        renderer.domElement.removeEventListener("pointermove", onPointerMove);
+        renderer.domElement.removeEventListener("pointerup", onPointerUp);
+        renderer.domElement.removeEventListener("pointercancel", onPointerUp);
+        renderer.domElement.removeEventListener("wheel", onWheel);
+        runtimeRef.current = null;
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) {
+            object.geometry.dispose();
+            const material = object.material;
+            if (Array.isArray(material)) material.forEach((item) => item.dispose());
+            else material.dispose();
+          }
+        });
+        renderer.dispose();
+        renderer.domElement.remove();
       };
     }, []);
 
     return (
-      <div
-        aria-label="Home globe"
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: LUXE_PANEL_BG,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          ref={containerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: LUXE_PANEL_BG,
-          }}
-        />
-
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            background:
-              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 42%, rgba(4,4,5,0.6) 70%, rgba(4,4,5,0.98) 100%)",
-          }}
-        />
-
-        {errorMsg && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              color: "#8a939c",
-              fontSize: 13,
-              background: LUXE_PANEL_BG,
-              padding: 16,
-              textAlign: "center",
-            }}
-          >
-            <div>Globe failed to load</div>
-            <div style={{ color: "#4e5762", fontSize: 11 }}>{errorMsg}</div>
-          </div>
-        )}
+      <div className="home-three-globe" aria-label="Home globe">
+        <div ref={mountRef} className="home-three-globe-canvas" />
+        <div className="home-three-globe-vignette" aria-hidden="true" />
+        {error && <div className="home-three-globe-error">Globe unavailable · {error}</div>}
       </div>
     );
   },

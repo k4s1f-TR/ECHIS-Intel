@@ -9,8 +9,6 @@ import {
 } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { feature } from "topojson-client";
-import countriesAtlas from "world-atlas/countries-10m.json";
 import {
   createEchisOsmGlobeStyle,
   OSM_VECTOR_SOURCE_ID,
@@ -95,6 +93,8 @@ const MARKER_SOURCE_SIGNALS = "echis-markers-signals";
 //   SEL     selected pin     (the one selected feature, larger)
 const MARKER_BLOOM_GLOBAL   = "echis-markers-global-bloom";
 const MARKER_BLOOM_SIGNALS  = "echis-markers-signals-bloom";
+const MARKER_SIGNAL_GLOBAL  = "echis-markers-global-signal";
+const MARKER_SIGNAL_SIGNALS = "echis-markers-signals-signal";
 const MARKER_GLOW_GLOBAL    = "echis-markers-global-glow";
 const MARKER_GLOW_SIGNALS   = "echis-markers-signals-glow";
 const MARKER_LAYER_GLOBAL   = "echis-markers-global-layer";
@@ -174,13 +174,14 @@ const MARKER_COUNT_BADGE_FILTER: maplibregl.FilterSpecification = [
   1,
 ] as unknown as maplibregl.FilterSpecification;
 
-// Silver marker accent tokens (design_handoff_silver_map_marker).  Used only by
-// the marker glow / selection / badge layers — the silver redesign exists to
-// break the pins out of the red basemap, so their highlight halo is silver, not
-// red.
-const SILVER_RING = "#BABDC5"; // inner disc ring + count-badge ring (muted gunmetal, less glare)
-const SILVER_HALO = "rgba(200,204,214,0.34)"; // selection bloom — toned down so it doesn't shout
-const SILVER_GLOW = "rgba(198,202,212,0.3)"; // selection / hover ring glow
+// Normal pins stay metallic silver so they remain legible over the crimson
+// cartography. Hover is a restrained silver halo; selection switches to the
+// 2A critical-crimson language without changing the marker interaction stack.
+const SILVER_RING = "#BABDC5";
+const SILVER_HOVER_HALO = "rgba(198,202,212,0.30)";
+const SELECTED_MARKER_RING = "#FF3D4F";
+const SELECTED_MARKER_HALO = "rgba(255,61,79,0.26)";
+const SELECTED_MARKER_GLOW = "rgba(255,61,79,0.42)";
 
 const selectedMarkerOpacityExpression = (
   selectedId: string,
@@ -202,8 +203,8 @@ const selectedMarkerOpacityExpression = (
 // pixelRatio + icon-size then set the final size. icon-anchor: "bottom" keeps
 // the tip on the geographic coordinate during zoom / drag / auto-rotate.
 //
-// Two ring variants per the handoff state table: default (#E6E7EC, 0.9 px) and
-// active/selected (#FFFFFF, 1.2 px).
+// Two ring variants per the 2A state language: muted silver by default and
+// critical crimson when active/selected.
 // ---------------------------------------------------------------------------
 // Muted gunmetal variant of the handoff body gradient — the original silver was
 // too bright against the dark basemap; darker highlight + cooler mids keep the
@@ -235,7 +236,7 @@ const GLOBAL_PIN_ICON_SIZE_DEFAULT = 0.68;
 const GLOBAL_PIN_ICON_SIZE_HOVER = 0.73;
 const GLOBAL_PIN_ICON_SIZE_SELECTED = 0.8;
 const GLOBAL_PIN_SVG = buildSilverPinSvg(SILVER_RING, 0.9);
-const GLOBAL_PIN_SELECTED_SVG = buildSilverPinSvg("#FFFFFF", 1.2);
+const GLOBAL_PIN_SELECTED_SVG = buildSilverPinSvg(SELECTED_MARKER_RING, 1.2);
 
 function registerSvgIcon(
   map: maplibregl.Map,
@@ -310,16 +311,14 @@ const CARTO_DARK_MATTER_STYLE_URL =
 // slightly lower to expose more of southern Africa.
 // ---------------------------------------------------------------------------
 export const DEFAULT_GLOBE_VIEW = {
-  // Türkiye / Eastern Mediterranean as the strategic focus, but the camera
-  // center sits south of Türkiye so Anatolia lands in the upper-center of
-  // the framed globe rather than dead center.  Longitude held around 35.
-  // MapLibre center order is [longitude, latitude].
-  center: [35, 31] as [number, number],
-  // Tuned visually to the reference screenshot: the full globe is
-  // comfortably visible with a black margin around it, Europe / Türkiye /
-  // Middle East / Africa / Asia all in frame.  Single source of truth —
-  // initial paint and Central View consume this same value.
-  zoom: 2.12,
+  // Exact geographic centre derived from the approved Three.js 2A globe's
+  // initial Euler rotation (-14°, -30°, 0°): Africa sits on the right half,
+  // the Atlantic remains central and South America enters from the left.
+  center: [30, -14] as [number, number],
+  // The reference crops the sphere slightly at the top/bottom rather than
+  // showing a small full globe with a wide margin. This zoom recreates that
+  // composition while the existing screen padding keeps side panels clear.
+  zoom: 2.55,
   bearing: 0,
   pitch: 0,
 } as const;
@@ -372,7 +371,9 @@ const GLOBE_SCREEN_FRAMING: Record<GlobeViewMode, FramingPadding> = {
 
 const VIEW_TRANSITION_MS = 1400;
 
-const REGION_GLOBE_VIEWS: Record<
+// Exported so the three.js screen globes can reframe to the same region
+// centres — one table, so the two renderers can never drift apart.
+export const REGION_GLOBE_VIEWS: Record<
   RegionKey,
   { center: [number, number]; zoom: number }
 > = {
@@ -480,6 +481,7 @@ function setMarkerVisibility(
   const ids =
     kind === "global"
       ? [
+          MARKER_SIGNAL_GLOBAL,
           MARKER_BLOOM_GLOBAL,
           MARKER_GLOW_GLOBAL,
           MARKER_LAYER_GLOBAL,
@@ -490,6 +492,7 @@ function setMarkerVisibility(
           MARKER_BADGE_TEXT_GLOBAL,
         ]
       : [
+          MARKER_SIGNAL_SIGNALS,
           MARKER_BLOOM_SIGNALS,
           MARKER_GLOW_SIGNALS,
           MARKER_LAYER_SIGNALS,
@@ -512,7 +515,8 @@ function setMarkerVisibility(
 //
 // Layer stack per kind (bottom → top):
 //
-//  BLOOM  large soft spread — outer neon bloom (big blurred circle)
+//  SIGNAL severity accent — persistent critical/high/silver marker halo
+//  BLOOM  large soft spread — outer selected-marker bloom
 //  GLOW   small crisp ring  — inner neon ring with bright stroke
 //  LAYER  normal pin icons  — all features except the selected one
 //  SEL    selected pin icon — only the selected feature, larger
@@ -527,6 +531,46 @@ function setMarkerVisibility(
 function setupMarkerLayers(map: maplibregl.Map): void {
   const emptyFC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
+  const addSignalLayer = (source: string, signalId: string) => {
+    if (map.getLayer(signalId)) return;
+    const markerLevel: maplibregl.ExpressionSpecification = [
+      "coalesce",
+      ["get", "severity"],
+      ["get", "confidence"],
+      "normal",
+    ];
+    map.addLayer({
+      id: signalId,
+      type: "circle",
+      source,
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": [
+          "match",
+          markerLevel,
+          "critical",
+          8,
+          "high",
+          7,
+          5,
+        ],
+        "circle-color": [
+          "match",
+          markerLevel,
+          "critical",
+          "#FF3D4F",
+          "high",
+          "#FF7A3C",
+          "rgba(198,202,212,0.72)",
+        ],
+        "circle-blur": 0.72,
+        "circle-opacity": 0.36,
+        "circle-translate": [0, -16],
+        "circle-translate-anchor": "viewport",
+      },
+    } as unknown as maplibregl.LayerSpecification);
+  };
+
   const addGlowLayers = (source: string, bloomId: string, glowId: string) => {
     // Outer selection bloom — soft and controlled, centered on the pin head.
     if (!map.getLayer(bloomId)) {
@@ -537,7 +581,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 22,
-          "circle-color": SILVER_HALO,
+          "circle-color": SELECTED_MARKER_HALO,
           "circle-blur": 0.94,
           "circle-opacity": 0,
           "circle-translate": [0, -16],
@@ -554,11 +598,11 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 11,
-          "circle-color": SILVER_GLOW,
+          "circle-color": SELECTED_MARKER_GLOW,
           "circle-blur": 0.34,
           "circle-opacity": 0,
           "circle-stroke-width": 1.2,
-          "circle-stroke-color": SILVER_RING,
+          "circle-stroke-color": SELECTED_MARKER_RING,
           "circle-stroke-opacity": 0,
           "circle-translate": [0, -16],
           "circle-translate-anchor": "viewport",
@@ -581,7 +625,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 15,
-          "circle-color": SILVER_HALO,
+          "circle-color": SILVER_HOVER_HALO,
           "circle-blur": 0.72,
           "circle-opacity": 0.24,
           "circle-opacity-transition": { duration: 180, delay: 0 },
@@ -627,7 +671,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
             8.4,
             7.2,
           ],
-          "circle-color": "#07090f",
+          "circle-color": "#08070A",
           "circle-opacity": 0.94,
           "circle-opacity-transition": { duration: 180, delay: 0 },
           "circle-stroke-width": 1.25,
@@ -729,6 +773,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     if (!map.getSource(MARKER_SOURCE_GLOBAL)) {
       map.addSource(MARKER_SOURCE_GLOBAL, { type: "geojson", data: emptyFC });
     }
+    addSignalLayer(MARKER_SOURCE_GLOBAL, MARKER_SIGNAL_GLOBAL);
     addGlowLayers(MARKER_SOURCE_GLOBAL, MARKER_BLOOM_GLOBAL, MARKER_GLOW_GLOBAL);
     addPinLayers(MARKER_SOURCE_GLOBAL, MARKER_LAYER_GLOBAL, MARKER_SEL_GLOBAL);
     addHoverLayers(
@@ -742,6 +787,7 @@ function setupMarkerLayers(map: maplibregl.Map): void {
     if (!map.getSource(MARKER_SOURCE_SIGNALS)) {
       map.addSource(MARKER_SOURCE_SIGNALS, { type: "geojson", data: emptyFC });
     }
+    addSignalLayer(MARKER_SOURCE_SIGNALS, MARKER_SIGNAL_SIGNALS);
     addGlowLayers(MARKER_SOURCE_SIGNALS, MARKER_BLOOM_SIGNALS, MARKER_GLOW_SIGNALS);
     addPinLayers(MARKER_SOURCE_SIGNALS, MARKER_LAYER_SIGNALS, MARKER_SEL_SIGNALS);
     addHoverLayers(
@@ -859,6 +905,7 @@ function setGlobalMarkerLayerOpacity(
   };
 
   try {
+    setPaint(MARKER_SIGNAL_GLOBAL, "circle-opacity", 0.36 * opacity);
     setPaint(MARKER_LAYER_GLOBAL, "icon-opacity", opacity);
     setPaint(MARKER_SEL_GLOBAL, "icon-opacity", opacity);
     setPaint(MARKER_HOVER_LAYER_GLOBAL, "icon-opacity", opacity);
@@ -982,154 +1029,77 @@ const AUTO_ROTATE_EVENT_TAG = "echisAutoRotate";
 //   LAND_FILL        background layer = land base — clearly readable above
 //                    water but still restrained
 //
-// Borders, labels: muted gray, low opacity, no neon, no pure white.
+// Borders: thin crimson with a restrained glow. Labels: muted silver with a
+// dark halo, no blue/navy cast and no pure-white glare.
 // ---------------------------------------------------------------------------
-// --- Luxe palette (option A): vivid red ocean, black continents, white
-// borders — the Luxe Globe look applied to the detailed OSM basemap so all
-// zoom / city-district / label detail is preserved.
-// ---------------------------------------------------------------------------
-// MapLibre's accepted appearance is the premium Luxe-inspired style: glowing
-// red coastlines, silver detail, deep obsidian space, and an atmosphere halo.
-// It is intentionally unconditional; the renderer switch in AppShell chooses
-// between Luxe (Three.js) and MapLibre, not between two MapLibre themes.
 // --- Premium MapLibre palette ----------------------------------------------
-// Deep obsidian space behind the globe, near-black land, silver-grey borders,
-// and the bright/dark red coastline endpoints from the reference.
+// Deep obsidian space behind the globe, near-black land/water, crimson borders,
+// and the dark red horizon treatment from the 2A reference.
 // Exported: HomeGlobe (the offline opening-screen globe) reuses the same
 // accepted palette so the two globes can never drift apart visually.
-export const LUXE_PANEL_BG = "#0B0C0E";
-export const LUXE_LAND_FILL = "#050506";
-const LUXE_LAND_OVERLAY = "#0d0e10";
-export const LUXE_WATER_FILL = "#040405";
-const LUXE_WATERWAY_FILL = "rgba(120, 130, 146, 0.30)";
-export const LUXE_BORDER_COUNTRY = "rgba(255, 43, 61, 0.78)";
-// Intra-country (state/province) borders. Kept clearly visible but still
-// subordinate to the solid national border — dashed crimson at a higher
-// alpha so provinces read on the dark globe.
-const LUXE_BORDER_ADMIN = "rgba(255, 43, 61, 0.52)";
+export const ECHIS_PANEL_BG = "#050406";
+export const ECHIS_LAND_FILL = "#0B0C0F";
+const ECHIS_LAND_OVERLAY = "#101114";
+export const ECHIS_WATER_FILL = "#070809";
+const ECHIS_WATERWAY_FILL = "rgba(154, 162, 174, 0.14)";
+export const ECHIS_BORDER_COUNTRY = "#FF2B3D";
+// Intra-country (state/province) borders stay subordinate to the solid
+// national outline. They are disabled in the accepted globe style but kept
+// restrained for the CARTO diagnostic fallback.
+const ECHIS_BORDER_ADMIN = "rgba(255, 43, 61, 0.32)";
 
-// Luxe outline source/layer — each country's polygon rings are converted into
-// independent line pieces. This avoids a topology mesh that "walks" around the
-// world as one continuous pen path and then visually connects unrelated ends.
-const LUXE_OUTLINE_SOURCE = "echis-luxe-outline";
-const LUXE_OUTLINE_LAYER = "echis-luxe-outline";
-const LUXE_ANTIMERIDIAN_JUMP_DEG = 180;
-const LUXE_POLAR_ARTIFACT_LAT = 88;
-const LUXE_MAX_EDGE_DEG = 0.75;
+// The 50m outline is generated once by `npm run generate:home-globe` and shared
+// by the Three.js landing globe and MapLibre work globes. A local 30° graticule
+// sits beneath the outline to reproduce the restrained 2A technical depth.
+const ECHIS_OUTLINE_SOURCE = "echis-outline";
+const ECHIS_OUTLINE_GLOW_LAYER = "echis-outline-glow";
+const ECHIS_OUTLINE_LAYER = "echis-outline";
+const ECHIS_GRATICULE_SOURCE = "echis-graticule";
+const ECHIS_GRATICULE_LAYER = "echis-graticule";
 
-let luxeOutlineGeoJsonCache: GeoJSON.FeatureCollection | null = null;
-
-function isAntimeridianClosure(
-  previous: GeoJSON.Position,
-  current: GeoJSON.Position,
-): boolean {
-  return Math.abs(previous[0] - current[0]) >= LUXE_ANTIMERIDIAN_JUMP_DEG;
-}
-
-function isPolarArtifactLine(line: GeoJSON.Position[]): boolean {
-  return (
-    line.length > 3 &&
-    line.every((coordinate) => Math.abs(coordinate[1]) >= LUXE_POLAR_ARTIFACT_LAT)
-  );
-}
-
-function isDrawableOutlineEdge(
-  previous: GeoJSON.Position,
-  current: GeoJSON.Position,
-): boolean {
-  if (isAntimeridianClosure(previous, current)) return false;
-  const deltaLng = Math.abs(previous[0] - current[0]);
-  const deltaLat = Math.abs(previous[1] - current[1]);
-  return Math.hypot(deltaLng, deltaLat) <= LUXE_MAX_EDGE_DEG;
-}
-
-function appendLineAsOutlineSegments(
-  line: GeoJSON.Position[],
-  lines: GeoJSON.Position[][],
-): void {
-  if (isPolarArtifactLine(line)) return;
-
-  for (let index = 1; index < line.length; index += 1) {
-    const previous = line[index - 1];
-    const current = line[index];
-    if (!previous || !current) continue;
-    if (isDrawableOutlineEdge(previous, current)) lines.push([previous, current]);
-  }
-}
-
-function appendGeometryAsOutlineSegments(
-  geometry: GeoJSON.Geometry | null,
-  lines: GeoJSON.Position[][],
-): void {
-  if (!geometry) return;
-
-  if (geometry.type === "LineString") {
-    appendLineAsOutlineSegments(geometry.coordinates, lines);
-    return;
-  }
-
-  if (geometry.type === "MultiLineString") {
-    geometry.coordinates.forEach((line) => appendLineAsOutlineSegments(line, lines));
-    return;
-  }
-
-  if (geometry.type === "Polygon") {
-    geometry.coordinates.forEach((ring) => appendLineAsOutlineSegments(ring, lines));
-    return;
-  }
-
-  if (geometry.type === "MultiPolygon") {
-    geometry.coordinates.forEach((polygon) => {
-      polygon.forEach((ring) => appendLineAsOutlineSegments(ring, lines));
-    });
-    return;
-  }
-
-  if (geometry.type === "GeometryCollection") {
-    geometry.geometries.forEach((child) => appendGeometryAsOutlineSegments(child, lines));
-  }
-}
-
-function buildLuxeOutlineGeoJson(): GeoJSON.FeatureCollection {
-  const topology = countriesAtlas as unknown as TopoJSON.Topology;
-  const countriesGeoJson = feature(
-    topology,
-    topology.objects.countries as TopoJSON.GeometryCollection,
-  ) as GeoJSON.FeatureCollection;
+function buildEchisGraticuleGeoJson(): GeoJSON.FeatureCollection {
   const lines: GeoJSON.Position[][] = [];
 
-  countriesGeoJson.features.forEach((country) => {
-    appendGeometryAsOutlineSegments(country.geometry, lines);
-  });
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const line: GeoJSON.Position[] = [];
+    for (let lng = -180; lng <= 180; lng += 2) line.push([lng, lat]);
+    lines.push(line);
+  }
+
+  for (let lng = -180; lng < 180; lng += 30) {
+    const line: GeoJSON.Position[] = [];
+    for (let lat = -85; lat <= 85; lat += 2) line.push([lng, lat]);
+    lines.push(line);
+  }
 
   return {
     type: "FeatureCollection",
     features: [
       {
         type: "Feature",
-        properties: { kind: "outline" },
+        properties: { kind: "graticule" },
         geometry: { type: "MultiLineString", coordinates: lines },
       },
     ],
   };
 }
 
-function getLuxeOutlineGeoJson(): GeoJSON.FeatureCollection {
-  if (luxeOutlineGeoJsonCache) {
-    return luxeOutlineGeoJsonCache;
-  }
-  luxeOutlineGeoJsonCache = buildLuxeOutlineGeoJson();
-  return luxeOutlineGeoJsonCache;
-}
+const ECHIS_GRATICULE_GEOJSON = buildEchisGraticuleGeoJson();
 
-export function setupLuxeOutline(map: maplibregl.Map): void {
+export function setupEchisOutline(map: maplibregl.Map): void {
   try {
-    if (!map.getSource(LUXE_OUTLINE_SOURCE)) {
-      map.addSource(LUXE_OUTLINE_SOURCE, {
+    if (!map.getSource(ECHIS_OUTLINE_SOURCE)) {
+      map.addSource(ECHIS_OUTLINE_SOURCE, {
         type: "geojson",
-        data: getLuxeOutlineGeoJson(),
+        data: "/data/home-globe.geojson",
         maxzoom: 6,
         tolerance: 0,
+      });
+    }
+    if (!map.getSource(ECHIS_GRATICULE_SOURCE)) {
+      map.addSource(ECHIS_GRATICULE_SOURCE, {
+        type: "geojson",
+        data: ECHIS_GRATICULE_GEOJSON,
       });
     }
     const beforeId = [
@@ -1137,36 +1107,91 @@ export function setupLuxeOutline(map: maplibregl.Map): void {
       "place_country_label",
       "place_region_label",
     ].find((id) => map.getLayer(id));
-    if (!map.getLayer(LUXE_OUTLINE_LAYER)) {
+    if (!map.getLayer(ECHIS_GRATICULE_LAYER)) {
       map.addLayer(
         {
-          id: LUXE_OUTLINE_LAYER,
+          id: ECHIS_GRATICULE_LAYER,
           type: "line",
-          source: LUXE_OUTLINE_SOURCE,
+          source: ECHIS_GRATICULE_SOURCE,
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": LUXE_BORDER_COUNTRY,
-            "line-width": 0.62,
-            "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.9, 6, 0.95],
+            "line-color": "#9AA2AE",
+            "line-width": 0.45,
+            "line-opacity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              0.07,
+              3,
+              0.05,
+              4.8,
+              0,
+            ],
+          },
+        } as unknown as maplibregl.LayerSpecification,
+        beforeId,
+      );
+    }
+    if (!map.getLayer(ECHIS_OUTLINE_GLOW_LAYER)) {
+      map.addLayer(
+        {
+          id: ECHIS_OUTLINE_GLOW_LAYER,
+          type: "line",
+          source: ECHIS_OUTLINE_SOURCE,
+          filter: ["==", ["get", "kind"], "outline"],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": ECHIS_BORDER_COUNTRY,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 0, 1.8, 6, 2.7],
+            "line-opacity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              0.18,
+              3,
+              0.14,
+              6,
+              0.08,
+            ],
+            "line-blur": 1.15,
+          },
+        } as unknown as maplibregl.LayerSpecification,
+        beforeId,
+      );
+    }
+    if (!map.getLayer(ECHIS_OUTLINE_LAYER)) {
+      map.addLayer(
+        {
+          id: ECHIS_OUTLINE_LAYER,
+          type: "line",
+          source: ECHIS_OUTLINE_SOURCE,
+          filter: ["==", ["get", "kind"], "outline"],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": ECHIS_BORDER_COUNTRY,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 6, 0.9],
+            "line-opacity": 0.6,
           },
         } as unknown as maplibregl.LayerSpecification,
         beforeId,
       );
     }
   } catch (e) {
-    console.warn("[MapLibreGlobe] luxe outline setup failed:", e);
+    console.warn("[MapLibreGlobe] ECHIS outline setup failed:", e);
   }
 }
 
-const ACTIVE_PANEL_BG = LUXE_PANEL_BG;
+const ACTIVE_PANEL_BG = ECHIS_PANEL_BG;
 // These aliases keep the CARTO diagnostic fallback on the same accepted
 // premium palette instead of silently reverting MapLibre to the legacy look.
-const LAND_FILL = LUXE_LAND_FILL;
-const LAND_OVERLAY = LUXE_LAND_OVERLAY;
-const WATER_FILL = LUXE_WATER_FILL;
-const WATERWAY_FILL = LUXE_WATERWAY_FILL;
-const BORDER_COUNTRY = LUXE_BORDER_COUNTRY;
-const BORDER_ADMIN = LUXE_BORDER_ADMIN;
+const LAND_FILL = ECHIS_LAND_FILL;
+const LAND_OVERLAY = ECHIS_LAND_OVERLAY;
+const WATER_FILL = ECHIS_WATER_FILL;
+const WATERWAY_FILL = ECHIS_WATERWAY_FILL;
+const BORDER_COUNTRY = ECHIS_BORDER_COUNTRY;
+const BORDER_ADMIN = ECHIS_BORDER_ADMIN;
 
 const LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
 const LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
@@ -1184,14 +1209,14 @@ export function createEchisGlobeStyle():
   | string {
   return USE_ECHIS_OSM_BASEMAP
     ? createEchisOsmGlobeStyle({
-        landFill: LUXE_LAND_FILL,
-        landOverlay: LUXE_LAND_OVERLAY,
-        waterFill: LUXE_WATER_FILL,
-        waterwayFill: LUXE_WATERWAY_FILL,
-        borderCountry: LUXE_BORDER_COUNTRY,
-        borderAdmin: LUXE_BORDER_ADMIN,
+        landFill: ECHIS_LAND_FILL,
+        landOverlay: ECHIS_LAND_OVERLAY,
+        waterFill: ECHIS_WATER_FILL,
+        waterwayFill: ECHIS_WATERWAY_FILL,
+        borderCountry: ECHIS_BORDER_COUNTRY,
+        borderAdmin: ECHIS_BORDER_ADMIN,
         showBoundaries: false,
-        // National border comes from the luxe outline. The OSM
+        // National border comes from the ECHIS outline. The OSM
         // sub-national admin lines (state/province + district/city)
         // are kept off — they cluttered the globe.
         showAdminBoundaries: false,
@@ -1201,26 +1226,26 @@ export function createEchisGlobeStyle():
 }
 
 export function applyEchisGlobeAtmosphere(map: maplibregl.Map): void {
-  // Premium atmosphere halo — a faint reddish glow at the globe's edge
-  // over obsidian space. Wrapped defensively for older MapLibre builds.
+  // MapLibre exposes the globe atmosphere through `setSky` rather than the
+  // Mapbox-style `setFog` API used in the handoff. These values are the direct
+  // equivalents of the approved 2A palette: obsidian space, #3f0e15 at the
+  // horizon, #160608 in the deeper fog, and a restrained ~0.15 intensity.
   try {
-    (map as unknown as {
-      setSky?: (sky: Record<string, unknown>) => void;
-    }).setSky?.({
-      "sky-color": "#0B0C0E",
-      "sky-horizon-blend": 0.6,
-      "horizon-color": "#2a0a0d",
-      "horizon-fog-blend": 0.7,
-      "fog-color": "#1a0608",
-      "fog-ground-blend": 0.85,
+    map.setSky({
+      "sky-color": "#050406",
+      "sky-horizon-blend": 0.12,
+      "horizon-color": "#3F0E15",
+      "horizon-fog-blend": 0.12,
+      "fog-color": "#160608",
+      "fog-ground-blend": 0.88,
       "atmosphere-blend": [
         "interpolate",
         ["linear"],
         ["zoom"],
         0,
-        0.7,
+        0.15,
         4,
-        0.45,
+        0.12,
         6,
         0,
       ],
@@ -1558,12 +1583,10 @@ export function applyCountryLabelWhitelist(map: maplibregl.Map): void {
           "text-padding": isOsmCountrySource ? 8 : 4,
         },
         paint: {
-          "text-color": isOsmCountrySource
-            ? "rgba(196, 202, 198, 0.86)"
-            : LABEL_MAJOR,
+          "text-color": LABEL_MAJOR,
           "text-halo-color": LABEL_HALO,
           "text-halo-width": isOsmCountrySource ? 1 : 1.2,
-          "text-opacity": isOsmCountrySource ? 0.9 : 1,
+          "text-opacity": isOsmCountrySource ? 0.68 : 0.78,
         },
       } as unknown as maplibregl.LayerSpecification);
     } catch (e) {
@@ -1600,6 +1623,8 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const surfaceFxRef = useRef<HTMLDivElement | null>(null);
+    const starFxRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const pendingGlobalMarkersRef = useRef<MarkerFeature[]>([]);
     const globalMarkerDebounceTimerRef = useRef<number | null>(null);
@@ -1806,6 +1831,26 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
       }
       mapRef.current = map;
 
+      // MapLibre has no PBR surface material. Recreate the approved 2A
+      // fixed-view key/rim lighting with a screen-space sphere overlay at the
+      // strategic zoom, then fade it away before detailed zoom levels so it
+      // never interferes with normal map exploration.
+      const syncSurfaceFx = () => {
+        const surfaceFx = surfaceFxRef.current;
+        const zoom = map.getZoom();
+        const fade = Math.max(0, Math.min(1, (3.15 - zoom) / 0.6));
+        const scale = Math.min(1.35, Math.pow(2, zoom - DEFAULT_GLOBE_VIEW.zoom));
+        if (surfaceFx) {
+          surfaceFx.style.opacity = String(0.78 * fade);
+          surfaceFx.style.transform = `translate(-50%,-50%) scale(${scale})`;
+        }
+        if (starFxRef.current) {
+          starFxRef.current.style.opacity = String(0.06 * fade);
+        }
+      };
+      map.on("zoom", syncSurfaceFx);
+      syncSurfaceFx();
+
       if (USE_ECHIS_OSM_BASEMAP) {
         map.addControl(
           new maplibregl.AttributionControl({ compact: true }),
@@ -1910,7 +1955,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         // Default-view country label whitelist — keeps only continents +
         // whitelisted countries at default zoom; user zoom-in restores all.
         applyCountryLabelWhitelist(map);
-        setupLuxeOutline(map);
+        setupEchisOutline(map);
         // Register the shared pin icons before adding the symbol layers that
         // reference them; styleimagemissing is a safety net for image races.
         registerPinIcons(map);
@@ -2197,6 +2242,7 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
           map.off("click", markerClick);
           map.off("mousemove", markerMouseMove);
           map.off("mouseout", markerMouseOut);
+          map.off("zoom", syncSurfaceFx);
           map.remove();
         } catch {
           // Defensive: removal during HMR can race with internal teardown.
@@ -2393,13 +2439,56 @@ export const MapLibreGlobe = forwardRef<MapLibreGlobeHandle, MapLibreGlobeProps>
         />
 
         <div
+          ref={surfaceFxRef}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "calc(50% - 101px)",
+            top: "50%",
+            width: "124vh",
+            height: "124vh",
+            borderRadius: "50%",
+            pointerEvents: "none",
+            opacity: 0,
+            transform: "translate(-50%,-50%)",
+            transformOrigin: "center",
+            mixBlendMode: "screen",
+            background:
+              "radial-gradient(circle at 27% 28%,rgba(243,239,241,.13) 0%,rgba(190,197,208,.055) 30%,transparent 55%),radial-gradient(circle at 79% 73%,rgba(255,43,61,.17) 0%,rgba(90,17,29,.08) 24%,transparent 43%),linear-gradient(135deg,rgba(255,255,255,.018),transparent 48%,rgba(0,0,0,.16) 78%)",
+            boxShadow:
+              "inset -70px -30px 120px rgba(255,43,61,.10),inset 55px 0 120px rgba(206,210,218,.035),18px 12px 85px rgba(255,43,61,.12)",
+            willChange: "transform, opacity",
+          }}
+        />
+
+        <div
+          ref={starFxRef}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            opacity: 0.06,
+            mixBlendMode: "screen",
+            backgroundImage:
+              "radial-gradient(circle at center,rgba(146,152,162,.82) 0 .55px,transparent .8px),radial-gradient(circle at center,rgba(146,152,162,.58) 0 .45px,transparent .72px)",
+            backgroundSize: "137px 137px,223px 223px",
+            backgroundPosition: "19px 31px,83px 117px",
+            WebkitMaskImage:
+              "radial-gradient(circle at calc(50% - 101px) 50%,transparent 0%,transparent 44%,rgba(0,0,0,.3) 56%,#000 72%)",
+            maskImage:
+              "radial-gradient(circle at calc(50% - 101px) 50%,transparent 0%,transparent 44%,rgba(0,0,0,.3) 56%,#000 72%)",
+          }}
+        />
+
+        <div
           aria-hidden="true"
           style={{
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
             background:
-              "radial-gradient(circle at 50% 46%, transparent 0%, transparent 42%, rgba(4,4,5,0.6) 70%, rgba(4,4,5,0.98) 100%)",
+              "radial-gradient(circle at calc(50% - 101px) 50%,transparent 0%,transparent 48%,rgba(5,4,6,.16) 76%,rgba(5,4,6,.55) 100%)",
           }}
         />
 

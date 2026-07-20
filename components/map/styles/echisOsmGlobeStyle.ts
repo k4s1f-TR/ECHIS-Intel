@@ -19,6 +19,9 @@ const OSM_ATTRIBUTION =
 // borders in the visual hierarchy, so their grey is kept dimmer than the
 // country border colour passed in via `borderCountry`.
 const OSM_ADMIN_BOUNDARY = "rgba(111, 7, 16, 0.28)";
+const OSM_LABEL_MAJOR = "rgba(206, 210, 218, 0.74)";
+const OSM_LABEL_MINOR = "rgba(150, 158, 170, 0.46)";
+const OSM_LABEL_WATER = "rgba(140, 150, 166, 0.50)";
 
 export type EchisOsmGlobeStylePalette = {
   landFill: string;
@@ -27,14 +30,14 @@ export type EchisOsmGlobeStylePalette = {
   waterwayFill: string;
   borderCountry: string;
   labelHalo: string;
-  // --- Luxe additions (optional; default style is unaffected) --------------
-  // In the luxe variant, MapLibreGlobe supplies one local outline layer for
+  // --- ECHIS outline options (default style is unaffected) -----------------
+  // MapLibreGlobe supplies one local outline layer for
   // coastlines + country borders. This switch hides OSM line layers so two
   // line systems do not overlap.
   borderAdmin?: string;
   showBoundaries?: boolean;
   // Sub-national (state/province/district) borders, controlled independently
-  // of `showBoundaries`. The luxe variant hides OSM's coastline/country/road
+  // of `showBoundaries`. The ECHIS globe hides OSM's coastline/country/road
   // lines (showBoundaries:false) because it draws its own country outline, but
   // still wants the intra-country admin lines — so this defaults to follow
   // `showBoundaries` yet can be switched on on its own.
@@ -242,7 +245,7 @@ export function createEchisOsmGlobeStyle({
           "text-padding": 6,
         },
         paint: {
-          "text-color": "rgba(140, 150, 166, 0.50)",
+          "text-color": OSM_LABEL_WATER,
           "text-halo-color": labelHalo,
           "text-halo-width": 0.8,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 2, 0.35, 6, 0.48],
@@ -270,7 +273,7 @@ export function createEchisOsmGlobeStyle({
           "text-padding": 8,
         },
         paint: {
-          "text-color": "rgba(208, 212, 220, 0.84)",
+          "text-color": OSM_LABEL_MAJOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.82, 6, 0.88],
@@ -298,7 +301,7 @@ export function createEchisOsmGlobeStyle({
           "text-padding": 10,
         },
         paint: {
-          "text-color": "rgba(184, 190, 202, 0.64)",
+          "text-color": OSM_LABEL_MINOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 0.95,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4.6, 0, 5.3, 0.54, 8, 0.66],
@@ -328,7 +331,7 @@ export function createEchisOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(198, 204, 212, 0.82)",
+          "text-color": OSM_LABEL_MAJOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0, 3.6, 0.7, 7, 0.82],
@@ -359,7 +362,7 @@ export function createEchisOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(190, 196, 206, 0.76)",
+          "text-color": OSM_LABEL_MAJOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 1,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 3.9, 0, 4.6, 0.62, 8, 0.76],
@@ -400,7 +403,7 @@ export function createEchisOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(180, 186, 198, 0.70)",
+          "text-color": OSM_LABEL_MINOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 0.9,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4.9, 0, 5.7, 0.54, 9, 0.70],
@@ -430,7 +433,7 @@ export function createEchisOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(172, 178, 190, 0.62)",
+          "text-color": OSM_LABEL_MINOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 0.85,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6.6, 0, 7.4, 0.46, 10, 0.62],
@@ -465,7 +468,7 @@ export function createEchisOsmGlobeStyle({
           "symbol-sort-key": ["to-number", ["get", "rank"], 99],
         },
         paint: {
-          "text-color": "rgba(164, 170, 182, 0.54)",
+          "text-color": OSM_LABEL_MINOR,
           "text-halo-color": labelHalo,
           "text-halo-width": 0.8,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8.2, 0, 9, 0.34, 11, 0.54],

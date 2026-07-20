@@ -13,7 +13,8 @@ Single Next.js app, no separate backend service.
 
 Stack (see `package.json` for exact versions):
 Next.js 16 · React 19 · TypeScript · Tailwind 4 · MapLibre GL ·
-react-simple-maps · topojson-client / world-atlas · lucide-react.
+react-simple-maps ·
+topojson-client / world-atlas · lucide-react.
 
 The app is **not** purely static. `app/api/sources/*` proxies real
 news APIs server-side using keys in `.env.local`. Most UI screens
@@ -100,15 +101,13 @@ document into AGENTS.md or into per-task prompts.**
 
 ## 6. Globe / map (the only place where wrong moves cost hours)
 
-Two globe renderers ship and the user switches between them at runtime
-(`MapSystemSwitch` in `AppShell.tsx`):
-
-- **Luxe** (`components/luxe/LuxeGlobeMap.tsx`) — current default.
-- **MapLibre** (`components/maplibre/MapLibreGlobe.tsx`).
-
-Both expose the same handle (`MapLibreGlobeHandle`) and marker
-contract (`MarkerFeature`). When the task says "the globe", clarify
-which one. **Do not delete either.**
+Operational globe surfaces use MapLibre. `HomeGlobe` is the offline
+opening-screen globe. Global View and SOCMINT each mount their own
+screen-scoped `MapLibreGlobe` instance while sharing the renderer
+implementation, handle (`MapLibreGlobeHandle`), and marker contract
+(`MarkerFeature`). Only the active screen's globe may be mounted.
+The Home globe's single-source asset is `public/data/home-globe.geojson`;
+regenerate it with `npm run generate:home-globe`, never hand-edit it.
 
 Hard rules:
 
@@ -136,7 +135,7 @@ unless the task targets it explicitly.
 App shell · HeaderNav · LeftRail · storage keys · `DEFAULT_GLOBE_VIEW`
 · `SharedWorldMap2D` · accepted globe camera / labels / markers ·
 source pipeline (`data/source-intelligence/**`) · unrelated screens ·
-unrelated mock data · `app/luxe-globe/` (standalone test page).
+unrelated mock data.
 
 Reserved (don't build unless asked): Air Track, Ship Track, Analytics,
 auth, real database, websocket / streaming, scraping.

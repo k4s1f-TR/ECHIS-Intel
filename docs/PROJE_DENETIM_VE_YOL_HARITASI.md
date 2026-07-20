@@ -165,22 +165,21 @@ Actions ücretsiz. AI ajanına verilecek görev: "Add npm test script wrapping
 the two existing test harnesses (see their header comments for the exact tsc
 command) and a GitHub Actions workflow running lint, build, test on push."
 
-### 4.2 ☐ Çift globe motorunun lazy yüklenmesi (K3)
+### 4.2 ✅ Küre yaşam döngüsünün ayrılması (K3)
 
-`AppShell.tsx` iki motoru da statik import ediyor → tarayıcı MapLibre GL
-(~800 KB) + Three.js (~600 KB) ikisini birden indiriyor. `next/dynamic` ile
-yalnızca seçili motor yüklenmeli. Dikkat: `MapLibreGlobeHandle` ref sözleşmesi
-korunmalı (AGENTS.md §6).
+Eski Three.js alternatif küresi ve motor seçici kaldırıldı. Ana ekran,
+Global View ve SOCMINT MapLibre üzerinde ayrı ref/instance yaşam döngülerine
+sahip; yalnızca aktif ekranın operasyonel küresi mount edilir.
 
-### 4.3 ☐ `three` yükseltmesi (K1 kalanı)
+### 4.3 ✅ `three` bağımlılığının kaldırılması (K1)
 
-`three@0.149` (2023) → güncel sürüm. Luxe globe'u kırabilir; ayrı oturumda,
-görsel regresyon kontrolüyle yapılmalı. Acele yok.
+Eski alternatif kürenin Three.js kullanımı kaldırıldı. `three` ve
+`@types/three` bağımlılıkları projeden tamamen çıkarıldı.
 
 ### 4.4 ☐ Dev dosyaların bölünmesi (K2)
 
-`MapLibreGlobe.tsx` (2430 satır), `IntelWatchMap.tsx` (2231), `LuxeGlobeMap.tsx`
-(1841), `SourcesScreen.tsx` (1300). Bir sonraki büyük dokunuşta marker/kamera/
+`MapLibreGlobe.tsx` (2430 satır), `IntelWatchMap.tsx` (2231),
+`SourcesScreen.tsx` (1300). Bir sonraki büyük dokunuşta marker/kamera/
 stil alt modüllere ayrılmalı. Kendi başına bir görev olarak YAPMAYIN —
 "çalışan koda dokunma" ilkesi; ancak o dosyada zaten iş varken bölün.
 
@@ -240,9 +239,9 @@ websocket/streaming, scraping. Yukarıdaki 1-4 bitmeden başlamayın.
 | S7 | IP→findip.net + sınırsız cache | ✅ cache cap · ☐ KVKK/alternatif (§3.4) |
 | S8 | Link şema doğrulaması yok | ✅ http(s) filtresi |
 | S9 | Devlet medyası + zayıf taşıma güvenliği bileşimi | ✅ S1 ile kapandı; kalıcı çözüm §5.1 rozeti |
-| K1 | Ölü bağımlılıklar | ✅ silindi · ☐ three yükseltmesi (§4.3) |
+| K1 | Ölü bağımlılıklar | ✅ silindi · three kaldırıldı (§4.3) |
 | K2 | Dev dosyalar | ☐ (§4.4) |
-| K3 | Çift motor bundle'ı | ☐ (§4.2) |
+| K3 | Çift motor bundle'ı | ✅ operasyonel alternatif kaldırıldı (§4.2) |
 | K4 | Test script'i/CI yok | ☐ (§4.1) |
 | K5 | Commit hijyeni | ☐ (§4.5) |
 | P1 | 88 kaynak fetch fırtınası | ✅ server cache absorbe ediyor |

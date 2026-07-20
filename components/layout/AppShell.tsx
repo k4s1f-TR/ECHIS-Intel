@@ -1,20 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Globe2, Map as MapIcon } from "lucide-react";
 import { LeftRail } from "./LeftRail";
 import { HeaderNav } from "./HeaderNav";
-// Luxe and MapLibre share the same map handle / marker contract so the user
-// can switch engines without changing the surrounding monitor workflow.
-import { LuxeGlobeMap } from "@/components/luxe/LuxeGlobeMap";
 import {
-  MapLibreGlobe,
-  type MapLibreGlobeHandle,
+  REGION_GLOBE_VIEWS,
   type MarkerFeature,
 } from "@/components/maplibre/MapLibreGlobe";
-// Opening-screen globe — fully offline (bundled world-atlas data), separate
-// from the Global View / SOCMINT work globes above.
-import { HomeGlobe } from "@/components/map/HomeGlobe";
+import { ScreenGlobe } from "@/components/map/ScreenGlobe";
+import {
+  markersFromFeatures,
+  prefetchGlobeData,
+  type EchisGlobeHandle,
+} from "@/components/map/EchisGlobe";
+import { MonitorLanding } from "@/components/monitor/MonitorLanding";
 import {
   FloatingMonitoringCard,
   type MonitorCategoryOption,
@@ -58,85 +57,11 @@ type ActiveTopTab = "situation" | "politics" | "intel" | "cyber" | "defense" | "
 type ActiveRailMode = "global" | "signals" | null;
 type SignalCoverage = RegionKey | "global";
 type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
-type MapSystem = "luxe" | "maplibre";
-const DEFAULT_MAP_SYSTEM: MapSystem = "maplibre";
 
-const MAP_SYSTEM_OPTIONS = [
-  { key: "luxe", label: "Luxe", title: "Use Luxe globe", icon: Globe2 },
-  { key: "maplibre", label: "MapLibre", title: "Use MapLibre globe", icon: MapIcon },
-] as const;
-
-function MapSystemSwitch({
-  value,
-  onChange,
-  dockedToPanel,
-}: {
-  value: MapSystem;
-  onChange: (value: MapSystem) => void;
-  dockedToPanel: boolean;
-}) {
-  return (
-    <div
-      aria-label="Map system"
-      style={{
-        position: "absolute",
-        top: 16,
-        right: dockedToPanel ? 400 : 14,
-        zIndex: 18,
-        display: "flex",
-        alignItems: "center",
-        gap: 3,
-        padding: 3,
-        borderRadius: 9,
-        background: "rgba(7,8,10,0.72)",
-        border: "1px solid var(--accent-blue-border)",
-        boxShadow: "0 14px 36px rgba(0,0,0,0.42)",
-        backdropFilter: "blur(14px)",
-        transition: "right 180ms ease, opacity 120ms ease",
-      }}
-    >
-      {MAP_SYSTEM_OPTIONS.map(({ key, label, title, icon: Icon }) => {
-        const selected = value === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            title={title}
-            aria-pressed={selected}
-            onClick={() => onChange(key)}
-            className="map-system-switch__btn"
-            style={{
-              height: 24,
-              minWidth: key === "maplibre" ? 82 : 62,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 5,
-              borderRadius: 6,
-              padding: "0 8px",
-              border: selected
-                ? "1px solid var(--c-accent-border)"
-                : "1px solid transparent",
-              background: selected ? "var(--c-accent-grad-soft)" : "transparent",
-              color: selected ? "#fff4f4" : "var(--c-t4)",
-              fontSize: 9,
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              lineHeight: 1,
-              cursor: "pointer",
-              transition: "background 150ms ease, color 140ms ease, border-color 150ms ease",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <Icon size={11} strokeWidth={1.7} />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// Screen-space framing for the work-view globes — same free-zone edges the
+// MapLibre globe used: the floating card on the left, MapControls + feed panel
+// on the right. Keeps the sphere centered in the open area, not behind a panel.
+const GLOBE_SCREEN_FRAMING = { left: 220, right: 422 } as const;
 
 function filterSourceMarkerItems(
   marker: SourceMarkerFeature,
@@ -166,19 +91,27 @@ function filterSourceMarkerItems(
 }
 
 export function AppShell() {
-  const homeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
-  const luxeGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
-  const mapLibreGlobeRef = useRef<MapLibreGlobeHandle | null>(null);
+  const homeGlobeRef = useRef<EchisGlobeHandle | null>(null);
+  const globalGlobeRef = useRef<EchisGlobeHandle | null>(null);
+  const signalsGlobeRef = useRef<EchisGlobeHandle | null>(null);
+
+  // Warm the globe border + label data while the opening screen is idle, so the
+  // data screens' borders/labels are ready on first open instead of queueing
+  // behind the RSS calls and appearing late.
+  useEffect(() => {
+    const idle = window.requestIdleCallback;
+    if (idle) {
+      const id = idle(() => prefetchGlobeData(), { timeout: 2500 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(() => prefetchGlobeData(), 800);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [markerPopup, setMarkerPopup] = useState<MarkerPopupState>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);
-  const [mapSystem, setMapSystem] = useState<MapSystem>(DEFAULT_MAP_SYSTEM);
-  const [mapLibreReady, setMapLibreReady] = useState(false);
-  const [shouldMountLuxe, setShouldMountLuxe] = useState(
-    DEFAULT_MAP_SYSTEM === "luxe",
-  );
   const [activeView, setActiveView] = useState<ViewMode>("situation");
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
   const [activeSourceCategory, setActiveSourceCategory] = useState<SourceFilterDomain | "all">("all");
@@ -194,41 +127,15 @@ export function AppShell() {
     useState(ALL_SOURCES_FILTER);
   const [monitorCardCollapsed, setMonitorCardCollapsed] = useState(false);
   const [sourceFilterCollapsed, setSourceFilterCollapsed] = useState(false);
-  // The opening screen (no rail mode) is served by the standalone offline
-  // HomeGlobe; Global View / SOCMINT are served by the Luxe/MapLibre work
-  // globe pair.  Zoom / Center View / focus calls route accordingly.
+  // Each map surface owns a distinct globe lifecycle. Only the active screen's
+  // instance is mounted, so Home, Global View, and SOCMINT never share camera
+  // state or retain hidden WebGL renderers.
   const getActiveGlobe = useCallback(() => {
     if (activeRailMode === null) return homeGlobeRef.current;
-    return mapSystem === "luxe"
-      ? luxeGlobeRef.current
-      : mapLibreGlobeRef.current;
-  }, [activeRailMode, mapSystem]);
-
-  useEffect(() => {
-    if (!mapLibreReady || shouldMountLuxe) return;
-
-    let idleId: number | null = null;
-    const delayId = window.setTimeout(() => {
-      const requestIdle = window.requestIdleCallback;
-      if (requestIdle) {
-        idleId = requestIdle(() => setShouldMountLuxe(true), {
-          timeout: 5000,
-        });
-        return;
-      }
-      setShouldMountLuxe(true);
-    }, 1200);
-
-    return () => {
-      window.clearTimeout(delayId);
-      if (idleId !== null) window.cancelIdleCallback?.(idleId);
-    };
-  }, [mapLibreReady, shouldMountLuxe]);
-
-  const handleMapSystemChange = useCallback((next: MapSystem) => {
-    if (next === "luxe") setShouldMountLuxe(true);
-    setMapSystem(next);
-  }, []);
+    return activeRailMode === "global"
+      ? globalGlobeRef.current
+      : signalsGlobeRef.current;
+  }, [activeRailMode]);
 
   // Warm the Cyber News + Defense Industry feed caches at app open so those
   // tabs render instantly instead of re-fetching on first visit.
@@ -252,14 +159,7 @@ export function AppShell() {
     items: sourceItems,
     markers: sourceMarkers,
     loadState: sourceLoadState,
-    pipelineBusy: sourcePipelineBusy,
-    loadingBySourceId,
   } = useSourceIntelligenceItems();
-
-  const globalMarkersLoading =
-    sourceLoadState === "loading" ||
-    sourcePipelineBusy ||
-    Object.values(loadingBySourceId).some(Boolean);
 
   const sourceCategoryOptions = useMemo<MonitorCategoryOption[]>(() => {
     const counts = new Map<SourceFilterDomain, number>();
@@ -357,16 +257,6 @@ export function AppShell() {
 
   const isMapScreen = activeSection === "dashboard" && activeTopTab === "situation";
   const activeMapRailMode = isMapScreen ? activeRailMode : null;
-  const globeView =
-    activeMapRailMode === "global" || activeMapRailMode === "signals"
-      ? activeMapRailMode
-      : activeView;
-  const globeRegion =
-    activeMapRailMode === "global" && activeView !== "global" ? activeRegion : undefined;
-  const globeSignalsRegion =
-    activeMapRailMode === "signals" && activeSignalRegion !== "global"
-      ? activeSignalRegion
-      : undefined;
   const mapControlPanelOffset =
     activeMapRailMode === "global" ? 390 : activeMapRailMode === "signals" ? 390 : 0;
 
@@ -403,7 +293,16 @@ export function AppShell() {
   // renders items that have a deterministic location match in the pipeline.
   // SOCMINT markers are untouched (separate signalsMarkers array below).
   const globalMarkers = useMemo<MarkerFeature[]>(
-    () => displayedSourceMarkers,
+    () =>
+      displayedSourceMarkers.map((marker) => ({
+        ...marker,
+        severity:
+          marker.candidate.severity === "high_interest"
+            ? "critical"
+            : marker.candidate.severity === "important"
+              ? "high"
+              : "medium",
+      })),
     [displayedSourceMarkers],
   );
 
@@ -417,6 +316,43 @@ export function AppShell() {
       })),
     [displayedSignals],
   );
+
+  // three.js globe marker contract — severity → level, same source arrays.
+  const globalViewGlobeMarkers = useMemo(
+    () => markersFromFeatures(globalMarkers),
+    [globalMarkers],
+  );
+  const signalsGlobeMarkers = useMemo(
+    () => markersFromFeatures(signalsMarkers),
+    [signalsMarkers],
+  );
+
+  // Region framing — picking a region in the monitoring / signals card moves
+  // the globe to that region's centre (same table the MapLibre globe framed
+  // with); the "global" coverage option returns to the default camera.
+  useEffect(() => {
+    if (activeMapRailMode !== "global") return;
+    const globe = globalGlobeRef.current;
+    if (!globe) return;
+    if (activeView === "global") {
+      globe.centerView();
+      return;
+    }
+    const view = REGION_GLOBE_VIEWS[activeRegion];
+    globe.focusMarker(view.center[0], view.center[1]);
+  }, [activeMapRailMode, activeView, activeRegion]);
+
+  useEffect(() => {
+    if (activeMapRailMode !== "signals") return;
+    const globe = signalsGlobeRef.current;
+    if (!globe) return;
+    if (activeSignalRegion === "global") {
+      globe.centerView();
+      return;
+    }
+    const view = REGION_GLOBE_VIEWS[activeSignalRegion];
+    globe.focusMarker(view.center[0], view.center[1]);
+  }, [activeMapRailMode, activeSignalRegion]);
 
   const selectedSignalReport = useMemo(
     () => displayedSignals.find((report) => report.id === selectedSignalId) ?? null,
@@ -617,21 +553,22 @@ export function AppShell() {
   }
 
   const getMarkerPopupPosition = useCallback(() => {
+    // The globe reports whether the point is on the near hemisphere; a marker
+    // that has rotated to the back projects to a mirrored screen point, so it
+    // must read as "no position" rather than a popup floating over open space.
+    const project = (lng: number, lat: number) => {
+      const projected = getActiveGlobe()?.projectMarker(lng, lat) ?? null;
+      if (!projected) return null;
+      return projected.visible === false ? null : projected;
+    };
     // Source marker: use pipeline-resolved coordinates directly.
     if (markerPopup?.kind === "global" && markerPopupSourceMarker) {
-      return (
-        getActiveGlobe()?.projectMarker(
-          markerPopupSourceMarker.lng,
-          markerPopupSourceMarker.lat,
-        ) ?? null
-      );
+      return project(markerPopupSourceMarker.lng, markerPopupSourceMarker.lat);
     }
     if (markerPopup?.kind === "signals" && markerPopupSignal?.coordinates) {
-      return (
-        getActiveGlobe()?.projectMarker(
-          markerPopupSignal.coordinates[0],
-          markerPopupSignal.coordinates[1],
-        ) ?? null
+      return project(
+        markerPopupSignal.coordinates[0],
+        markerPopupSignal.coordinates[1],
       );
     }
     return null;
@@ -672,97 +609,51 @@ export function AppShell() {
               transition: "opacity 120ms ease",
             }}
           >
-            {shouldMountLuxe && (
+            {isMapScreen && activeMapRailMode === null && (
               <div
                 className="absolute inset-0"
-                aria-hidden={mapSystem !== "luxe"}
-                style={{
-                  zIndex: mapSystem === "luxe" ? 2 : 1,
-                  opacity: mapSystem === "luxe" ? 1 : 0,
-                  pointerEvents: mapSystem === "luxe" ? "auto" : "none",
-                  transition: "opacity 180ms ease",
-                }}
+                style={{ zIndex: 1 }}
               >
-                <LuxeGlobeMap
-                  ref={luxeGlobeRef}
-                  activeView={globeView}
-                  activeRegion={globeRegion}
-                  activeSignalsRegion={globeSignalsRegion}
-                  globalMarkers={globalMarkers}
-                  signalsMarkers={signalsMarkers}
-                  globalMarkersLoading={globalMarkersLoading}
-                  autoRotatePaused={
-                    mapSystem !== "luxe" ||
-                    !isMapScreen ||
-                    activeMapRailMode === null
-                  }
-                  selectedGlobalId={selectedId}
-                  selectedSignalsId={selectedSignalId}
-                  onMarkerClick={(id, kind) => {
-                    if (kind === "global") handleGlobalMarkerSelect(id);
-                    else if (kind === "signals") handleSignalMarkerSelect(id);
-                  }}
+                <MonitorLanding
+                  ref={homeGlobeRef}
+                  onGlobalView={() => handleViewChange("global")}
+                  onSocmint={() => handleViewChange("signals")}
+                  onAirTrack={handleAirTrackOpen}
                 />
               </div>
             )}
-            <div
-              className="absolute inset-0"
-              aria-hidden={mapSystem !== "maplibre"}
-              style={{
-                zIndex: mapSystem === "maplibre" ? 2 : 1,
-                opacity: mapSystem === "maplibre" ? 1 : 0,
-                pointerEvents: mapSystem === "maplibre" ? "auto" : "none",
-                transition: "opacity 180ms ease",
-              }}
-            >
-              <MapLibreGlobe
-                ref={mapLibreGlobeRef}
-                activeView={globeView}
-                activeRegion={globeRegion}
-                activeSignalsRegion={globeSignalsRegion}
-                globalMarkers={globalMarkers}
-                signalsMarkers={signalsMarkers}
-                globalMarkersLoading={globalMarkersLoading}
-                autoRotatePaused={
-                  mapSystem !== "maplibre" ||
-                  !isMapScreen ||
-                  activeMapRailMode === null
-                }
-                onReady={() => setMapLibreReady(true)}
-                selectedGlobalId={selectedId}
-                selectedSignalsId={selectedSignalId}
-                onMarkerClick={(id, kind) => {
-                  if (kind === "global") handleGlobalMarkerSelect(id);
-                  else if (kind === "signals") handleSignalMarkerSelect(id);
-                }}
-              />
-            </div>
-            {/* Opening-screen globe — offline, standalone.  Sits above the
-                work globes when no rail mode is active; rail modes fade it
-                out and hand the screen to the Luxe/MapLibre pair. */}
-            <div
-              className="absolute inset-0"
-              aria-hidden={activeMapRailMode !== null}
-              style={{
-                zIndex: activeMapRailMode === null ? 3 : 1,
-                opacity: activeMapRailMode === null ? 1 : 0,
-                pointerEvents: activeMapRailMode === null ? "auto" : "none",
-                transition: "opacity 180ms ease",
-              }}
-            >
-              <HomeGlobe
-                ref={homeGlobeRef}
-                autoRotatePaused={!isMapScreen || activeMapRailMode !== null}
-              />
-            </div>
-            {/* Luxe/MapLibre engine switch applies to the work globes only —
-                the opening screen always shows the standalone HomeGlobe. */}
-            {activeMapRailMode !== null && (
-              <MapSystemSwitch
-                value={mapSystem}
-                onChange={handleMapSystemChange}
-                dockedToPanel={activeMapRailMode !== null}
-              />
+            {isMapScreen && activeMapRailMode === "global" && (
+              <div
+                className="absolute inset-0"
+                style={{ zIndex: 1 }}
+              >
+                <ScreenGlobe
+                  key="global-view-globe"
+                  ref={globalGlobeRef}
+                  framing={GLOBE_SCREEN_FRAMING}
+                  markerShape="pin"
+                  markers={globalViewGlobeMarkers}
+                  selectedMarkerId={selectedId}
+                  onMarkerSelect={handleGlobalMarkerSelect}
+                  caption="GLOBAL VIEW"
+                />
+              </div>
+            )}
+            {isMapScreen && activeMapRailMode === "signals" && (
+              <div
+                className="absolute inset-0"
+                style={{ zIndex: 1 }}
+              >
+                <ScreenGlobe
+                  key="socmint-globe"
+                  ref={signalsGlobeRef}
+                  framing={GLOBE_SCREEN_FRAMING}
+                  markers={signalsGlobeMarkers}
+                  selectedMarkerId={selectedSignalId}
+                  onMarkerSelect={handleSignalMarkerSelect}
+                  caption="SOCMINT WATCH"
+                />
+              </div>
             )}
             <div
               style={{
@@ -830,12 +721,14 @@ export function AppShell() {
                 </div>
               )}
             </div>
-            <MapControls
-              onCenterView={() => getActiveGlobe()?.centerView()}
-              onZoomIn={() => getActiveGlobe()?.zoomIn()}
-              onZoomOut={() => getActiveGlobe()?.zoomOut()}
-              panelOffset={mapControlPanelOffset}
-            />
+            {activeMapRailMode !== null && (
+              <MapControls
+                onCenterView={() => getActiveGlobe()?.centerView()}
+                onZoomIn={() => getActiveGlobe()?.zoomIn()}
+                onZoomOut={() => getActiveGlobe()?.zoomOut()}
+                panelOffset={mapControlPanelOffset}
+              />
+            )}
             {activeMapRailMode !== null && (
               <LiveStatusPill panelOffset={mapControlPanelOffset} />
             )}

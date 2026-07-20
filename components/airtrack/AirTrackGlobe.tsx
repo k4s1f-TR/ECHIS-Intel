@@ -16,7 +16,7 @@ import {
   applyDarkTone,
   applyEchisGlobeAtmosphere,
   createEchisGlobeStyle,
-  setupLuxeOutline,
+  setupEchisOutline,
 } from "@/components/maplibre/MapLibreGlobe";
 import { USE_ECHIS_OSM_BASEMAP } from "@/components/map/styles/echisOsmGlobeStyle";
 import { GlobeLoadingAnimation } from "@/components/map/GlobeLoadingAnimation";
@@ -675,7 +675,7 @@ export const AirTrackGlobe = forwardRef<AirTrackGlobeHandle, AirTrackGlobeProps>
         applyEchisGlobeAtmosphere(map);
         if (!USE_ECHIS_OSM_BASEMAP) applyDarkTone(map);
         applyCountryLabelWhitelist(map);
-        setupLuxeOutline(map);
+        setupEchisOutline(map);
         registerAircraftIcons(map);
         setupAircraftLayers(map);
         // Push whatever contacts arrived before the style finished loading.
