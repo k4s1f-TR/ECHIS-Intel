@@ -43,6 +43,11 @@ export interface GlobeMarker {
   pulseDurationMs?: number;
   /** Per-marker wave-size multiplier. */
   pulseScale?: number;
+  /** Optional visibility window for transient projected cards. */
+  displayStartedAtMs?: number;
+  displayDurationMs?: number;
+  /** Non-visual grouping key used to balance transient cards geographically. */
+  regionKey?: string;
   /** Optional — only used when labels are on. */
   label?: string;
   detail?: string;
@@ -103,6 +108,8 @@ export interface EchisGlobeProps {
   /** Show the solid center of a pulsing dot marker. The signal rings remain
    *  visible when disabled. */
   showMarkerCore?: boolean;
+  /** Show the pulsing ring and halo for dot markers. */
+  showMarkerWaves?: boolean;
   /** Highlighted marker id (larger pin + stronger glow). */
   selectedMarkerId?: string | null;
   /** Fired when a marker is clicked. */
@@ -497,6 +504,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       labelsUrl = "/data/home-globe-labels.json",
       markerShape = "dot",
       showMarkerCore = true,
+      showMarkerWaves = true,
       selectedMarkerId = null,
       onMarkerClick,
       screenOffsetX = 0,
@@ -533,7 +541,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
     } | null>(null);
 
     const markerKey = useMemo(
-      () => markers.map((m) => `${m.id}:${m.lng}:${m.lat}:${m.level}:${m.pulseStartedAtMs ?? ""}:${m.pulseDurationMs ?? ""}:${m.pulseScale ?? ""}`).join("|"),
+      () => markers.map((m) => `${m.id}:${m.lng}:${m.lat}:${m.level}:${m.pulseStartedAtMs ?? ""}:${m.pulseDurationMs ?? ""}:${m.pulseScale ?? ""}:${m.displayStartedAtMs ?? ""}:${m.displayDurationMs ?? ""}:${m.regionKey ?? ""}`).join("|"),
       [markers],
     );
 
@@ -761,25 +769,34 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
 
           // Invisible, larger pick body — the drawn dot is far smaller than a
           // comfortable click target (MapLibre's circle layer was ~9px).
-          const hitGeom = new THREE.SphereGeometry(baseDot * HIT_RADIUS_FACTOR, 10, 10);
-          const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-          const hit = new THREE.Mesh(hitGeom, hitMat);
-          hit.position.copy(p);
-          hit.userData.markerId = marker.id;
-          globe.add(hit);
-          pickTargets.push(hit);
+          let hit: THREE.Mesh | null = null;
+          if (onMarkerClickRef.current) {
+            const hitGeom = new THREE.SphereGeometry(baseDot * HIT_RADIUS_FACTOR, 10, 10);
+            const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+            hit = new THREE.Mesh(hitGeom, hitMat);
+            hit.position.copy(p);
+            hit.userData.markerId = marker.id;
+            globe.add(hit);
+            pickTargets.push(hit);
+            markerObjects.push(hit);
+            markerDisposables.push(hitGeom, hitMat);
+          }
 
-          const ringTex = makeRingTexture(hex);
-          const ringMat = new THREE.SpriteMaterial({ map: ringTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 });
-          const ring = new THREE.Sprite(ringMat);
-          ring.position.copy(p); ring.scale.set(0.02, 0.02, 1); globe.add(ring);
+          let ring: THREE.Sprite | null = null;
+          let halo: THREE.Sprite | null = null;
+          if (showMarkerWaves) {
+            const ringTex = makeRingTexture(hex);
+            const ringMat = new THREE.SpriteMaterial({ map: ringTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 });
+            ring = new THREE.Sprite(ringMat);
+            ring.position.copy(p); ring.scale.set(0.02, 0.02, 1); globe.add(ring);
 
-          const haloMat = new THREE.SpriteMaterial({ map: ringTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 });
-          const halo = new THREE.Sprite(haloMat);
-          halo.position.copy(p); halo.scale.set(0.1, 0.1, 1); globe.add(halo);
+            const haloMat = new THREE.SpriteMaterial({ map: ringTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 });
+            halo = new THREE.Sprite(haloMat);
+            halo.position.copy(p); halo.scale.set(0.1, 0.1, 1); globe.add(halo);
 
-          markerObjects.push(hit, ring, halo);
-          markerDisposables.push(hitGeom, hitMat, ringMat, haloMat, ringTex);
+            markerObjects.push(ring, halo);
+            markerDisposables.push(ringMat, haloMat, ringTex);
+          }
           markerRuntimes.push({ marker, shape: "dot", dot, ring, halo, hit, pin: null, texDefault: null, texSelected: null, baseDot, local, normal, phase });
         });
       };
@@ -1237,8 +1254,17 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
               const projected = markerNormalScratch.copy(mk.local).applyQuaternion(gq).project(camera);
               const x = (projected.x * 0.5 + 0.5) * mount.clientWidth;
               const y = (-projected.y * 0.5 + 0.5) * mount.clientHeight;
+              const hasDisplayWindow =
+                mk.marker.displayStartedAtMs !== undefined &&
+                mk.marker.displayDurationMs !== undefined;
+              const displayProgress = hasDisplayWindow
+                ? (now - mk.marker.displayStartedAtMs!) / mk.marker.displayDurationMs!
+                : 0.5;
+              const fadeIn = THREE.MathUtils.clamp(displayProgress / 0.16, 0, 1);
+              const fadeOut = THREE.MathUtils.clamp((1 - displayProgress) / 0.27, 0, 1);
+              const displayOpacity = hasDisplayWindow ? Math.min(fadeIn, fadeOut) : 1;
               labelEl.style.transform = `translate(${x}px, ${y}px)`;
-              labelEl.style.opacity = front ? "1" : "0";
+              labelEl.style.opacity = front ? displayOpacity.toFixed(3) : "0";
             }
           }
         }
@@ -1275,7 +1301,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         renderer.forceContextLoss();
         el.remove();
       };
-    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, cfg]);
+    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, showMarkerWaves, cfg]);
 
     // Marker updates are applied to the live scene — rebuilding the renderer
     // here would reset the camera mid-drag every time a feed batch lands.
@@ -1307,7 +1333,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
               <div style={{ position: "absolute", left: 0, bottom: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <div
                   style={{
-                    display: "flex", flexDirection: "column", gap: 2, padding: "6px 10px",
+                    display: "flex", flexDirection: "column", gap: 1, padding: "4px 7px",
                     border: marker.level === "critical" ? "1px solid rgba(239,61,79,.32)" : "1px solid rgba(255,255,255,.1)",
                     borderRadius: 8,
                     background: marker.level === "critical" ? "rgba(15,7,9,.78)" : "rgba(9,8,10,.76)",
@@ -1315,11 +1341,11 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
                     fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
                   }}
                 >
-                  <span style={{ fontSize: 8, fontWeight: 650, letterSpacing: ".14em", color: marker.level === "critical" ? "rgba(235,72,72,.94)" : "rgba(216,220,226,.86)" }}>
+                  <span style={{ fontSize: 7, fontWeight: 650, letterSpacing: ".1em", color: marker.level === "critical" ? "rgba(235,72,72,.94)" : "rgba(216,220,226,.86)" }}>
                     {(marker.label ?? marker.id).toUpperCase()}
                   </span>
                   {marker.detail && (
-                    <span style={{ fontSize: 7, letterSpacing: ".1em", color: marker.level === "critical" ? "rgba(235,72,72,.8)" : "rgba(200,117,46,.9)" }}>
+                    <span style={{ fontSize: 6, letterSpacing: ".07em", color: marker.level === "critical" ? "rgba(235,72,72,.8)" : "rgba(200,117,46,.9)" }}>
                       {marker.detail}
                     </span>
                   )}

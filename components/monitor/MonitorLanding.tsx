@@ -29,103 +29,276 @@ const WATCH_REGIONS: GlobeMarker[] = [
   { id: "red-sea", label: "Red Sea", detail: "ELEVATED · 8 SIGNALS", level: "high", lng: 40, lat: 18 },
 ];
 
-type SignalZone = {
-  id: string;
-  weight: number;
-  jitter: [lng: number, lat: number];
-  anchors: Array<[lng: number, lat: number]>;
+type CardZone =
+  | "north-america"
+  | "latin-america"
+  | "europe"
+  | "africa"
+  | "west-asia"
+  | "asia-pacific";
+
+type CountryCardLocation = {
+  key: string;
+  zone: CardZone;
+  label: string;
+  detail: string;
+  lng: number;
+  lat: number;
 };
 
-const SIGNAL_BATCH_INTERVAL_MS = 6_800;
-const SIGNAL_COUNT_MIN = 8;
-const SIGNAL_COUNT_MAX = 13;
+const CARD_TARGET_VISIBLE = 10;
+const CARD_MAX_ACTIVE = 14;
+const CARD_RECENT_COUNTRY_LIMIT = 42;
 
-// Each batch starts with one signal per macro-region. Remaining signals follow
-// these weights, keeping the ambient field globally spread without placing an
-// equal (and visually misleading) number in every geography.
-const SIGNAL_ZONES: SignalZone[] = [
-  {
-    id: "north-america",
-    weight: 0.15,
-    jitter: [7, 4],
-    anchors: [[-123, 49], [-105, 39], [-87, 42], [-74, 41], [-99, 20]],
-  },
-  {
-    id: "latin-america",
-    weight: 0.11,
-    jitter: [6, 4],
-    anchors: [[-74, 5], [-77, -12], [-47, -23], [-70, -33], [-58, -34]],
-  },
-  {
-    id: "europe",
-    weight: 0.18,
-    jitter: [5, 3],
-    anchors: [[-3, 52], [10, 51], [20, 45], [30, 50], [18, 60]],
-  },
-  {
-    id: "africa",
-    weight: 0.17,
-    jitter: [6, 4],
-    anchors: [[-7, 31], [-1, 7], [20, 1], [36, 9], [28, -26]],
-  },
-  {
-    id: "asia",
-    weight: 0.33,
-    jitter: [6, 4],
-    anchors: [[43, 25], [67, 42], [78, 22], [105, 35], [121, 31], [106, 10], [139, 36]],
-  },
-  {
-    id: "oceania",
-    weight: 0.06,
-    jitter: [6, 4],
-    anchors: [[116, -32], [135, -25], [151, -33], [174, -41], [147, -7]],
-  },
+// Ambient welcome-screen categories only; these labels do not represent live events.
+const WELCOME_SIGNAL_LABELS = [
+  "CONFLICT WATCH",
+  "CRISIS WATCH",
+  "DIPLOMATIC ACTIVITY",
+  "OFFICIAL VISIT",
+  "POLICY UPDATE",
+  "SECURITY DIALOGUE",
+  "ECONOMIC TALKS",
+  "DEFENSE MEETING",
+  "PUBLIC STATEMENT",
+  "HUMANITARIAN UPDATE",
+  "ELECTION WATCH",
+  "REGIONAL TENSION",
+] as const;
+
+const COUNTRY_CARD_LOCATIONS: CountryCardLocation[] = [
+  { key: "canada", zone: "north-america", label: "Canada", detail: "NORTH AMERICA · PUBLIC SOURCES", lng: -106, lat: 56 },
+  { key: "united-states", zone: "north-america", label: "United States", detail: "NORTH AMERICA · PUBLIC SOURCES", lng: -98, lat: 38 },
+  { key: "mexico", zone: "north-america", label: "Mexico", detail: "NORTH AMERICA · PUBLIC SOURCES", lng: -102, lat: 23 },
+  { key: "brazil", zone: "latin-america", label: "Brazil", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -52, lat: -10 },
+  { key: "argentina", zone: "latin-america", label: "Argentina", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -64, lat: -34 },
+  { key: "colombia", zone: "latin-america", label: "Colombia", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -74, lat: 4 },
+  { key: "chile", zone: "latin-america", label: "Chile", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -71, lat: -30 },
+  { key: "united-kingdom", zone: "europe", label: "United Kingdom", detail: "EUROPE · PUBLIC SOURCES", lng: -3, lat: 55 },
+  { key: "france", zone: "europe", label: "France", detail: "EUROPE · PUBLIC SOURCES", lng: 2, lat: 46 },
+  { key: "germany", zone: "europe", label: "Germany", detail: "EUROPE · PUBLIC SOURCES", lng: 10, lat: 51 },
+  { key: "poland", zone: "europe", label: "Poland", detail: "EUROPE · PUBLIC SOURCES", lng: 19, lat: 52 },
+  { key: "ukraine", zone: "europe", label: "Ukraine", detail: "EUROPE · PUBLIC SOURCES", lng: 31, lat: 49 },
+  { key: "turkiye", zone: "europe", label: "Türkiye", detail: "EUROPE · PUBLIC SOURCES", lng: 35, lat: 39 },
+  { key: "spain", zone: "europe", label: "Spain", detail: "EUROPE · PUBLIC SOURCES", lng: -4, lat: 40 },
+  { key: "morocco", zone: "africa", label: "Morocco", detail: "AFRICA · PUBLIC SOURCES", lng: -6, lat: 32 },
+  { key: "egypt", zone: "africa", label: "Egypt", detail: "AFRICA · PUBLIC SOURCES", lng: 30, lat: 27 },
+  { key: "nigeria", zone: "africa", label: "Nigeria", detail: "AFRICA · PUBLIC SOURCES", lng: 8, lat: 9 },
+  { key: "kenya", zone: "africa", label: "Kenya", detail: "AFRICA · PUBLIC SOURCES", lng: 37, lat: 0 },
+  { key: "south-africa", zone: "africa", label: "South Africa", detail: "AFRICA · PUBLIC SOURCES", lng: 25, lat: -29 },
+  { key: "ethiopia", zone: "africa", label: "Ethiopia", detail: "AFRICA · PUBLIC SOURCES", lng: 40, lat: 9 },
+  { key: "saudi-arabia", zone: "west-asia", label: "Saudi Arabia", detail: "WEST ASIA · PUBLIC SOURCES", lng: 45, lat: 24 },
+  { key: "united-arab-emirates", zone: "west-asia", label: "United Arab Emirates", detail: "WEST ASIA · PUBLIC SOURCES", lng: 54, lat: 24 },
+  { key: "iran", zone: "west-asia", label: "Iran", detail: "WEST ASIA · PUBLIC SOURCES", lng: 53, lat: 32 },
+  { key: "jordan", zone: "west-asia", label: "Jordan", detail: "WEST ASIA · PUBLIC SOURCES", lng: 36, lat: 31 },
+  { key: "india", zone: "asia-pacific", label: "India", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 79, lat: 22 },
+  { key: "china", zone: "asia-pacific", label: "China", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 104, lat: 35 },
+  { key: "japan", zone: "asia-pacific", label: "Japan", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 138, lat: 37 },
+  { key: "south-korea", zone: "asia-pacific", label: "South Korea", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 128, lat: 36 },
+  { key: "indonesia", zone: "asia-pacific", label: "Indonesia", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 118, lat: -2 },
+  { key: "australia", zone: "asia-pacific", label: "Australia", detail: "OCEANIA · PUBLIC SOURCES", lng: 134, lat: -25 },
+  { key: "new-zealand", zone: "asia-pacific", label: "New Zealand", detail: "OCEANIA · PUBLIC SOURCES", lng: 174, lat: -41 },
+  { key: "philippines", zone: "asia-pacific", label: "Philippines", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 122, lat: 13 },
+  { key: "guatemala", zone: "north-america", label: "Guatemala", detail: "CENTRAL AMERICA · PUBLIC SOURCES", lng: -90, lat: 15 },
+  { key: "cuba", zone: "north-america", label: "Cuba", detail: "CARIBBEAN · PUBLIC SOURCES", lng: -79, lat: 22 },
+  { key: "dominican-republic", zone: "north-america", label: "Dominican Republic", detail: "CARIBBEAN · PUBLIC SOURCES", lng: -70, lat: 19 },
+  { key: "panama", zone: "north-america", label: "Panama", detail: "CENTRAL AMERICA · PUBLIC SOURCES", lng: -80, lat: 9 },
+  { key: "peru", zone: "latin-america", label: "Peru", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -76, lat: -10 },
+  { key: "ecuador", zone: "latin-america", label: "Ecuador", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -78, lat: -2 },
+  { key: "bolivia", zone: "latin-america", label: "Bolivia", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -64, lat: -17 },
+  { key: "uruguay", zone: "latin-america", label: "Uruguay", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -56, lat: -33 },
+  { key: "venezuela", zone: "latin-america", label: "Venezuela", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -66, lat: 7 },
+  { key: "paraguay", zone: "latin-america", label: "Paraguay", detail: "LATIN AMERICA · PUBLIC SOURCES", lng: -58, lat: -23 },
+  { key: "italy", zone: "europe", label: "Italy", detail: "EUROPE · PUBLIC SOURCES", lng: 12, lat: 42 },
+  { key: "sweden", zone: "europe", label: "Sweden", detail: "EUROPE · PUBLIC SOURCES", lng: 16, lat: 62 },
+  { key: "norway", zone: "europe", label: "Norway", detail: "EUROPE · PUBLIC SOURCES", lng: 9, lat: 62 },
+  { key: "romania", zone: "europe", label: "Romania", detail: "EUROPE · PUBLIC SOURCES", lng: 25, lat: 46 },
+  { key: "greece", zone: "europe", label: "Greece", detail: "EUROPE · PUBLIC SOURCES", lng: 22, lat: 39 },
+  { key: "netherlands", zone: "europe", label: "Netherlands", detail: "EUROPE · PUBLIC SOURCES", lng: 5, lat: 52 },
+  { key: "algeria", zone: "africa", label: "Algeria", detail: "AFRICA · PUBLIC SOURCES", lng: 2, lat: 28 },
+  { key: "ghana", zone: "africa", label: "Ghana", detail: "AFRICA · PUBLIC SOURCES", lng: -2, lat: 8 },
+  { key: "senegal", zone: "africa", label: "Senegal", detail: "AFRICA · PUBLIC SOURCES", lng: -14, lat: 14 },
+  { key: "tanzania", zone: "africa", label: "Tanzania", detail: "AFRICA · PUBLIC SOURCES", lng: 35, lat: -6 },
+  { key: "dr-congo", zone: "africa", label: "DR Congo", detail: "AFRICA · PUBLIC SOURCES", lng: 23, lat: -3 },
+  { key: "angola", zone: "africa", label: "Angola", detail: "AFRICA · PUBLIC SOURCES", lng: 18, lat: -12 },
+  { key: "tunisia", zone: "africa", label: "Tunisia", detail: "AFRICA · PUBLIC SOURCES", lng: 9, lat: 34 },
+  { key: "libya", zone: "africa", label: "Libya", detail: "NORTH AFRICA", lng: 18, lat: 27 },
+  { key: "mauritania", zone: "africa", label: "Mauritania", detail: "NORTH AFRICA", lng: -11, lat: 21 },
+  { key: "sudan", zone: "africa", label: "Sudan", detail: "NORTH AFRICA", lng: 30, lat: 16 },
+  { key: "iraq", zone: "west-asia", label: "Iraq", detail: "WEST ASIA · PUBLIC SOURCES", lng: 44, lat: 33 },
+  { key: "qatar", zone: "west-asia", label: "Qatar", detail: "WEST ASIA · PUBLIC SOURCES", lng: 51, lat: 25 },
+  { key: "oman", zone: "west-asia", label: "Oman", detail: "WEST ASIA · PUBLIC SOURCES", lng: 57, lat: 21 },
+  { key: "azerbaijan", zone: "west-asia", label: "Azerbaijan", detail: "WEST ASIA · PUBLIC SOURCES", lng: 47, lat: 40 },
+  { key: "georgia", zone: "west-asia", label: "Georgia", detail: "WEST ASIA · PUBLIC SOURCES", lng: 44, lat: 42 },
+  { key: "kazakhstan", zone: "west-asia", label: "Kazakhstan", detail: "CENTRAL ASIA · PUBLIC SOURCES", lng: 68, lat: 48 },
+  { key: "vietnam", zone: "asia-pacific", label: "Vietnam", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 108, lat: 16 },
+  { key: "thailand", zone: "asia-pacific", label: "Thailand", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 101, lat: 15 },
+  { key: "malaysia", zone: "asia-pacific", label: "Malaysia", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 102, lat: 4 },
+  { key: "pakistan", zone: "asia-pacific", label: "Pakistan", detail: "SOUTH ASIA · PUBLIC SOURCES", lng: 69, lat: 30 },
+  { key: "bangladesh", zone: "asia-pacific", label: "Bangladesh", detail: "SOUTH ASIA · PUBLIC SOURCES", lng: 90, lat: 24 },
+  { key: "singapore", zone: "asia-pacific", label: "Singapore", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 104, lat: 1 },
+  { key: "mongolia", zone: "asia-pacific", label: "Mongolia", detail: "ASIA PACIFIC · PUBLIC SOURCES", lng: 104, lat: 47 },
 ];
 
-function createSignalBatch(batchIndex: number, startedAtMs: number): GlobeMarker[] {
-  const count = SIGNAL_COUNT_MIN +
-    Math.floor(Math.random() * (SIGNAL_COUNT_MAX - SIGNAL_COUNT_MIN + 1));
-  const allocations = new Map(SIGNAL_ZONES.map((zone) => [zone.id, 1]));
+type CountryLabelFile = {
+  countries?: Array<{ n: string; lng: number; lat: number }>;
+};
 
-  for (let index = SIGNAL_ZONES.length; index < count; index += 1) {
-    const roll = Math.random();
-    let cumulativeWeight = 0;
-    const zone = SIGNAL_ZONES.find((candidate) => {
-      cumulativeWeight += candidate.weight;
-      return roll <= cumulativeWeight;
-    }) ?? SIGNAL_ZONES[SIGNAL_ZONES.length - 1];
-    allocations.set(zone.id, (allocations.get(zone.id) ?? 0) + 1);
+type ProjectedCountry = {
+  location: CountryCardLocation;
+  point: { x: number; y: number; visible: boolean };
+};
+
+const NORTH_AFRICA_COUNTRIES = new Set([
+  "Algeria",
+  "Egypt",
+  "Libya",
+  "Mauritania",
+  "Morocco",
+  "Sudan",
+  "Tunisia",
+  "Western Sahara",
+]);
+
+function classifyCountry(
+  label: string,
+  lng: number,
+  lat: number,
+): Pick<CountryCardLocation, "zone" | "detail"> {
+  if (NORTH_AFRICA_COUNTRIES.has(label)) {
+    return { zone: "africa", detail: "NORTH AFRICA" };
   }
+  if (lat < 15 && (lng > 110 || lng < -140)) {
+    return { zone: "asia-pacific", detail: "OCEANIA & PACIFIC" };
+  }
+  if (lng < -30) {
+    if (lat >= 20) return { zone: "north-america", detail: "NORTH AMERICA" };
+    if (lat >= 7) return { zone: "north-america", detail: "CENTRAL AMERICA & CARIBBEAN" };
+    return { zone: "latin-america", detail: "SOUTH AMERICA" };
+  }
+  if (lat <= -10 && lng >= 105) {
+    return { zone: "asia-pacific", detail: "OCEANIA & PACIFIC" };
+  }
+  if (lng >= -20 && lng <= 55 && lat > -38 && lat < 20) {
+    if (lat <= -18) return { zone: "africa", detail: "SOUTHERN AFRICA" };
+    if (lng < 12) return { zone: "africa", detail: "WEST AFRICA" };
+    if (lng >= 28) return { zone: "africa", detail: "EAST AFRICA" };
+    return { zone: "africa", detail: "CENTRAL AFRICA" };
+  }
+  if (lat >= 35 && lng < 45) {
+    if (lat >= 56) return { zone: "europe", detail: "NORTHERN EUROPE" };
+    if (lat < 45) return { zone: "europe", detail: "SOUTHERN EUROPE" };
+    if (lng >= 20) return { zone: "europe", detail: "EASTERN EUROPE" };
+    return { zone: "europe", detail: "WESTERN EUROPE" };
+  }
+  if (lng < 60) return { zone: "west-asia", detail: "WEST ASIA" };
+  if (lng < 90 && lat >= 35) return { zone: "west-asia", detail: "CENTRAL ASIA" };
+  if (lng < 95 && lat < 35) return { zone: "asia-pacific", detail: "SOUTH ASIA" };
+  if (lng < 130 && lat < 22) return { zone: "asia-pacific", detail: "SOUTHEAST ASIA" };
+  return { zone: "asia-pacific", detail: "EAST ASIA" };
+}
 
-  const signals: GlobeMarker[] = [];
-  SIGNAL_ZONES.forEach((zone) => {
-    const zoneCount = allocations.get(zone.id) ?? 0;
-    for (let index = 0; index < zoneCount; index += 1) {
-      const anchor = zone.anchors[Math.floor(Math.random() * zone.anchors.length)];
-      const lng = anchor[0] + (Math.random() * 2 - 1) * zone.jitter[0];
-      const lat = anchor[1] + (Math.random() * 2 - 1) * zone.jitter[1];
-      const levelRoll = Math.random();
-      const level: GlobeMarker["level"] = levelRoll < 0.04
-        ? "critical"
-        : levelRoll < 0.18
-          ? "high"
-          : levelRoll < 0.55
-            ? "medium"
-            : "low";
+function countryPoolFromLabels(data: CountryLabelFile): CountryCardLocation[] {
+  return (data.countries ?? []).map((country, index) => ({
+    key: `${index}-${country.n}`,
+    label: country.n,
+    lng: country.lng,
+    lat: country.lat,
+    ...classifyCountry(country.n, country.lng, country.lat),
+  }));
+}
 
-      signals.push({
-        id: `ambient-${batchIndex}-${zone.id}-${index}`,
-        lng,
-        lat: Math.max(-58, Math.min(72, lat)),
-        level,
-        pulseStartedAtMs: startedAtMs + 120 + Math.random() * 2_080,
-        pulseDurationMs: 3_600 + Math.random() * 900,
-        pulseScale: 0.7 + Math.random() * 0.16,
-      });
+function pickWelcomeSignalLabel(activeCards: GlobeMarker[]): string {
+  const usage = new Map<string, number>(
+    WELCOME_SIGNAL_LABELS.map((label) => [label, 0]),
+  );
+  activeCards.forEach((card) => {
+    if (card.detail && usage.has(card.detail)) {
+      usage.set(card.detail, (usage.get(card.detail) ?? 0) + 1);
     }
   });
+  const minimumUsage = Math.min(...usage.values());
+  const availableLabels = WELCOME_SIGNAL_LABELS.filter(
+    (label) => usage.get(label) === minimumUsage,
+  );
+  return availableLabels[Math.floor(Math.random() * availableLabels.length)];
+}
 
-  return signals;
+function pickCountryCard(
+  pool: CountryCardLocation[],
+  activeCards: GlobeMarker[],
+  recentLabels: Set<string>,
+  regionUsage: Map<string, number>,
+  globe: EchisGlobeHandle,
+  now: number,
+  sequence: number,
+): GlobeMarker | null {
+  const activeLabels = new Set(activeCards.map((card) => card.label));
+  const activeProjected = activeCards
+    .map((card) => ({ card, point: globe.projectMarker(card.lng, card.lat) }))
+    .filter((item): item is { card: GlobeMarker; point: { x: number; y: number; visible: boolean } } =>
+      Boolean(item.point?.visible),
+    );
+  const projectCandidates = (ignoreRecent: boolean) => pool
+    .filter((location) =>
+      !activeLabels.has(location.label) &&
+      (ignoreRecent || !recentLabels.has(location.label)),
+    )
+    .map((location) => ({ location, point: globe.projectMarker(location.lng, location.lat) }))
+    .filter((item): item is ProjectedCountry => Boolean(item.point?.visible));
+  let candidates = projectCandidates(false);
+  if (candidates.length === 0) candidates = projectCandidates(true);
+  if (candidates.length === 0) return null;
+
+  const activeRegionCounts = new Map<string, number>();
+  activeProjected.forEach(({ card }) => {
+    const region = card.regionKey ?? "GLOBAL";
+    activeRegionCounts.set(region, (activeRegionCounts.get(region) ?? 0) + 1);
+  });
+  const candidateRegions = Array.from(new Set(candidates.map(({ location }) => location.detail)));
+  candidateRegions.sort((a, b) => {
+    const activeDelta = (activeRegionCounts.get(a) ?? 0) - (activeRegionCounts.get(b) ?? 0);
+    if (activeDelta !== 0) return activeDelta;
+    const usageDelta = (regionUsage.get(a) ?? 0) - (regionUsage.get(b) ?? 0);
+    return usageDelta !== 0 ? usageDelta : Math.random() - 0.5;
+  });
+  const leastActiveCount = activeRegionCounts.get(candidateRegions[0]) ?? 0;
+  const balancedRegions = candidateRegions.filter(
+    (region) => (activeRegionCounts.get(region) ?? 0) === leastActiveCount,
+  );
+  const minimumUsage = Math.min(...balancedRegions.map((region) => regionUsage.get(region) ?? 0));
+  const fairestRegions = balancedRegions.filter(
+    (region) => (regionUsage.get(region) ?? 0) === minimumUsage,
+  );
+  const selectedRegion = fairestRegions[Math.floor(Math.random() * fairestRegions.length)];
+  candidates = candidates.filter(({ location }) => location.detail === selectedRegion);
+
+  const ranked = candidates
+    .map((candidate) => ({
+      ...candidate,
+      spacing: activeProjected.length === 0
+        ? Number.POSITIVE_INFINITY
+        : Math.min(...activeProjected.map(({ point }) => {
+            const dx = candidate.point.x - point.x;
+            const dy = candidate.point.y - point.y;
+            return dx * dx + dy * dy;
+          })),
+    }))
+    .sort((a, b) => b.spacing - a.spacing);
+  const variedTopCount = Math.min(4, ranked.length);
+  const selected = ranked[Math.floor(Math.random() * variedTopCount)].location;
+
+  return {
+    id: `country-card-${sequence}-${selected.key}`,
+    label: selected.label,
+    detail: pickWelcomeSignalLabel(activeCards),
+    regionKey: selected.detail,
+    lng: selected.lng,
+    lat: selected.lat,
+    level: "low",
+    displayStartedAtMs: now + 100 + Math.random() * 350,
+    displayDurationMs: 4_500 + Math.random() * 3_000,
+  };
 }
 
 const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
@@ -135,18 +308,102 @@ const BODY = "var(--font-ui, 'Hanken Grotesk', sans-serif)";
 export const MonitorLanding = forwardRef<EchisGlobeHandle, MonitorLandingProps>(
   function MonitorLanding({ onGlobalView, onSocmint, onAirTrack }, ref) {
   const globeRef = useRef<EchisGlobeHandle>(null);
-  const [ambientSignals, setAmbientSignals] = useState<GlobeMarker[]>([]);
+  const [countryCards, setCountryCards] = useState<GlobeMarker[]>([]);
 
   useEffect(() => {
-    let batchIndex = 0;
-    const refreshSignals = () => {
-      setAmbientSignals(createSignalBatch(batchIndex, performance.now()));
-      batchIndex += 1;
+    const controller = new AbortController();
+    let disposed = false;
+    let timeoutId: number | undefined;
+    let sequence = 0;
+    let pool: CountryCardLocation[] = [];
+    let currentCards: GlobeMarker[] = [];
+    let recentLabels: string[] = [];
+    const regionUsage = new Map<string, number>();
+
+    const scheduleNext = (delayMs: number) => {
+      timeoutId = window.setTimeout(runCardCycle, delayMs);
     };
 
-    refreshSignals();
-    const intervalId = window.setInterval(refreshSignals, SIGNAL_BATCH_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
+    const runCardCycle = () => {
+      if (disposed) return;
+      const now = performance.now();
+      const previousCards = currentCards;
+      let nextCards = previousCards.filter((card) =>
+        (card.displayStartedAtMs ?? 0) + (card.displayDurationMs ?? 0) > now,
+      );
+      const globe = globeRef.current;
+      const visibleCount = globe
+        ? nextCards.filter((card) => globe.projectMarker(card.lng, card.lat)?.visible).length
+        : 0;
+
+      if (
+        globe &&
+        pool.length > 0 &&
+        visibleCount < CARD_TARGET_VISIBLE &&
+        nextCards.length < CARD_MAX_ACTIVE
+      ) {
+        const nextCard = pickCountryCard(
+          pool,
+          nextCards,
+          new Set(recentLabels),
+          regionUsage,
+          globe,
+          now,
+          sequence,
+        );
+        if (nextCard) {
+          nextCards = [...nextCards, nextCard];
+          sequence += 1;
+          const label = nextCard.label ?? nextCard.id;
+          recentLabels = [...recentLabels, label].slice(-CARD_RECENT_COUNTRY_LIMIT);
+          const region = nextCard.regionKey ?? "GLOBAL";
+          regionUsage.set(region, (regionUsage.get(region) ?? 0) + 1);
+        }
+      }
+
+      const changed =
+        nextCards.length !== previousCards.length ||
+        nextCards.some((card, index) => card !== previousCards[index]);
+      if (changed) {
+        currentCards = nextCards;
+        setCountryCards(nextCards);
+      }
+
+      const nextVisibleCount = globe
+        ? nextCards.filter((card) => globe.projectMarker(card.lng, card.lat)?.visible).length
+        : 0;
+      const fillingViewport = nextVisibleCount < CARD_TARGET_VISIBLE;
+      scheduleNext(
+        fillingViewport
+          ? 320 + Math.random() * 480
+          : 650 + Math.random() * 900,
+      );
+    };
+
+    fetch("/data/home-globe-labels.json", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("Country label data unavailable");
+        return response.json() as Promise<CountryLabelFile>;
+      })
+      .then((data) => {
+        if (disposed) return;
+        pool = countryPoolFromLabels(data);
+        runCardCycle();
+      })
+      .catch(() => {
+        if (disposed) return;
+        pool = COUNTRY_CARD_LOCATIONS.map((location) => ({
+          ...location,
+          ...classifyCountry(location.label, location.lng, location.lat),
+        }));
+        runCardCycle();
+      });
+
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, []);
 
   // Expose the internal globe handle so AppShell's homeGlobeRef keeps working.
@@ -211,9 +468,10 @@ export const MonitorLanding = forwardRef<EchisGlobeHandle, MonitorLandingProps>(
       <EchisGlobe
         ref={globeRef}
         size="hero"
-        markers={ambientSignals}
-        showLabels={false}
+        markers={countryCards}
+        showLabels
         showMarkerCore={false}
+        showMarkerWaves={false}
       />
 
       {/* Depth vignette above globe, below chrome */}
