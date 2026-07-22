@@ -38,6 +38,7 @@ export interface ScreenGlobeProps {
   showAdminBorders?: boolean;
   showPlaceLabels?: boolean;
   autoRotatePaused?: boolean;
+  onAutoRotateStart?: () => void;
   caption?: string;
   className?: string;
   style?: React.CSSProperties;
@@ -57,6 +58,7 @@ export const ScreenGlobe = forwardRef<EchisGlobeHandle, ScreenGlobeProps>(
       showAdminBorders = true,
       showPlaceLabels = true,
       autoRotatePaused = false,
+      onAutoRotateStart,
       caption,
       className,
       style,
@@ -87,6 +89,7 @@ export const ScreenGlobe = forwardRef<EchisGlobeHandle, ScreenGlobeProps>(
           showAdminBorders={showAdminBorders}
           showPlaceLabels={showPlaceLabels}
           autoRotatePaused={autoRotatePaused}
+          onAutoRotateStart={onAutoRotateStart}
         />
         <div
           aria-hidden

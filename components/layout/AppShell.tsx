@@ -117,6 +117,7 @@ export function AppShell() {
   const globalGlobeRef = useRef<EchisGlobeHandle | null>(null);
   const signalsGlobeRef = useRef<EchisGlobeHandle | null>(null);
   const gatewayEntryTimerRef = useRef<number | null>(null);
+  const markerPopupCloseTimerRef = useRef<number | null>(null);
 
   // Warm the globe border + label data while the opening screen is idle, so the
   // data screens' borders/labels are ready on first open instead of queueing
@@ -132,6 +133,7 @@ export function AppShell() {
   }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [markerPopup, setMarkerPopup] = useState<MarkerPopupState>(null);
+  const [markerPopupClosing, setMarkerPopupClosing] = useState(false);
   const [activeSection, setActiveSection] = useState<ActiveSection>("dashboard");
   const [activeTopTab, setActiveTopTab] = useState<ActiveTopTab>("situation");
   const [activeRailMode, setActiveRailMode] = useState<ActiveRailMode>(null);
@@ -172,10 +174,41 @@ export function AppShell() {
     prefetchPolicyFeed();
   }, []);
 
+  useEffect(() => {
+    if (!workspaceGeography || activeRailMode === null) return;
+
+    let frame = 0;
+    let attempt = 0;
+    const applyGeographyFocus = () => {
+      const globe =
+        activeRailMode === "global"
+          ? globalGlobeRef.current
+          : signalsGlobeRef.current;
+      if (
+        globe?.focusGeography(
+          workspaceGeography.lng,
+          workspaceGeography.lat,
+        )
+      ) {
+        return;
+      }
+      attempt += 1;
+      if (attempt < 16) {
+        frame = window.requestAnimationFrame(applyGeographyFocus);
+      }
+    };
+
+    frame = window.requestAnimationFrame(applyGeographyFocus);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeRailMode, workspaceGeography]);
+
   useEffect(
     () => () => {
       if (gatewayEntryTimerRef.current !== null) {
         window.clearTimeout(gatewayEntryTimerRef.current);
+      }
+      if (markerPopupCloseTimerRef.current !== null) {
+        window.clearTimeout(markerPopupCloseTimerRef.current);
       }
     },
     [],
@@ -509,7 +542,7 @@ export function AppShell() {
 
     const topTab: ActiveTopTab =
       destination === "policy" ? "politics" : destination;
-    handleTopTabSelect(topTab);
+    handleTopTabSelect(topTab, Boolean(geography));
   }
 
   function handleRegionChange(region: RegionKey) {
@@ -521,6 +554,7 @@ export function AppShell() {
     setSelectedSourceFilterId(ALL_SOURCES_FILTER);
     setSelectedId(null);
     setMarkerPopup(null);
+    setWorkspaceGeography(null);
   }
 
   function handleSourceCategoryChange(category: string) {
@@ -540,7 +574,13 @@ export function AppShell() {
     setMarkerPopup(null);
   }
 
-  function handleTopTabSelect(tab: ActiveTopTab) {
+  function handleTopTabSelect(
+    tab: ActiveTopTab,
+    preserveGeography = false,
+  ) {
+    if (!preserveGeography && tab !== "situation") {
+      setWorkspaceGeography(null);
+    }
     if (tab === "sources") {
       setActiveSection("sources");
       setActiveTopTab("sources");
@@ -583,13 +623,48 @@ export function AppShell() {
     handleViewChange("situation");
   }
 
+  function cancelMarkerPopupAutoClose() {
+    if (markerPopupCloseTimerRef.current !== null) {
+      window.clearTimeout(markerPopupCloseTimerRef.current);
+      markerPopupCloseTimerRef.current = null;
+    }
+  }
+
+  function openMarkerPopup(next: NonNullable<MarkerPopupState>) {
+    cancelMarkerPopupAutoClose();
+    setMarkerPopupClosing(false);
+    setMarkerPopup(next);
+  }
+
+  function clearMarkerSelection(kind: NonNullable<MarkerPopupState>["kind"]) {
+    if (kind === "global") {
+      setSelectedId(null);
+      setSelectedSourceItemId(null);
+      return;
+    }
+    setSelectedSignalId(null);
+  }
+
+  function handleMarkerAutoRotateStart() {
+    if (!markerPopup || markerPopupClosing) return;
+    const kind = markerPopup.kind;
+    cancelMarkerPopupAutoClose();
+    setMarkerPopupClosing(true);
+    markerPopupCloseTimerRef.current = window.setTimeout(() => {
+      markerPopupCloseTimerRef.current = null;
+      clearMarkerSelection(kind);
+      setMarkerPopup(null);
+      setMarkerPopupClosing(false);
+    }, 520);
+  }
+
   // Same interaction contract as Global View: a feed card click focuses the
   // marker on the globe and opens the on-globe popup; the detail modal opens
   // from the card's detail toggle instead.
   function handleSignalSelect(id: string) {
     setSelectedSignalId(id);
     setSignalDetailOpen(false);
-    setMarkerPopup({ kind: "signals", id });
+    openMarkerPopup({ kind: "signals", id });
     const report = socmintReports.find((r) => r.id === id);
     if (report?.coordinates) {
       getActiveGlobe()?.focusMarker(report.coordinates[0], report.coordinates[1]);
@@ -604,7 +679,7 @@ export function AppShell() {
 
   function handleGlobalMarkerSelect(id: string) {
     setSelectedId(id);
-    setMarkerPopup({ kind: "global", id });
+    openMarkerPopup({ kind: "global", id });
     // For source markers: default to the first item unless the currently selected
     // item already belongs to this marker (e.g. user re-clicks the same pin).
     const sourceMarker = displayedSourceMarkers.find((m) => m.id === id);
@@ -622,18 +697,14 @@ export function AppShell() {
   function handleSignalMarkerSelect(id: string) {
     setSelectedSignalId(id);
     setSignalDetailOpen(false);
-    setMarkerPopup({ kind: "signals", id });
+    openMarkerPopup({ kind: "signals", id });
   }
 
   function handleMarkerPopupClose() {
-    if (markerPopup?.kind === "global") {
-      setSelectedId(null);
-      setSelectedSourceItemId(null);
-    }
-    if (markerPopup?.kind === "signals") {
-      setSelectedSignalId(null);
-    }
+    cancelMarkerPopupAutoClose();
+    if (markerPopup) clearMarkerSelection(markerPopup.kind);
     setMarkerPopup(null);
+    setMarkerPopupClosing(false);
   }
 
   function handleSignalDetailClose() {
@@ -692,6 +763,8 @@ export function AppShell() {
 
         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
+            aria-hidden={!isMapScreen}
+            inert={!isMapScreen}
             className="absolute inset-0"
             style={{
               opacity: isMapScreen ? 1 : 0,
@@ -727,6 +800,7 @@ export function AppShell() {
                   markers={globalViewGlobeMarkers}
                   selectedMarkerId={selectedId}
                   onMarkerSelect={handleGlobalMarkerSelect}
+                  onAutoRotateStart={handleMarkerAutoRotateStart}
                   caption="GLOBAL VIEW"
                 />
               </div>
@@ -743,11 +817,14 @@ export function AppShell() {
                   markers={signalsGlobeMarkers}
                   selectedMarkerId={selectedSignalId}
                   onMarkerSelect={handleSignalMarkerSelect}
+                  onAutoRotateStart={handleMarkerAutoRotateStart}
                   caption="SOCMINT WATCH"
                 />
               </div>
             )}
             <div
+              aria-hidden={activeMapRailMode !== "signals"}
+              inert={activeMapRailMode !== "signals"}
               style={{
                 opacity: activeMapRailMode === "signals" ? 1 : 0,
                 pointerEvents: activeMapRailMode === "signals" ? "auto" : "none",
@@ -759,6 +836,7 @@ export function AppShell() {
                 confidenceMin={signalConfidenceMin}
                 onRegionChange={(region) => {
                   setActiveSignalRegion(region);
+                  setWorkspaceGeography(null);
                   setSelectedSignalId(null);
                   setSignalDetailOpen(false);
                   setMarkerPopup(null);
@@ -772,6 +850,8 @@ export function AppShell() {
               />
             </div>
             <div
+              aria-hidden={activeMapRailMode !== "global"}
+              inert={activeMapRailMode !== "global"}
               style={{
                 opacity: activeMapRailMode === "global" ? 1 : 0,
                 pointerEvents: activeMapRailMode === "global" ? "auto" : "none",
@@ -826,6 +906,8 @@ export function AppShell() {
             )}
 
             <div
+              aria-hidden={activeMapRailMode !== "global"}
+              inert={activeMapRailMode !== "global"}
               style={{
                 position: "absolute",
                 top: "16px",
@@ -872,7 +954,7 @@ export function AppShell() {
                       );
                       if (grouped) {
                         setSelectedId(entry.markerId);
-                        setMarkerPopup({ kind: "global", id: entry.markerId });
+                        openMarkerPopup({ kind: "global", id: entry.markerId });
                         getActiveGlobe()?.focusMarker(
                           grouped.lng,
                           grouped.lat,
@@ -897,6 +979,7 @@ export function AppShell() {
                 accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
+                closing={markerPopupClosing}
                 onSendToIntelWatch={() =>
                   sendToIntelWatch({
                     itemId: markerPopupSourceItem.id,
@@ -923,6 +1006,8 @@ export function AppShell() {
               />
             )}
             <div
+              aria-hidden={activeMapRailMode !== "signals"}
+              inert={activeMapRailMode !== "signals"}
               style={{
                 position: "absolute",
                 top: "16px",
@@ -963,6 +1048,7 @@ export function AppShell() {
                 accent="var(--accent-blue-text)"
                 getPosition={getMarkerPopupPosition}
                 onClose={handleMarkerPopupClose}
+                closing={markerPopupClosing}
                 onSendToIntelWatch={() =>
                   sendToIntelWatch({
                     itemId: markerPopupSignal.id,

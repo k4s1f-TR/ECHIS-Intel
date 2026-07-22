@@ -283,6 +283,8 @@ export const MonitorLanding = forwardRef<EchisGlobeHandle, MonitorLandingProps>(
         zoomOut: () => globeRef.current?.zoomOut(),
         centerView: () => globeRef.current?.centerView(),
         focusMarker: (lng, lat) => globeRef.current?.focusMarker(lng, lat),
+        focusGeography: (lng, lat) =>
+          globeRef.current?.focusGeography(lng, lat) ?? false,
         projectMarker: (lng, lat) =>
           globeRef.current?.projectMarker(lng, lat) ?? null,
         setAutoRotatePaused: (paused) =>

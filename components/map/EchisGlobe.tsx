@@ -106,6 +106,7 @@ export interface EchisGlobeHandle {
   zoomOut: () => void;
   centerView: () => void;
   focusMarker: (lng: number, lat: number) => void;
+  focusGeography: (lng: number, lat: number) => boolean;
   projectMarker: (lng: number, lat: number) => { x: number; y: number; visible: boolean } | null;
   setAutoRotatePaused: (paused: boolean) => void;
   resumeAutoRotate: () => void;
@@ -114,6 +115,12 @@ export interface EchisGlobeHandle {
 export interface EchisGlobeProps {
   size?: EchisGlobeSize;
   autoRotatePaused?: boolean;
+  /** Camera-distance reduction used only by focusGeography(). */
+  geographyFocusZoomOffset?: number;
+  /** Per-frame damping used only by focusGeography(). */
+  geographyFocusEasing?: number;
+  /** Fired once when an idle globe actually resumes automatic rotation. */
+  onAutoRotateStart?: () => void;
   markers?: GlobeMarker[];
   /** Show projected HTML labels above markers (default: on for "hero"). */
   showLabels?: boolean;
@@ -738,6 +745,9 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
     {
       size = "hero",
       autoRotatePaused = false,
+      geographyFocusZoomOffset = 1.45,
+      geographyFocusEasing = 0.028,
+      onAutoRotateStart,
       markers = [],
       showLabels,
       markerLabelVariant = "badge",
@@ -783,6 +793,8 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       useRef<typeof onGeographyHover>(onGeographyHover);
     const onAtmosphereTripleClickRef =
       useRef<typeof onAtmosphereTripleClick>(onAtmosphereTripleClick);
+    const onAutoRotateStartRef =
+      useRef<typeof onAutoRotateStart>(onAutoRotateStart);
     const geographyRegionsRef = useRef(geographyRegions);
     const [error, setError] = useState<string | null>(null);
 
@@ -833,6 +845,9 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       onAtmosphereTripleClickRef.current = onAtmosphereTripleClick;
     }, [onAtmosphereTripleClick]);
     useEffect(() => {
+      onAutoRotateStartRef.current = onAutoRotateStart;
+    }, [onAutoRotateStart]);
+    useEffect(() => {
       geographyRegionsRef.current = geographyRegions;
     }, [geographyRegions, geographyRegionKey]);
 
@@ -877,6 +892,25 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
           s.targetZoom = Math.max(cfg.zoomMin, cfg.zoom - focusZoomOffset);
           s.interactionUntil = performance.now() + 12_000;
         },
+        focusGeography: (lng, lat) => {
+          const s = runtimeRef.current;
+          if (!s) return false;
+          s.targetLon = THREE.MathUtils.degToRad(-lng);
+          s.targetLat = THREE.MathUtils.clamp(
+            THREE.MathUtils.degToRad(lat + 0.8),
+            -MAX_TILT,
+            MAX_TILT,
+          );
+          s.easing = true;
+          s.easingFactor = geographyFocusEasing;
+          s.zoomEasingFactor = Math.max(0.018, geographyFocusEasing * 0.72);
+          s.targetZoom = Math.max(
+            cfg.zoomMin,
+            cfg.zoom - geographyFocusZoomOffset,
+          );
+          s.interactionUntil = performance.now() + 12_000;
+          return true;
+        },
         projectMarker: (lng, lat) => runtimeRef.current?.project(lng, lat) ?? null,
         setAutoRotatePaused: (paused) => { pausedRef.current = paused; },
         resumeAutoRotate: () => {
@@ -889,7 +923,14 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
           s.interactionUntil = 0;
         },
       }),
-      [cfg, focusEasing, focusLatitudeBiasDeg, focusZoomOffset],
+      [
+        cfg,
+        focusEasing,
+        focusLatitudeBiasDeg,
+        focusZoomOffset,
+        geographyFocusEasing,
+        geographyFocusZoomOffset,
+      ],
     );
 
     useEffect(() => {
@@ -1708,6 +1749,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       let frameId = 0;
       let lastFrame = performance.now();
       let elapsed = 0;
+      let wasAutoRotating = false;
       const animate = (now: number) => {
         frameId = requestAnimationFrame(animate);
         const delta = Math.min(Math.max((now - lastFrame) / 1000, 0), 0.05);
@@ -1728,8 +1770,14 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
             state.lat = state.targetLat;
             state.easing = false;
           }
-        } else if (!dragging && !pausedRef.current && performance.now() > state.interactionUntil) {
+        } else if (!dragging && !pausedRef.current && now > state.interactionUntil) {
+          if (!wasAutoRotating) {
+            wasAutoRotating = true;
+            onAutoRotateStartRef.current?.();
+          }
           state.lon += delta * cfg.autoRotate;
+        } else {
+          wasAutoRotating = false;
         }
         state.lat = THREE.MathUtils.clamp(state.lat, -MAX_TILT, MAX_TILT);
         globe.rotation.set(state.lat, state.lon, 0);
@@ -1941,7 +1989,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         renderer.forceContextLoss();
         el.remove();
       };
-    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, showMarkerWaves, enableGeographySelection, geographyRegionKey, cfg]);
+    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, showMarkerWaves, enableGeographySelection, geographyRegionKey, cfg, geographyFocusEasing, geographyFocusZoomOffset]);
 
     // Marker updates are applied to the live scene — rebuilding the renderer
     // here would reset the camera mid-drag every time a feed batch lands.

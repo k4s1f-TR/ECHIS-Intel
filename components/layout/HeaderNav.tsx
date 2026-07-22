@@ -100,6 +100,7 @@ export function HeaderNav({
             <button
               key={tab.label}
               onClick={tabKey ? () => onTabSelect(tabKey) : undefined}
+              aria-current={active ? "page" : undefined}
               className="relative flex h-full flex-shrink-0 items-center whitespace-nowrap px-2.5 transition-opacity duration-150 sm:px-3"
               style={{
                 height: "52px",

@@ -13,6 +13,8 @@ interface MarkerInfoPopupProps {
   accent?: string;
   getPosition: () => { x: number; y: number } | null;
   onClose: () => void;
+  /** One-way exit state used when the globe resumes auto-rotation. */
+  closing?: boolean;
   /** Writes the item into the Intel Watch workspace; enables the action row. */
   onSendToIntelWatch?: () => SendToIntelWatchResult;
   /** Pager props — only rendered when itemCount > 1. */
@@ -37,6 +39,7 @@ export function MarkerInfoPopup({
   accent = "var(--accent-blue-text)",
   getPosition,
   onClose,
+  closing = false,
   onSendToIntelWatch,
   itemIndex,
   itemCount,
@@ -78,8 +81,15 @@ export function MarkerInfoPopup({
         left: position.x,
         top: position.y,
         width: 248,
-        transform: "translate(-50%, calc(-100% - 18px))",
-        pointerEvents: "auto",
+        opacity: closing ? 0 : 1,
+        transform: closing
+          ? "translate(-50%, calc(-100% - 10px)) scale(0.965)"
+          : "translate(-50%, calc(-100% - 18px)) scale(1)",
+        transformOrigin: "50% 100%",
+        transition:
+          "opacity 420ms cubic-bezier(0.22, 0.8, 0.22, 1), transform 500ms cubic-bezier(0.22, 0.8, 0.22, 1)",
+        pointerEvents: closing ? "none" : "auto",
+        willChange: "opacity, transform",
       }}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
