@@ -92,7 +92,11 @@ const landFeatures = countries.features.map((country) => {
   collectOutlineLines(country.geometry, lines);
   return {
     type: "Feature",
-    properties: { kind: "land" },
+    properties: {
+      kind: "land",
+      id: String(country.id ?? country.properties?.name ?? "country"),
+      name: country.properties?.name ?? "Unknown country",
+    },
     geometry: compactGeometry(country.geometry),
   };
 });

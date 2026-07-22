@@ -79,7 +79,7 @@ function RailIcon({
       {/* Active left bar */}
       {active && (
         <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full"
+          className="rail-active-indicator absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full"
           style={{ background: "var(--accent-blue-text)" }}
         />
       )}

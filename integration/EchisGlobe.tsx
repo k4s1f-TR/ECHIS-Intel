@@ -601,7 +601,6 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         renderer.dispose();
         el.remove();
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [size, markerKey, geojsonUrl, adminGeojsonUrl, showAdminBorders, centered, labelsEnabled, cfg]);
 
     return (

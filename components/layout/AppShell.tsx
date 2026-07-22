@@ -12,8 +12,12 @@ import {
   markersFromFeatures,
   prefetchGlobeData,
   type EchisGlobeHandle,
+  type GlobeGeographySelection,
 } from "@/components/map/EchisGlobe";
-import { MonitorLanding } from "@/components/monitor/MonitorLanding";
+import {
+  MonitorLanding,
+  type MonitorDestination,
+} from "@/components/monitor/MonitorLanding";
 import {
   FloatingMonitoringCard,
   type MonitorCategoryOption,
@@ -50,6 +54,7 @@ import { socmintMatchesConfidenceFilter } from "@/types/socmint";
 import { domainTags } from "@/data/source-intelligence/filters/geopoliticalFilterRules";
 import type { SourceFilterDomain } from "@/data/source-intelligence/sourceIntelligenceTypes";
 import type { SourceMarkerFeature } from "@/data/source-intelligence/markers/sourceMarkerTypes";
+import { buildGlobeActivitySnapshot } from "@/data/source-intelligence/buildGlobeActivitySnapshot";
 
 export type ViewMode = "situation" | "global" | "signals";
 type ActiveSection = "dashboard" | "sources" | "bookmarks" | "airtrack";
@@ -62,6 +67,23 @@ type MarkerPopupState = { kind: "global" | "signals"; id: string } | null;
 // MapLibre globe used: the floating card on the left, MapControls + feed panel
 // on the right. Keeps the sphere centered in the open area, not behind a panel.
 const GLOBE_SCREEN_FRAMING = { left: 220, right: 422 } as const;
+
+function regionFromGeography(
+  geography: GlobeGeographySelection,
+): RegionKey {
+  const { lng, lat } = geography;
+  if (lng >= 25 && lng <= 67 && lat >= 10 && lat <= 45) {
+    return "middle-east";
+  }
+  if (lng >= -22 && lng <= 55 && lat >= -38 && lat < 37) {
+    return "africa";
+  }
+  if (lng >= -25 && lng <= 65 && lat >= 35 && lat <= 72) {
+    return "europe";
+  }
+  if (lng >= 55 || lng <= -150) return "asia-pacific";
+  return "americas";
+}
 
 function filterSourceMarkerItems(
   marker: SourceMarkerFeature,
@@ -94,6 +116,7 @@ export function AppShell() {
   const homeGlobeRef = useRef<EchisGlobeHandle | null>(null);
   const globalGlobeRef = useRef<EchisGlobeHandle | null>(null);
   const signalsGlobeRef = useRef<EchisGlobeHandle | null>(null);
+  const gatewayEntryTimerRef = useRef<number | null>(null);
 
   // Warm the globe border + label data while the opening screen is idle, so the
   // data screens' borders/labels are ready on first open instead of queueing
@@ -116,6 +139,10 @@ export function AppShell() {
   const [activeRegion, setActiveRegion] = useState<RegionKey>("middle-east");
   const [activeSourceCategory, setActiveSourceCategory] = useState<SourceFilterDomain | "all">("all");
   const [activeSignalRegion, setActiveSignalRegion] = useState<SignalCoverage>("global");
+  const [workspaceGeography, setWorkspaceGeography] =
+    useState<GlobeGeographySelection | null>(null);
+  const [gatewayEntry, setGatewayEntry] =
+    useState<MonitorDestination | null>(null);
   const [signalConfidenceMin, setSignalConfidenceMin] = useState(0);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
   const [signalDetailOpen, setSignalDetailOpen] = useState(false);
@@ -144,6 +171,15 @@ export function AppShell() {
     prefetchDefenseIndustryFeed();
     prefetchPolicyFeed();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (gatewayEntryTimerRef.current !== null) {
+        window.clearTimeout(gatewayEntryTimerRef.current);
+      }
+    },
+    [],
+  );
   const {
     bookmarkedItems,
     isBookmarked,
@@ -160,6 +196,16 @@ export function AppShell() {
     markers: sourceMarkers,
     loadState: sourceLoadState,
   } = useSourceIntelligenceItems();
+
+  const globeActivitySnapshot = useMemo(
+    () =>
+      buildGlobeActivitySnapshot({
+        items: sourceItems,
+        markers: sourceMarkers,
+        loadState: sourceLoadState,
+      }),
+    [sourceItems, sourceMarkers, sourceLoadState],
+  );
 
   const sourceCategoryOptions = useMemo<MonitorCategoryOption[]>(() => {
     const counts = new Map<SourceFilterDomain, number>();
@@ -422,6 +468,50 @@ export function AppShell() {
     setSignalDetailOpen(false);
   }
 
+  function handleMonitorNavigate(
+    destination: MonitorDestination,
+    geography: GlobeGeographySelection | null,
+  ) {
+    if (geography) {
+      setWorkspaceGeography(geography);
+      const region = regionFromGeography(geography);
+      setActiveRegion(region);
+      setActiveSignalRegion(region);
+    }
+
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setGatewayEntry(destination);
+      if (gatewayEntryTimerRef.current !== null) {
+        window.clearTimeout(gatewayEntryTimerRef.current);
+      }
+      gatewayEntryTimerRef.current = window.setTimeout(() => {
+        setGatewayEntry(null);
+        gatewayEntryTimerRef.current = null;
+      }, 560);
+    }
+
+    if (destination === "global") {
+      handleViewChange("global");
+      return;
+    }
+    if (destination === "socmint") {
+      handleViewChange("signals");
+      return;
+    }
+    if (destination === "airtrack") {
+      handleAirTrackOpen();
+      return;
+    }
+    if (destination === "bookmarks") {
+      handleBookmarksOpen();
+      return;
+    }
+
+    const topTab: ActiveTopTab =
+      destination === "policy" ? "politics" : destination;
+    handleTopTabSelect(topTab);
+  }
+
   function handleRegionChange(region: RegionKey) {
     setActiveSection("dashboard");
     setActiveTopTab("situation");
@@ -616,9 +706,11 @@ export function AppShell() {
               >
                 <MonitorLanding
                   ref={homeGlobeRef}
-                  onGlobalView={() => handleViewChange("global")}
-                  onSocmint={() => handleViewChange("signals")}
-                  onAirTrack={handleAirTrackOpen}
+                  onNavigate={handleMonitorNavigate}
+                  selectedGeography={workspaceGeography}
+                  onGeographyChange={setWorkspaceGeography}
+                  activitySnapshot={globeActivitySnapshot}
+                  bookmarkCount={bookmarkedItems.length}
                 />
               </div>
             )}
@@ -887,17 +979,17 @@ export function AppShell() {
           </div>
 
           {activeSection === "sources" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "sources" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <SourcesScreen />
             </div>
           )}
           {activeSection === "airtrack" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "airtrack" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <AirTrackScreen />
             </div>
           )}
           {activeSection === "bookmarks" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "bookmarks" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <BookmarksView
                 items={bookmarkedItems}
                 onRemoveBookmark={removeBookmark}
@@ -906,22 +998,22 @@ export function AppShell() {
             </div>
           )}
           {activeSection === "dashboard" && activeTopTab === "politics" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "policy" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <PolicyDossierScreen />
             </div>
           )}
           {activeSection === "dashboard" && activeTopTab === "cyber" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "cyber" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <CyberSecPanel />
             </div>
           )}
           {activeSection === "dashboard" && activeTopTab === "intel" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "intel" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <IntelWatchPanel />
             </div>
           )}
           {activeSection === "dashboard" && activeTopTab === "defense" && (
-            <div className="ui-fade-in absolute inset-0 z-20 flex flex-col overflow-hidden">
+            <div className={`${gatewayEntry === "defense" ? "gateway-screen-enter" : "ui-fade-in"} absolute inset-0 z-20 flex flex-col overflow-hidden`}>
               <DefenseIndustryPanel />
             </div>
           )}
@@ -930,6 +1022,57 @@ export function AppShell() {
               <ContactScreen />
             </div>
           )}
+
+          {workspaceGeography &&
+            !(isMapScreen && activeMapRailMode === null) && (
+              <div
+                className="absolute left-1/2 top-3 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full px-3 py-1.5"
+                style={{
+                  color: "var(--c-t3)",
+                  background: "rgba(7, 6, 8, 0.88)",
+                  border: "1px solid rgba(242, 56, 77, 0.2)",
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.34)",
+                  backdropFilter: "blur(10px)",
+                  fontFamily: "var(--font-mono), ui-monospace, monospace",
+                  fontSize: "7px",
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span style={{ color: "rgba(242, 87, 105, 0.82)" }}>
+                  Geography
+                </span>
+                <i
+                  aria-hidden
+                  style={{
+                    width: "18px",
+                    height: "1px",
+                    background:
+                      "linear-gradient(90deg, rgba(242,56,77,.55), transparent)",
+                  }}
+                />
+                <strong
+                  style={{
+                    color: "rgba(225, 229, 235, 0.9)",
+                    fontWeight: 650,
+                  }}
+                >
+                  {workspaceGeography.name}
+                </strong>
+                <button
+                  type="button"
+                  aria-label="Clear workspace geography"
+                  onClick={() => setWorkspaceGeography(null)}
+                  className="ml-1 grid h-4 w-4 place-items-center rounded-full transition-colors"
+                  style={{
+                    color: "rgba(151, 160, 174, 0.7)",
+                    background: "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
         </div>
       </div>
     </div>

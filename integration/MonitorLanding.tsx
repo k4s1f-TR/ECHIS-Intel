@@ -44,6 +44,7 @@ export const MonitorLanding = forwardRef<EchisGlobeHandle, MonitorLandingProps>(
     focusMarker: (lng, lat) => globeRef.current?.focusMarker(lng, lat),
     projectMarker: (lng, lat) => globeRef.current?.projectMarker(lng, lat) ?? null,
     setAutoRotatePaused: (paused) => globeRef.current?.setAutoRotatePaused(paused),
+    resumeAutoRotate: () => globeRef.current?.resumeAutoRotate(),
   }), []);
 
   const bracket = (corner: "tl" | "tr" | "bl" | "br"): React.CSSProperties => {

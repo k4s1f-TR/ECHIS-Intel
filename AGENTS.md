@@ -31,7 +31,8 @@ still render mock data from `data/**` — both paths are valid.
 | Left rail items                | `components/layout/LeftRail.tsx` (`topIcons`)   |
 | Global design tokens           | `app/globals.css` (`:root`, `.cyber-premium`)   |
 | Severity colors → tokens       | `lib/theme.ts`                                  |
-| Globe default camera           | `components/maplibre/MapLibreGlobe.tsx` → `DEFAULT_GLOBE_VIEW` |
+| Three.js globe + camera        | `components/map/EchisGlobe.tsx` (`SIZE_CONFIG`) |
+| MapLibre / Air Track camera    | `components/maplibre/MapLibreGlobe.tsx` → `DEFAULT_GLOBE_VIEW` |
 | Source pipeline                | `data/source-intelligence/sourceIntelligencePipeline.ts` |
 | Source adapters (server)       | `lib/sources/*Adapter.ts`                       |
 | Source API routes              | `app/api/sources/*/route.ts`                    |
@@ -101,22 +102,24 @@ document into AGENTS.md or into per-task prompts.**
 
 ## 6. Globe / map (the only place where wrong moves cost hours)
 
-Operational globe surfaces use MapLibre. `HomeGlobe` is the offline
-opening-screen globe. Global View and SOCMINT each mount their own
-screen-scoped `MapLibreGlobe` instance while sharing the renderer
-implementation, handle (`MapLibreGlobeHandle`), and marker contract
-(`MarkerFeature`). Only the active screen's globe may be mounted.
-The Home globe's single-source asset is `public/data/home-globe.geojson`;
-regenerate it with `npm run generate:home-globe`, never hand-edit it.
+The opening screen, Global View, and SOCMINT use the shared Three.js
+`EchisGlobe` renderer. `MonitorLanding` mounts it directly; Global View and
+SOCMINT mount it through the screen-scoped `ScreenGlobe` wrapper. Air Track
+uses its MapLibre-based `AirTrackGlobe`; `MapLibreGlobe.tsx` also remains the
+source of shared region presets. Only the active screen's WebGL globe may be
+mounted. The Three.js globe's country asset is
+`public/data/home-globe.geojson`; regenerate it with
+`npm run generate:home-globe`, never hand-edit it.
 
 Hard rules:
 
-- `DEFAULT_GLOBE_VIEW` is the single source of truth for initial,
-  refresh, and "Center View" camera. Don't hard-code alt values.
-- Auto-rotate is longitude-based (`map.jumpTo({ center:[lng,lat] })`),
-  not `rotateTo`. Don't replace it with continuous bearing animation.
-- One map instance at a time; on unmount call `map.remove()` and clear
-  every RAF / timeout / listener.
+- `SIZE_CONFIG.hero` is the Three.js globe's camera/zoom source of truth.
+  `DEFAULT_GLOBE_VIEW` remains the source of truth for MapLibre/Air Track.
+- Three.js auto-rotate advances the longitude state and rebuilds the globe
+  orientation; preserve that turntable model and its pause/resume contract.
+- One WebGL globe instance at a time. On unmount, clear every RAF, timeout,
+  and listener; dispose the renderer/context or call `map.remove()` as
+  appropriate for the renderer.
 - Globe panel must never be blank — keep the loading state and the
   dark error fallback.
 - Geographic camera (where we look on Earth) and screen framing (where
@@ -127,6 +130,14 @@ Shared 2D SVG map (`SharedWorldMap2D`) is used by Intel Watch,
 Cyber News, and Defense Industry. Treat it as frozen: Antarctica
 removed, Russia wrap fixed, accepted projection. Don't re-touch
 unless the task targets it explicitly.
+
+### Karşılama küresi canlı veri notu
+
+Karşılama küresi yalnızca ortak `GlobeActivitySnapshot` sözleşmesini
+kullanmalı ve canlı olay izlenimi veren sahte marker üretmemelidir. Mevcut
+toplama ziyaretçi tarafından tetiklenir; canlıya geçmeden önce zamanlanmış
+toplayıcı ve kalıcı snapshot deposu zorunludur. Ayrıntılar için
+`docs/CANLI_KURE_VERI_YOL_HARITASI.md` belgesine bakın.
 
 ---
 

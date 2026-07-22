@@ -121,7 +121,7 @@ export function HeaderNav({
               <span className="accent-grad-text">{tab.label}</span>
               {active && (
                 <span
-                  className="absolute bottom-0 left-2 right-2 h-[2px] rounded-t-full"
+                  className="nav-active-indicator absolute bottom-0 left-2 right-2 h-[2px] rounded-t-full"
                   style={{ background: "var(--accent-grad)" }}
                 />
               )}

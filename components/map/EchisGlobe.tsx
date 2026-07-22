@@ -46,11 +46,32 @@ export interface GlobeMarker {
   /** Optional visibility window for transient projected cards. */
   displayStartedAtMs?: number;
   displayDurationMs?: number;
+  /** Optional repeating interval for transient projected cards. */
+  displayCycleMs?: number;
   /** Non-visual grouping key used to balance transient cards geographically. */
   regionKey?: string;
   /** Optional — only used when labels are on. */
   label?: string;
   detail?: string;
+}
+
+export type GlobeGeographyKind = "country" | "region";
+
+export interface GlobeGeographySelection {
+  id: string;
+  name: string;
+  kind: GlobeGeographyKind;
+  lng: number;
+  lat: number;
+}
+
+export interface GlobeRegionDefinition {
+  id: string;
+  name: string;
+  lng: number;
+  lat: number;
+  /** One outer ring followed by optional inner rings, in [lng, lat]. */
+  rings: Position[][];
 }
 
 /** Shape of the app's existing MapLibre marker features. */
@@ -87,6 +108,7 @@ export interface EchisGlobeHandle {
   focusMarker: (lng: number, lat: number) => void;
   projectMarker: (lng: number, lat: number) => { x: number; y: number; visible: boolean } | null;
   setAutoRotatePaused: (paused: boolean) => void;
+  resumeAutoRotate: () => void;
 }
 
 export interface EchisGlobeProps {
@@ -95,6 +117,8 @@ export interface EchisGlobeProps {
   markers?: GlobeMarker[];
   /** Show projected HTML labels above markers (default: on for "hero"). */
   showLabels?: boolean;
+  /** Visual treatment for projected marker labels. */
+  markerLabelVariant?: "badge" | "country-card";
   /** Draw admin-1 (province/state) borders integrated into the sphere. */
   showAdminBorders?: boolean;
   /** Draw tiered place-name labels: country names when zoomed out, province/
@@ -114,6 +138,24 @@ export interface EchisGlobeProps {
   selectedMarkerId?: string | null;
   /** Fired when a marker is clicked. */
   onMarkerClick?: (id: string) => void;
+  /** Enables polygon hit-testing on the rendered countries. */
+  enableGeographySelection?: boolean;
+  /** Additional selectable geographic areas, such as maritime corridors. */
+  geographyRegions?: GlobeRegionDefinition[];
+  /** Selected country/region id, used by the cartographic highlight layer. */
+  selectedGeographyId?: string | null;
+  /** Fired with the exact clicked point on a country/region surface. */
+  onGeographySelect?: (geography: GlobeGeographySelection) => void;
+  /** Fired when the pointer crosses a selectable country/region boundary. */
+  onGeographyHover?: (geography: GlobeGeographySelection | null) => void;
+  /** Fired after three compact clicks on empty globe/atmosphere space. */
+  onAtmosphereTripleClick?: () => void;
+  /** Camera-distance reduction applied by focusMarker. */
+  focusZoomOffset?: number;
+  /** Small latitude framing correction, in degrees, applied while focusing. */
+  focusLatitudeBiasDeg?: number;
+  /** Per-frame focus damping. Lower values produce a slower glide. */
+  focusEasing?: number;
   /** Screen-space framing, in px: positive values move the globe left so it
    *  stays clear of a right-hand panel. Geographic camera is untouched. */
   screenOffsetX?: number;
@@ -198,6 +240,8 @@ const DRAG_YAW_SENSITIVITY = 0.0021;
 const DRAG_PITCH_SENSITIVITY = 0.0015;
 const DRAG_ZOOM_FACTOR_MIN = 0.4;
 const DRAG_ZOOM_FACTOR_MAX = 1.0;
+const ATMOSPHERE_CLICK_INTERVAL_MS = 760;
+const ATMOSPHERE_CLICK_RADIUS_PX = 42;
 
 const SIZE_CONFIG: Record<EchisGlobeSize, SizeConfig> = {
   hero: {
@@ -405,7 +449,7 @@ function buildMarkerTexture(level: GlobeMarkerLevel, selected: boolean) {
 }
 
 function addOutlineFromGeo(
-  geo: { features?: Array<{ properties?: { kind?: string }; geometry?: { type?: string; coordinates: Position[][] } }> },
+  geo: OutlineGeo,
   parent: THREE.Object3D,
   radius: number,
   material: THREE.LineBasicMaterial,
@@ -418,7 +462,8 @@ function addOutlineFromGeo(
     geo.features[0];
   if (!outline?.geometry) return null;
   const pos: number[] = [];
-  outline.geometry.coordinates.forEach((line) => {
+  const coordinates = outline.geometry.coordinates as Position[][];
+  coordinates.forEach((line) => {
     for (let i = 1; i < line.length; i += 1) {
       const a = spherePoint(line[i - 1][0], line[i - 1][1], radius);
       const b = spherePoint(line[i][0], line[i][1], radius);
@@ -431,9 +476,205 @@ function addOutlineFromGeo(
   return geom;
 }
 
+type GlobePolygonGeometry =
+  | { type: "Polygon"; coordinates: Position[][] }
+  | { type: "MultiPolygon"; coordinates: Position[][][] };
+
+type OutlineFeature = {
+  properties?: { kind?: string; id?: string; name?: string };
+  geometry?:
+    | GlobePolygonGeometry
+    | { type?: string; coordinates: Position[][] };
+};
+
+type InteractiveGeographyFeature = {
+  selection: GlobeGeographySelection;
+  geometry: GlobePolygonGeometry;
+};
+
+function unwrapRing(ring: Position[]) {
+  const unwrapped: Position[] = [];
+  let previousLng: number | null = null;
+  for (const [rawLng, lat] of ring) {
+    let lng = rawLng;
+    if (previousLng !== null) {
+      while (lng - previousLng > 180) lng -= 360;
+      while (lng - previousLng < -180) lng += 360;
+    }
+    unwrapped.push([lng, lat]);
+    previousLng = lng;
+  }
+  return unwrapped;
+}
+
+function ringContainsPoint(ring: Position[], lng: number, lat: number) {
+  const unwrapped = unwrapRing(ring);
+  if (unwrapped.length < 3) return false;
+  const reference = unwrapped.reduce((sum, point) => sum + point[0], 0) / unwrapped.length;
+  let testLng = lng;
+  while (testLng - reference > 180) testLng -= 360;
+  while (testLng - reference < -180) testLng += 360;
+
+  let inside = false;
+  for (let i = 0, j = unwrapped.length - 1; i < unwrapped.length; j = i, i += 1) {
+    const [xi, yi] = unwrapped[i];
+    const [xj, yj] = unwrapped[j];
+    const crosses =
+      yi > lat !== yj > lat &&
+      testLng < ((xj - xi) * (lat - yi)) / (yj - yi || Number.EPSILON) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function polygonContainsPoint(rings: Position[][], lng: number, lat: number) {
+  if (!rings[0] || !ringContainsPoint(rings[0], lng, lat)) return false;
+  return !rings.slice(1).some((hole) => ringContainsPoint(hole, lng, lat));
+}
+
+function geographyContainsPoint(
+  geometry: GlobePolygonGeometry,
+  lng: number,
+  lat: number,
+) {
+  if (geometry.type === "Polygon") {
+    return polygonContainsPoint(geometry.coordinates, lng, lat);
+  }
+  return geometry.coordinates.some((polygon) =>
+    polygonContainsPoint(polygon, lng, lat),
+  );
+}
+
+function polygonSets(geometry: GlobePolygonGeometry) {
+  return geometry.type === "Polygon"
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+}
+
+function geographyFocusPoint(geometry: GlobePolygonGeometry) {
+  let largest:
+    | { area: number; lng: number; lat: number }
+    | null = null;
+
+  for (const polygon of polygonSets(geometry)) {
+    const outer = polygon[0];
+    if (!outer || outer.length < 3) continue;
+    const ring = unwrapRing(outer);
+    let crossSum = 0;
+    let lngSum = 0;
+    let latSum = 0;
+
+    for (let index = 0; index < ring.length; index += 1) {
+      const current = ring[index];
+      const next = ring[(index + 1) % ring.length];
+      const cross = current[0] * next[1] - next[0] * current[1];
+      crossSum += cross;
+      lngSum += (current[0] + next[0]) * cross;
+      latSum += (current[1] + next[1]) * cross;
+    }
+
+    const area = Math.abs(crossSum);
+    if (area < 1e-6 || (largest && area <= largest.area)) continue;
+    const lng = lngSum / (3 * crossSum);
+    const lat = latSum / (3 * crossSum);
+    largest = {
+      area,
+      lng: ((lng + 540) % 360) - 180,
+      lat: THREE.MathUtils.clamp(lat, -85, 85),
+    };
+  }
+
+  return largest
+    ? { lng: largest.lng, lat: largest.lat }
+    : { lng: 0, lat: 0 };
+}
+
+function buildGeographyOutlineGeometry(
+  geometry: GlobePolygonGeometry,
+  radius: number,
+) {
+  const positions: number[] = [];
+  for (const polygon of polygonSets(geometry)) {
+    for (const ring of polygon) {
+      const unwrapped = unwrapRing(ring);
+      for (let index = 1; index < unwrapped.length; index += 1) {
+        const previous = unwrapped[index - 1];
+        const current = unwrapped[index];
+        const a = spherePoint(previous[0], previous[1], radius);
+        const b = spherePoint(current[0], current[1], radius);
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    }
+  }
+  const buffer = new THREE.BufferGeometry();
+  buffer.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  return buffer;
+}
+
+function buildGeographyFillGeometry(
+  geometry: GlobePolygonGeometry,
+  radius: number,
+) {
+  const positions: number[] = [];
+  const appendTriangle = (
+    a: THREE.Vector2,
+    b: THREE.Vector2,
+    c: THREE.Vector2,
+    depth: number,
+  ) => {
+    if (depth <= 0) {
+      for (const vertex of [a, b, c]) {
+        const point = spherePoint(vertex.x, vertex.y, radius);
+        positions.push(point.x, point.y, point.z);
+      }
+      return;
+    }
+    const ab = new THREE.Vector2((a.x + b.x) / 2, (a.y + b.y) / 2);
+    const bc = new THREE.Vector2((b.x + c.x) / 2, (b.y + c.y) / 2);
+    const ca = new THREE.Vector2((c.x + a.x) / 2, (c.y + a.y) / 2);
+    appendTriangle(a, ab, ca, depth - 1);
+    appendTriangle(ab, b, bc, depth - 1);
+    appendTriangle(ca, bc, c, depth - 1);
+    appendTriangle(ab, bc, ca, depth - 1);
+  };
+
+  for (const polygon of polygonSets(geometry)) {
+    const outer = polygon[0];
+    if (!outer || outer.length < 4) continue;
+    const contour = unwrapRing(outer.slice(0, -1)).map(
+      ([lng, lat]) => new THREE.Vector2(lng, lat),
+    );
+    const faces = THREE.ShapeUtils.triangulateShape(contour, []);
+    for (const face of faces) {
+      const a = contour[face[0]];
+      const b = contour[face[1]];
+      const c = contour[face[2]];
+      const span = Math.max(
+        Math.abs(a.x - b.x),
+        Math.abs(b.x - c.x),
+        Math.abs(c.x - a.x),
+        Math.abs(a.y - b.y),
+        Math.abs(b.y - c.y),
+        Math.abs(c.y - a.y),
+      );
+      const depth = span > 18 ? 3 : span > 8 ? 2 : span > 3 ? 1 : 0;
+      appendTriangle(a, b, c, depth);
+    }
+  }
+  const buffer = new THREE.BufferGeometry();
+  buffer.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  return buffer;
+}
+
 /** Parsed-GeoJSON shape addOutlineFromGeo consumes. */
 type OutlineGeo = {
-  features?: Array<{ properties?: { kind?: string }; geometry?: { type?: string; coordinates: Position[][] } }>;
+  features?: OutlineFeature[];
 };
 
 // Border GeoJSON is fetched + JSON.parsed once per URL, then the parsed result
@@ -499,6 +740,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       autoRotatePaused = false,
       markers = [],
       showLabels,
+      markerLabelVariant = "badge",
       showAdminBorders = false,
       showPlaceLabels = false,
       labelsUrl = "/data/home-globe-labels.json",
@@ -507,6 +749,15 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       showMarkerWaves = true,
       selectedMarkerId = null,
       onMarkerClick,
+      enableGeographySelection = false,
+      geographyRegions = [],
+      selectedGeographyId = null,
+      onGeographySelect,
+      onGeographyHover,
+      onAtmosphereTripleClick,
+      focusZoomOffset = 0.6,
+      focusLatitudeBiasDeg = 0,
+      focusEasing = 0.1,
       screenOffsetX = 0,
       geojsonUrl = "/data/home-globe.geojson",
       adminGeojsonUrl = "/data/home-globe-admin1.geojson",
@@ -524,7 +775,15 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
     const markersRef = useRef<GlobeMarker[]>(markers);
     const markerKeyRef = useRef("");
     const selectedRef = useRef<string | null>(selectedMarkerId);
+    const selectedGeographyRef = useRef<string | null>(selectedGeographyId);
     const onMarkerClickRef = useRef<typeof onMarkerClick>(onMarkerClick);
+    const onGeographySelectRef =
+      useRef<typeof onGeographySelect>(onGeographySelect);
+    const onGeographyHoverRef =
+      useRef<typeof onGeographyHover>(onGeographyHover);
+    const onAtmosphereTripleClickRef =
+      useRef<typeof onAtmosphereTripleClick>(onAtmosphereTripleClick);
+    const geographyRegionsRef = useRef(geographyRegions);
     const [error, setError] = useState<string | null>(null);
 
     const runtimeRef = useRef<{
@@ -533,6 +792,8 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       targetLon: number;
       targetLat: number;
       easing: boolean;
+      easingFactor: number;
+      zoomEasingFactor: number;
       targetZoom: number;
       interactionUntil: number;
       markerKey: string;
@@ -541,8 +802,15 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
     } | null>(null);
 
     const markerKey = useMemo(
-      () => markers.map((m) => `${m.id}:${m.lng}:${m.lat}:${m.level}:${m.pulseStartedAtMs ?? ""}:${m.pulseDurationMs ?? ""}:${m.pulseScale ?? ""}:${m.displayStartedAtMs ?? ""}:${m.displayDurationMs ?? ""}:${m.regionKey ?? ""}`).join("|"),
+      () => markers.map((m) => `${m.id}:${m.lng}:${m.lat}:${m.level}:${m.pulseStartedAtMs ?? ""}:${m.pulseDurationMs ?? ""}:${m.pulseScale ?? ""}:${m.displayStartedAtMs ?? ""}:${m.displayDurationMs ?? ""}:${m.displayCycleMs ?? ""}:${m.regionKey ?? ""}`).join("|"),
       [markers],
+    );
+    const geographyRegionKey = useMemo(
+      () =>
+        geographyRegions
+          .map((region) => `${region.id}:${region.lng}:${region.lat}`)
+          .join("|"),
+      [geographyRegions],
     );
 
     useEffect(() => { pausedRef.current = autoRotatePaused; }, [autoRotatePaused]);
@@ -551,7 +819,22 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       markerKeyRef.current = markerKey;
     }, [markers, markerKey]);
     useEffect(() => { selectedRef.current = selectedMarkerId; }, [selectedMarkerId]);
+    useEffect(() => {
+      selectedGeographyRef.current = selectedGeographyId;
+    }, [selectedGeographyId]);
     useEffect(() => { onMarkerClickRef.current = onMarkerClick; }, [onMarkerClick]);
+    useEffect(() => {
+      onGeographySelectRef.current = onGeographySelect;
+    }, [onGeographySelect]);
+    useEffect(() => {
+      onGeographyHoverRef.current = onGeographyHover;
+    }, [onGeographyHover]);
+    useEffect(() => {
+      onAtmosphereTripleClickRef.current = onAtmosphereTripleClick;
+    }, [onAtmosphereTripleClick]);
+    useEffect(() => {
+      geographyRegionsRef.current = geographyRegions;
+    }, [geographyRegions, geographyRegionKey]);
 
     useImperativeHandle(
       ref,
@@ -559,11 +842,13 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         zoomIn: () => {
           const s = runtimeRef.current; if (!s) return;
           s.targetZoom = Math.max(cfg.zoomMin, s.targetZoom - cfg.zoomStep);
+          s.zoomEasingFactor = 0.06;
           s.interactionUntil = performance.now() + 12_000;
         },
         zoomOut: () => {
           const s = runtimeRef.current; if (!s) return;
           s.targetZoom = Math.min(cfg.zoomMax, s.targetZoom + cfg.zoomStep);
+          s.zoomEasingFactor = 0.06;
           s.interactionUntil = performance.now() + 12_000;
         },
         centerView: () => {
@@ -571,6 +856,8 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
           s.targetLon = FRAME_YAW;
           s.targetLat = FRAME_PITCH;
           s.easing = true;
+          s.easingFactor = 0.1;
+          s.zoomEasingFactor = 0.06;
           s.targetZoom = cfg.zoom;
           s.interactionUntil = performance.now() + 5_000;
         },
@@ -579,15 +866,30 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
           // Bring the marker to frame centre with north still up (centre lng =
           // -lon, centre lat = lat) — no roll, unlike a look-at quaternion.
           s.targetLon = THREE.MathUtils.degToRad(-lng);
-          s.targetLat = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(lat), -MAX_TILT, MAX_TILT);
+          s.targetLat = THREE.MathUtils.clamp(
+            THREE.MathUtils.degToRad(lat + focusLatitudeBiasDeg),
+            -MAX_TILT,
+            MAX_TILT,
+          );
           s.easing = true;
-          s.targetZoom = Math.max(cfg.zoomMin, cfg.zoom - 0.6);
+          s.easingFactor = focusEasing;
+          s.zoomEasingFactor = Math.max(0.02, focusEasing * 0.75);
+          s.targetZoom = Math.max(cfg.zoomMin, cfg.zoom - focusZoomOffset);
           s.interactionUntil = performance.now() + 12_000;
         },
         projectMarker: (lng, lat) => runtimeRef.current?.project(lng, lat) ?? null,
         setAutoRotatePaused: (paused) => { pausedRef.current = paused; },
+        resumeAutoRotate: () => {
+          const s = runtimeRef.current;
+          if (!s) return;
+          pausedRef.current = false;
+          s.easing = false;
+          s.targetZoom = cfg.zoom;
+          s.zoomEasingFactor = 0.045;
+          s.interactionUntil = 0;
+        },
       }),
-      [cfg],
+      [cfg, focusEasing, focusLatitudeBiasDeg, focusZoomOffset],
     );
 
     useEffect(() => {
@@ -629,6 +931,127 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       );
       globe.add(sphere);
       disposables.push(sphere.geometry, sphere.material as THREE.Material);
+
+      const countryGeographies: InteractiveGeographyFeature[] = [];
+      const regionGeographies: InteractiveGeographyFeature[] =
+        geographyRegionsRef.current.map((region) => ({
+          selection: {
+            id: region.id,
+            name: region.name,
+            kind: "region",
+            lng: region.lng,
+            lat: region.lat,
+          },
+          geometry: { type: "Polygon", coordinates: region.rings },
+        }));
+      const geographyById = new Map<string, InteractiveGeographyFeature>();
+      regionGeographies.forEach((feature) =>
+        geographyById.set(feature.selection.id, feature),
+      );
+
+      const regionGuideMaterial = new THREE.LineBasicMaterial({
+        color: 0xc9824d,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+      });
+      disposables.push(regionGuideMaterial);
+      for (const region of regionGeographies) {
+        const geometry = buildGeographyOutlineGeometry(
+          region.geometry,
+          RADIUS + 0.008,
+        );
+        const guide = new THREE.LineSegments(geometry, regionGuideMaterial);
+        guide.renderOrder = 1;
+        globe.add(guide);
+        disposables.push(geometry);
+      }
+
+      const selectedFillMaterial = new THREE.MeshBasicMaterial({
+        color: 0xd31f35,
+        transparent: true,
+        opacity: 0.13,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const selectedLineMaterial = new THREE.LineBasicMaterial({
+        color: 0xff6575,
+        transparent: true,
+        opacity: 0.96,
+        depthWrite: false,
+      });
+      const hoverFillMaterial = new THREE.MeshBasicMaterial({
+        color: 0xc9824d,
+        transparent: true,
+        opacity: 0.09,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const hoverLineMaterial = new THREE.LineBasicMaterial({
+        color: 0xffb078,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+      });
+      disposables.push(
+        selectedFillMaterial,
+        selectedLineMaterial,
+        hoverFillMaterial,
+        hoverLineMaterial,
+      );
+
+      const selectedFill = new THREE.Mesh(
+        new THREE.BufferGeometry(),
+        selectedFillMaterial,
+      );
+      const selectedLine = new THREE.LineSegments(
+        new THREE.BufferGeometry(),
+        selectedLineMaterial,
+      );
+      const hoverFill = new THREE.Mesh(
+        new THREE.BufferGeometry(),
+        hoverFillMaterial,
+      );
+      const hoverLine = new THREE.LineSegments(
+        new THREE.BufferGeometry(),
+        hoverLineMaterial,
+      );
+      selectedFill.visible = false;
+      selectedLine.visible = false;
+      hoverFill.visible = false;
+      hoverLine.visible = false;
+      selectedFill.renderOrder = 2;
+      selectedLine.renderOrder = 4;
+      hoverFill.renderOrder = 3;
+      hoverLine.renderOrder = 5;
+      globe.add(selectedFill, selectedLine, hoverFill, hoverLine);
+
+      const setGeographyHighlight = (
+        fill: THREE.Mesh,
+        line: THREE.LineSegments,
+        feature: InteractiveGeographyFeature | null,
+        radiusOffset: number,
+      ) => {
+        fill.geometry.dispose();
+        line.geometry.dispose();
+        if (!feature) {
+          fill.geometry = new THREE.BufferGeometry();
+          line.geometry = new THREE.BufferGeometry();
+          fill.visible = false;
+          line.visible = false;
+          return;
+        }
+        fill.geometry = buildGeographyFillGeometry(
+          feature.geometry,
+          RADIUS + radiusOffset,
+        );
+        line.geometry = buildGeographyOutlineGeometry(
+          feature.geometry,
+          RADIUS + radiusOffset + 0.004,
+        );
+        fill.visible = true;
+        line.visible = true;
+      };
 
       if (cfg.graticule) {
         const pos: number[] = [];
@@ -742,10 +1165,23 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
             // (ACES tone mapping would mute it away from the MapLibre pin).
             const texDefault = getPinTexture(marker.level, false);
             const texSelected = getPinTexture(marker.level, true);
-            const pinMat = new THREE.SpriteMaterial({ map: texDefault, transparent: true, depthWrite: false, toneMapped: false });
+            // The pin is a screen-facing billboard whose tip sits on the
+            // sphere. Keeping depth testing enabled lets the curved globe
+            // occlude the upper part of that flat billboard, most visibly on
+            // the lower hemisphere while rotating. Back-side visibility is
+            // already handled explicitly in the animation loop, so render the
+            // complete front-side pin above the globe surface.
+            const pinMat = new THREE.SpriteMaterial({
+              map: texDefault,
+              transparent: true,
+              depthTest: false,
+              depthWrite: false,
+              toneMapped: false,
+            });
             const pin = new THREE.Sprite(pinMat);
             pin.center.set(0.5, 0);
             pin.position.copy(p);
+            pin.renderOrder = 20;
             pin.userData.markerId = marker.id;
             globe.add(pin);
             pickTargets.push(pin);
@@ -814,6 +1250,8 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         targetLon: FRAME_YAW,
         targetLat: FRAME_PITCH,
         easing: false,
+        easingFactor: 0.1,
+        zoomEasingFactor: 0.06,
         targetZoom: cfg.zoom,
         interactionUntil: 0,
         /** Marker set currently in the scene — lets the marker effect skip the
@@ -844,7 +1282,44 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
 
       let cancelled = false;
       loadOutlineGeo(geojsonUrl)
-        .then((geo) => { if (!cancelled) { const g = addOutlineFromGeo(geo, globe, RADIUS + 0.006, borderMat, "outline"); if (g) disposables.push(g); } })
+        .then((geo) => {
+          if (cancelled) return;
+          const g = addOutlineFromGeo(
+            geo,
+            globe,
+            RADIUS + 0.006,
+            borderMat,
+            "outline",
+          );
+          if (g) disposables.push(g);
+          if (!enableGeographySelection) return;
+
+          for (const feature of geo.features ?? []) {
+            const { id, kind, name } = feature.properties ?? {};
+            const geometry = feature.geometry;
+            if (
+              kind !== "land" ||
+              !id ||
+              !name ||
+              !geometry ||
+              (geometry.type !== "Polygon" &&
+                geometry.type !== "MultiPolygon")
+            ) {
+              continue;
+            }
+            const interactive: InteractiveGeographyFeature = {
+              selection: {
+                id: `country-${id}`,
+                name,
+                kind: "country",
+                ...geographyFocusPoint(geometry as GlobePolygonGeometry),
+              },
+              geometry: geometry as GlobePolygonGeometry,
+            };
+            countryGeographies.push(interactive);
+            geographyById.set(interactive.selection.id, interactive);
+          }
+        })
         .catch(() => {});
       if (showAdminBorders) {
         loadOutlineGeo(adminGeojsonUrl)
@@ -1061,6 +1536,53 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       const hoverNdc = new THREE.Vector2();
       let hoverDirty = false;
       let hoveredId: string | null = null;
+      let hoveredGeographyId: string | null = null;
+      let appliedHoveredGeographyId: string | null = null;
+      let appliedSelectedGeographyId: string | null = null;
+      const geographyLocalPoint = new THREE.Vector3();
+      let atmosphereClickCount = 0;
+      let atmosphereLastClickAt = 0;
+      let atmosphereLastClickX = 0;
+      let atmosphereLastClickY = 0;
+      let atmosphereClickTimer: number | null = null;
+
+      const resetAtmosphereClicks = () => {
+        atmosphereClickCount = 0;
+        atmosphereLastClickAt = 0;
+        if (atmosphereClickTimer !== null) {
+          window.clearTimeout(atmosphereClickTimer);
+          atmosphereClickTimer = null;
+        }
+      };
+
+      const registerAtmosphereClick = (event: PointerEvent) => {
+        const now = performance.now();
+        const deltaX = event.clientX - atmosphereLastClickX;
+        const deltaY = event.clientY - atmosphereLastClickY;
+        const closeInTime =
+          now - atmosphereLastClickAt <= ATMOSPHERE_CLICK_INTERVAL_MS;
+        const closeInSpace =
+          Math.hypot(deltaX, deltaY) <= ATMOSPHERE_CLICK_RADIUS_PX;
+
+        atmosphereClickCount =
+          closeInTime && closeInSpace ? atmosphereClickCount + 1 : 1;
+        atmosphereLastClickAt = now;
+        atmosphereLastClickX = event.clientX;
+        atmosphereLastClickY = event.clientY;
+
+        if (atmosphereClickTimer !== null) {
+          window.clearTimeout(atmosphereClickTimer);
+        }
+        atmosphereClickTimer = window.setTimeout(
+          resetAtmosphereClicks,
+          ATMOSPHERE_CLICK_INTERVAL_MS,
+        );
+
+        if (atmosphereClickCount === 3) {
+          resetAtmosphereClicks();
+          onAtmosphereTripleClickRef.current?.();
+        }
+      };
 
       /** Nearest front-facing marker under the given NDC point, if any. */
       const pickMarkerAt = (point: THREE.Vector2) => {
@@ -1071,6 +1593,35 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         // three.js raycasts hidden objects too, so filter explicitly.
         const nearest = hits.find((h) => h.object.visible);
         return (nearest?.object.userData.markerId as string | undefined) ?? null;
+      };
+
+      const pickGeographyAt = (point: THREE.Vector2) => {
+        if (!enableGeographySelection) return null;
+        raycaster.setFromCamera(point, camera);
+        const hit = raycaster.intersectObject(sphere, false)[0];
+        if (!hit) return null;
+        geographyLocalPoint.copy(hit.point);
+        globe.worldToLocal(geographyLocalPoint);
+        const length = geographyLocalPoint.length();
+        if (!length) return null;
+        const lng = THREE.MathUtils.radToDeg(
+          Math.atan2(geographyLocalPoint.x, geographyLocalPoint.z),
+        );
+        const lat = THREE.MathUtils.radToDeg(
+          Math.asin(
+            THREE.MathUtils.clamp(geographyLocalPoint.y / length, -1, 1),
+          ),
+        );
+        const containsPoint = (candidate: InteractiveGeographyFeature) =>
+          geographyContainsPoint(candidate.geometry, lng, lat);
+        const feature =
+          countryGeographies.find(containsPoint) ??
+          regionGeographies.find(containsPoint);
+        if (!feature) return null;
+        return {
+          feature,
+          selection: feature.selection,
+        };
       };
 
       const onPointerDown = (event: PointerEvent) => {
@@ -1104,23 +1655,43 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
       };
       const onPointerUp = (event: PointerEvent) => {
         dragging = false;
-        if (moved < 5 && onMarkerClickRef.current) {
+        if (moved < 5) {
           const rect = el.getBoundingClientRect();
           ndc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
           ndc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-          const id = pickMarkerAt(ndc);
-          if (id) onMarkerClickRef.current(id);
+          const id = onMarkerClickRef.current ? pickMarkerAt(ndc) : null;
+          if (id) {
+            resetAtmosphereClicks();
+            onMarkerClickRef.current?.(id);
+            return;
+          }
+          const geography = pickGeographyAt(ndc);
+          if (geography) {
+            resetAtmosphereClicks();
+            onGeographySelectRef.current?.(geography.selection);
+            return;
+          }
+          registerAtmosphereClick(event);
+          return;
         }
+        resetAtmosphereClicks();
       };
-      const onPointerCancel = () => { dragging = false; };
+      const onPointerCancel = () => {
+        dragging = false;
+        resetAtmosphereClicks();
+      };
       const onPointerLeave = () => {
+        resetAtmosphereClicks();
         hoverDirty = false;
         hoveredId = null;
+        hoveredGeographyId = null;
+        onGeographyHoverRef.current?.(null);
         el.style.cursor = "grab";
       };
       const onWheel = (event: WheelEvent) => {
         event.preventDefault();
         state.targetZoom = THREE.MathUtils.clamp(state.targetZoom + event.deltaY * 0.002, cfg.zoomMin, cfg.zoomMax);
+        state.zoomEasingFactor = 0.06;
         state.interactionUntil = performance.now() + 12_000;
       };
       el.addEventListener("pointerdown", onPointerDown);
@@ -1150,8 +1721,8 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
           let deltaLon = state.targetLon - state.lon;
           deltaLon = Math.atan2(Math.sin(deltaLon), Math.cos(deltaLon)); // shortest signed path
           const deltaLat = state.targetLat - state.lat;
-          state.lon += deltaLon * 0.1;
-          state.lat += deltaLat * 0.1;
+          state.lon += deltaLon * state.easingFactor;
+          state.lat += deltaLat * state.easingFactor;
           if (Math.abs(deltaLon) < 0.002 && Math.abs(deltaLat) < 0.002) {
             state.lon = state.targetLon;
             state.lat = state.targetLat;
@@ -1163,7 +1734,11 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         state.lat = THREE.MathUtils.clamp(state.lat, -MAX_TILT, MAX_TILT);
         globe.rotation.set(state.lat, state.lon, 0);
 
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, state.targetZoom, 0.06);
+        camera.position.z = THREE.MathUtils.lerp(
+          camera.position.z,
+          state.targetZoom,
+          state.zoomEasingFactor,
+        );
 
         // Reveal the admin-1 borders by zoom: invisible at the wide framing,
         // fading in as the camera closes past ADMIN_FADE_START_Z (~4th zoom-in
@@ -1179,14 +1754,61 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
 
         if (hoverDirty) {
           hoverDirty = false;
-          const nextHovered = dragging ? null : pickMarkerAt(hoverNdc);
+          const nextHovered =
+            dragging || !onMarkerClickRef.current
+              ? null
+              : pickMarkerAt(hoverNdc);
+          const nextGeography =
+            dragging || nextHovered ? null : pickGeographyAt(hoverNdc);
           if (nextHovered !== hoveredId) {
             hoveredId = nextHovered;
-            el.style.cursor = hoveredId ? "pointer" : "grab";
           }
+          const nextGeographyId =
+            nextGeography?.feature.selection.id ?? null;
+          if (nextGeographyId !== hoveredGeographyId) {
+            hoveredGeographyId = nextGeographyId;
+            onGeographyHoverRef.current?.(
+              nextGeography?.selection ?? null,
+            );
+          }
+          el.style.cursor =
+            hoveredId || hoveredGeographyId ? "pointer" : "grab";
         }
 
         const gq = globe.quaternion;
+        const selectedGeographyIdNow = selectedGeographyRef.current;
+        if (
+          selectedGeographyIdNow !== appliedSelectedGeographyId ||
+          (selectedGeographyIdNow !== null && !selectedLine.visible)
+        ) {
+          const selectedGeography = selectedGeographyIdNow
+            ? geographyById.get(selectedGeographyIdNow) ?? null
+            : null;
+          setGeographyHighlight(
+            selectedFill,
+            selectedLine,
+            selectedGeography,
+            0.008,
+          );
+          appliedSelectedGeographyId = selectedGeography
+            ? selectedGeographyIdNow
+            : null;
+        }
+        const visibleHoveredGeographyId =
+          hoveredGeographyId === selectedGeographyIdNow
+            ? null
+            : hoveredGeographyId;
+        if (visibleHoveredGeographyId !== appliedHoveredGeographyId) {
+          setGeographyHighlight(
+            hoverFill,
+            hoverLine,
+            visibleHoveredGeographyId
+              ? geographyById.get(visibleHoveredGeographyId) ?? null
+              : null,
+            0.01,
+          );
+          appliedHoveredGeographyId = visibleHoveredGeographyId;
+        }
         const selId = selectedRef.current;
         let hoverStillPresent = false;
         for (const mk of markerRuntimes) {
@@ -1257,12 +1879,25 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
               const hasDisplayWindow =
                 mk.marker.displayStartedAtMs !== undefined &&
                 mk.marker.displayDurationMs !== undefined;
+              const displayElapsed = hasDisplayWindow
+                ? now - mk.marker.displayStartedAtMs!
+                : 0;
+              const cycledElapsed =
+                hasDisplayWindow && mk.marker.displayCycleMs
+                  ? ((displayElapsed % mk.marker.displayCycleMs) +
+                      mk.marker.displayCycleMs) %
+                    mk.marker.displayCycleMs
+                  : displayElapsed;
               const displayProgress = hasDisplayWindow
-                ? (now - mk.marker.displayStartedAtMs!) / mk.marker.displayDurationMs!
+                ? cycledElapsed / mk.marker.displayDurationMs!
                 : 0.5;
               const fadeIn = THREE.MathUtils.clamp(displayProgress / 0.16, 0, 1);
               const fadeOut = THREE.MathUtils.clamp((1 - displayProgress) / 0.27, 0, 1);
-              const displayOpacity = hasDisplayWindow ? Math.min(fadeIn, fadeOut) : 1;
+              const displayOpacity = hasDisplayWindow && displayProgress >= 0 && displayProgress < 1
+                ? Math.min(fadeIn, fadeOut)
+                : hasDisplayWindow
+                  ? 0
+                  : 1;
               labelEl.style.transform = `translate(${x}px, ${y}px)`;
               labelEl.style.opacity = front ? displayOpacity.toFixed(3) : "0";
             }
@@ -1274,7 +1909,7 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         // follows, so the cursor has to be released here.
         if (hoveredId && !hoverStillPresent) {
           hoveredId = null;
-          el.style.cursor = "grab";
+          el.style.cursor = hoveredGeographyId ? "pointer" : "grab";
         }
 
         if (showPlaceLabels) updatePlaceLabels(gq, now);
@@ -1293,15 +1928,20 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
         el.removeEventListener("pointercancel", onPointerCancel);
         el.removeEventListener("pointerleave", onPointerLeave);
         el.removeEventListener("wheel", onWheel);
+        resetAtmosphereClicks();
         runtimeRef.current = null;
         disposeMarkers();
+        selectedFill.geometry.dispose();
+        selectedLine.geometry.dispose();
+        hoverFill.geometry.dispose();
+        hoverLine.geometry.dispose();
         if (labelLayer) labelLayer.remove();
         disposables.forEach((d) => { try { d.dispose(); } catch { /* noop */ } });
         renderer.dispose();
         renderer.forceContextLoss();
         el.remove();
       };
-    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, showMarkerWaves, cfg]);
+    }, [size, geojsonUrl, adminGeojsonUrl, showAdminBorders, showPlaceLabels, labelsUrl, labelsEnabled, screenOffsetX, markerShape, showMarkerCore, showMarkerWaves, enableGeographySelection, geographyRegionKey, cfg]);
 
     // Marker updates are applied to the live scene — rebuilding the renderer
     // here would reset the camera mid-drag every time a feed batch lands.
@@ -1327,30 +1967,67 @@ export const EchisGlobe = forwardRef<EchisGlobeHandle, EchisGlobeProps>(
               style={{
                 position: "absolute", left: 0, top: 0, zIndex: 7, pointerEvents: "none",
                 opacity: 0, transform: "translate(-2000px,-2000px)", willChange: "transform, opacity",
-                transition: "opacity .28s ease",
+                transition: markerLabelVariant === "country-card" ? "opacity .6s ease" : "opacity .28s ease",
               }}
             >
               <div style={{ position: "absolute", left: 0, bottom: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <div
                   style={{
-                    display: "flex", flexDirection: "column", gap: 1, padding: "4px 7px",
-                    border: marker.level === "critical" ? "1px solid rgba(239,61,79,.32)" : "1px solid rgba(255,255,255,.1)",
-                    borderRadius: 8,
-                    background: marker.level === "critical" ? "rgba(15,7,9,.78)" : "rgba(9,8,10,.76)",
-                    backdropFilter: "blur(10px)", boxShadow: "0 12px 34px rgba(0,0,0,.45)", whiteSpace: "nowrap",
+                    display: "flex", flexDirection: "column",
+                    gap: markerLabelVariant === "country-card" ? 5 : 1,
+                    minWidth: markerLabelVariant === "country-card" ? 116 : undefined,
+                    padding: markerLabelVariant === "country-card" ? "9px 11px 8px" : "4px 7px",
+                    border: markerLabelVariant === "country-card"
+                      ? "1px solid rgba(231,235,240,.12)"
+                      : marker.level === "critical" ? "1px solid rgba(239,61,79,.32)" : "1px solid rgba(255,255,255,.1)",
+                    borderLeftColor: markerLabelVariant === "country-card"
+                      ? marker.level === "high" || marker.level === "critical"
+                        ? "rgba(224,76,91,.62)"
+                        : "rgba(209,215,224,.34)"
+                      : undefined,
+                    borderRadius: markerLabelVariant === "country-card" ? 2 : 8,
+                    background: markerLabelVariant === "country-card"
+                      ? "linear-gradient(135deg,rgba(15,14,17,.84),rgba(7,7,9,.68))"
+                      : marker.level === "critical" ? "rgba(15,7,9,.78)" : "rgba(9,8,10,.76)",
+                    backdropFilter: markerLabelVariant === "country-card" ? "blur(14px) saturate(.78)" : "blur(10px)",
+                    boxShadow: markerLabelVariant === "country-card"
+                      ? "0 18px 46px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.025)"
+                      : "0 12px 34px rgba(0,0,0,.45)",
+                    whiteSpace: "nowrap",
                     fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
                   }}
                 >
-                  <span style={{ fontSize: 7, fontWeight: 650, letterSpacing: ".1em", color: marker.level === "critical" ? "rgba(235,72,72,.94)" : "rgba(216,220,226,.86)" }}>
+                  <span style={{
+                    fontSize: markerLabelVariant === "country-card" ? 8 : 7,
+                    fontWeight: markerLabelVariant === "country-card" ? 560 : 650,
+                    letterSpacing: markerLabelVariant === "country-card" ? ".13em" : ".1em",
+                    color: markerLabelVariant === "country-card"
+                      ? "rgba(231,234,239,.9)"
+                      : marker.level === "critical" ? "rgba(235,72,72,.94)" : "rgba(216,220,226,.86)",
+                  }}>
                     {(marker.label ?? marker.id).toUpperCase()}
                   </span>
                   {marker.detail && (
-                    <span style={{ fontSize: 6, letterSpacing: ".07em", color: marker.level === "critical" ? "rgba(235,72,72,.8)" : "rgba(200,117,46,.9)" }}>
+                    <span style={{
+                      fontSize: markerLabelVariant === "country-card" ? 6 : 6,
+                      letterSpacing: markerLabelVariant === "country-card" ? ".11em" : ".07em",
+                      color: markerLabelVariant === "country-card"
+                        ? "rgba(147,157,171,.72)"
+                        : marker.level === "critical" ? "rgba(235,72,72,.8)" : "rgba(200,117,46,.9)",
+                    }}>
                       {marker.detail}
                     </span>
                   )}
                 </div>
-                <div style={{ width: 1, height: 16, background: marker.level === "critical" ? "linear-gradient(180deg,rgba(255,60,74,.3),rgba(255,60,74,.9))" : "linear-gradient(180deg,rgba(255,120,80,.3),rgba(255,120,80,.85))" }} />
+                <div style={{
+                  width: 1,
+                  height: markerLabelVariant === "country-card" ? 19 : 16,
+                  background: markerLabelVariant === "country-card"
+                    ? marker.level === "high" || marker.level === "critical"
+                      ? "linear-gradient(180deg,rgba(210,65,81,.18),rgba(226,74,91,.72))"
+                      : "linear-gradient(180deg,rgba(201,207,216,.08),rgba(201,207,216,.48))"
+                    : marker.level === "critical" ? "linear-gradient(180deg,rgba(255,60,74,.3),rgba(255,60,74,.9))" : "linear-gradient(180deg,rgba(255,120,80,.3),rgba(255,120,80,.85))",
+                }} />
                 {showMarkerCore && (
                   <div style={{ width: 7, height: 7, borderRadius: "50%", marginTop: -1, background: marker.level === "critical" ? "#ef3d4f" : "#ff7a3c", boxShadow: marker.level === "critical" ? "0 0 12px rgba(239,61,79,.9)" : "0 0 10px rgba(255,122,60,.85)" }} />
                 )}

@@ -1,0 +1,861 @@
+.root {
+  --landing-red: #f2384d;
+  --landing-amber: #d5743f;
+  --landing-white: rgba(239, 242, 246, 0.94);
+  --landing-silver: rgba(175, 183, 195, 0.76);
+  --landing-dim: rgba(113, 123, 139, 0.56);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--landing-white);
+  background:
+    radial-gradient(circle at 48% 49%, rgba(39, 6, 13, 0.24), transparent 40%),
+    radial-gradient(circle at 81% 48%, rgba(103, 10, 24, 0.06), transparent 34%),
+    linear-gradient(150deg, #070608 0%, #030304 62%, #060406 100%);
+  font-family: var(--font-ui), "Hanken Grotesk", sans-serif;
+}
+
+.root button {
+  font: inherit;
+}
+
+.globeStage {
+  position: absolute;
+  inset: -1.5% 0 -1%;
+  z-index: 1;
+}
+
+.surfaceLight,
+.edgeVignette,
+.fineGrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.surfaceLight {
+  z-index: 2;
+  background:
+    radial-gradient(circle at 48% 48%, transparent 30%, rgba(182, 24, 46, 0.035) 48%, transparent 64%),
+    linear-gradient(90deg, rgba(4, 3, 5, 0.42), transparent 25%, transparent 78%, rgba(5, 3, 5, 0.56));
+  transition:
+    background 320ms ease,
+    opacity 260ms ease;
+}
+
+.root[data-selected] .surfaceLight {
+  background:
+    linear-gradient(90deg, transparent 0%, transparent 62%, rgba(3, 3, 4, 0.44) 72%, rgba(3, 3, 4, 0.92) 84%, #030304 100%),
+    radial-gradient(circle at 48% 48%, transparent 30%, rgba(182, 24, 46, 0.025) 48%, transparent 64%);
+}
+
+.edgeVignette {
+  z-index: 3;
+  box-shadow:
+    inset 0 80px 90px rgba(2, 2, 3, 0.54),
+    inset 0 -90px 110px rgba(2, 2, 3, 0.62),
+    inset 90px 0 120px rgba(2, 2, 3, 0.48),
+    inset -80px 0 110px rgba(2, 2, 3, 0.48);
+}
+
+.fineGrid {
+  z-index: 2;
+  opacity: 0.075;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(circle at 49% 49%, transparent 27%, black 83%);
+}
+
+.topBar {
+  position: absolute;
+  z-index: 30;
+  top: 24px;
+  left: 32px;
+  right: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  animation: topBarIn 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: opacity 220ms ease;
+}
+
+.scopeLabel,
+.systemState {
+  display: flex;
+  align-items: center;
+}
+
+.scopeLabel {
+  gap: 9px;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6px;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.scopeLabel span {
+  color: rgba(246, 79, 98, 0.82);
+}
+
+.scopeLabel i {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(242, 56, 77, 0.7), transparent);
+}
+
+.scopeLabel strong {
+  color: rgba(151, 161, 175, 0.68);
+  font-size: 6px;
+  font-weight: 560;
+}
+
+.systemState {
+  gap: 9px;
+  color: rgba(135, 145, 159, 0.66);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.systemState > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.systemState small {
+  font-size: 5.5px;
+  letter-spacing: 0.15em;
+}
+
+.systemState strong {
+  color: rgba(201, 207, 216, 0.86);
+  font-size: 7px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+
+.systemState > i {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.17), transparent);
+}
+
+.systemDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(175, 184, 196, 0.84);
+  box-shadow: 0 0 10px rgba(175, 184, 196, 0.3);
+  animation: statusPulse 2.4s ease-in-out infinite;
+}
+
+.systemState[data-state="ready"] .systemDot {
+  background: #9fc9ae;
+  box-shadow: 0 0 12px rgba(117, 195, 145, 0.42);
+}
+
+.systemState[data-state="ready"] strong {
+  color: rgba(173, 211, 187, 0.9);
+}
+
+.systemState[data-state="partial"] .systemDot {
+  background: #d29155;
+  box-shadow: 0 0 12px rgba(210, 145, 85, 0.42);
+}
+
+.systemState[data-state="partial"] strong {
+  color: rgba(222, 174, 116, 0.92);
+}
+
+.systemState[data-state="stale"] .systemDot {
+  background: #bc845e;
+  box-shadow: 0 0 12px rgba(188, 132, 94, 0.38);
+}
+
+.systemState[data-state="stale"] strong {
+  color: rgba(205, 160, 125, 0.88);
+}
+
+.systemState[data-state="error"] .systemDot {
+  background: #ed5062;
+  box-shadow: 0 0 12px rgba(237, 80, 98, 0.5);
+}
+
+.systemState[data-state="error"] strong {
+  color: rgba(239, 102, 119, 0.92);
+}
+
+.systemDetail {
+  max-width: 155px;
+  overflow: hidden;
+  font-size: 6px;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.leaderPath {
+  fill: none;
+  stroke: rgba(213, 116, 63, 0.82);
+  stroke-width: 1;
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  filter: drop-shadow(0 0 4px rgba(213, 92, 52, 0.18));
+  transition:
+    opacity 240ms ease,
+    stroke-dashoffset 560ms cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+
+.leaderPath[data-ready][data-projected] {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+.orientation {
+  position: absolute;
+  z-index: 18;
+  left: clamp(30px, 4vw, 66px);
+  bottom: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 265px;
+  pointer-events: none;
+  animation: captionIn 480ms 180ms ease both;
+}
+
+.orientation > span,
+.selectedPlaceCaption > span {
+  color: rgba(243, 73, 94, 0.72);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6px;
+  font-weight: 650;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.orientation p {
+  margin: 0;
+  color: rgba(166, 176, 189, 0.68);
+  font-family: var(--font-display), "Space Grotesk", sans-serif;
+  font-size: clamp(16px, 1.6vw, 22px);
+  font-weight: 430;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+}
+
+.activityMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 14px;
+  color: rgba(116, 127, 142, 0.58);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 5.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.activityMeta i {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(137, 197, 158, 0.8);
+  box-shadow: 0 0 8px rgba(116, 190, 143, 0.34);
+}
+
+.root[data-activity-state="loading"] .activityMeta i {
+  background: rgba(177, 185, 197, 0.74);
+  box-shadow: 0 0 8px rgba(177, 185, 197, 0.25);
+  animation: statusPulse 2.4s ease-in-out infinite;
+}
+
+.root[data-activity-state="partial"] .activityMeta i,
+.root[data-activity-state="stale"] .activityMeta i {
+  background: rgba(205, 145, 91, 0.82);
+  box-shadow: 0 0 8px rgba(205, 145, 91, 0.28);
+}
+
+.root[data-activity-state="unavailable"] .activityMeta i {
+  background: rgba(218, 76, 94, 0.82);
+  box-shadow: 0 0 8px rgba(218, 76, 94, 0.3);
+}
+
+.activityMeta small {
+  padding-left: 8px;
+  color: rgba(102, 113, 128, 0.44);
+  font-size: inherit;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.selectedPlaceCaption {
+  position: absolute;
+  z-index: 20;
+  left: clamp(30px, 4vw, 66px);
+  bottom: 83px;
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+  border-left: 1px solid rgba(242, 56, 77, 0.78);
+  background: linear-gradient(90deg, rgba(5, 4, 6, 0.58), transparent);
+  opacity: 0;
+  transform: translateY(7px);
+  transition:
+    opacity 260ms ease,
+    transform 360ms cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+
+.selectedPlaceCaption[data-ready] {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 40ms;
+}
+
+.selectedPlaceCaption > strong {
+  margin-top: 8px;
+  color: rgba(235, 239, 244, 0.94);
+  font-family: var(--font-display), "Space Grotesk", sans-serif;
+  font-size: clamp(22px, 2.25vw, 31px);
+  font-weight: 520;
+  letter-spacing: -0.04em;
+}
+
+.selectedPlaceCaption > small {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 5px;
+  color: rgba(127, 137, 151, 0.66);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.selectedPlaceCaption > small i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(218, 88, 69, 0.7);
+}
+
+.contextGateway {
+  position: absolute;
+  z-index: 24;
+  top: 48%;
+  right: clamp(25px, 3vw, 48px);
+  width: min(278px, 25vw);
+  opacity: 0;
+  transform: translate(12px, -50%);
+  transition:
+    opacity 280ms ease,
+    transform 430ms cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+
+.contextGateway[data-ready] {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 90ms;
+}
+
+.clearSelection {
+  position: absolute;
+  top: -17px;
+  right: 0;
+  padding: 0;
+  color: rgba(112, 122, 137, 0.58);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 5.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.clearSelection:hover,
+.clearSelection:focus-visible {
+  color: rgba(235, 239, 244, 0.88);
+  outline: none;
+}
+
+.gatewayHeading h1 {
+  margin: 0;
+  color: rgba(239, 242, 246, 0.96);
+  font-family: var(--font-display), "Space Grotesk", sans-serif;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 520;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.gatewayHeading p {
+  margin: 7px 0 0;
+  color: rgba(158, 167, 180, 0.7);
+  font-size: 8.5px;
+  letter-spacing: 0.015em;
+  line-height: 1.45;
+}
+
+.contextTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 23px;
+  padding: 12px 0 9px;
+  color: rgba(151, 161, 175, 0.74);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-top: 1px solid rgba(213, 116, 63, 0.36);
+}
+
+.contextTitle small {
+  color: rgba(116, 126, 141, 0.48);
+  font-size: 5.5px;
+}
+
+.contextRoutes {
+  display: flex;
+  flex-direction: column;
+}
+
+.contextRoutes button {
+  display: grid;
+  grid-template-columns: 33px 1fr;
+  align-items: center;
+  min-height: 46px;
+  padding: 0;
+  color: rgba(172, 181, 193, 0.78);
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateX(7px);
+  transition:
+    color 170ms ease,
+    padding-left 190ms ease,
+    border-color 170ms ease,
+    opacity 240ms ease,
+    transform 340ms cubic-bezier(0.22, 0.8, 0.22, 1);
+}
+
+.contextGateway[data-ready] .contextRoutes button {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.contextGateway[data-ready] .contextRoutes button:nth-child(1) {
+  transition-delay: 0ms, 0ms, 0ms, 150ms, 150ms;
+}
+
+.contextGateway[data-ready] .contextRoutes button:nth-child(2) {
+  transition-delay: 0ms, 0ms, 0ms, 190ms, 190ms;
+}
+
+.contextGateway[data-ready] .contextRoutes button:nth-child(3) {
+  transition-delay: 0ms, 0ms, 0ms, 230ms, 230ms;
+}
+
+.contextGateway[data-ready] .contextRoutes button:nth-child(4) {
+  transition-delay: 0ms, 0ms, 0ms, 270ms, 270ms;
+}
+
+.contextRoutes button > span {
+  color: rgba(137, 147, 161, 0.66);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6.5px;
+  letter-spacing: 0.1em;
+  transition: color 170ms ease;
+}
+
+.contextRoutes button > strong {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.contextRoutes button:hover,
+.contextRoutes button:focus-visible {
+  padding-left: 5px;
+  color: rgba(250, 90, 108, 0.94);
+  border-color: rgba(242, 56, 77, 0.2);
+  outline: none;
+}
+
+.contextRoutes button:hover > span,
+.contextRoutes button:focus-visible > span {
+  color: rgba(247, 93, 111, 0.82);
+}
+
+.contextRoutes button[data-active] {
+  padding-left: 5px;
+  color: rgba(255, 116, 131, 0.98);
+  border-color: rgba(242, 56, 77, 0.3);
+  background: linear-gradient(90deg, rgba(242, 56, 77, 0.08), transparent 78%);
+}
+
+.root[data-leaving] {
+  pointer-events: none;
+}
+
+.root[data-leaving] .topBar,
+.root[data-leaving] .selectedPlaceCaption,
+.root[data-leaving] .contextGateway,
+.root[data-leaving] .globeGuide,
+.root[data-leaving] .utilityDock {
+  opacity: 0;
+}
+
+.root[data-leaving] .selectedPlaceCaption {
+  transform: translateY(4px);
+  transition-delay: 0ms;
+}
+
+.root[data-leaving] .contextGateway {
+  transform: translate(-8px, -50%);
+  transition-delay: 0ms;
+}
+
+.root[data-leaving] .leaderPath {
+  stroke-dashoffset: -120;
+  opacity: 0;
+}
+
+.routeFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  color: rgba(115, 125, 140, 0.58);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 5.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.routeFooter > i {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent);
+}
+
+.routeFooter > small {
+  color: rgba(145, 155, 168, 0.58);
+  font-size: 5.5px;
+}
+
+.globeGuide {
+  position: absolute;
+  z-index: 17;
+  bottom: 28px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(104, 114, 129, 0.5);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 5.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 220ms ease;
+}
+
+.globeGuide i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(225, 65, 85, 0.48);
+}
+
+.guideLine {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(223, 62, 83, 0.52));
+}
+
+.utilityDock {
+  position: absolute;
+  z-index: 28;
+  right: 31px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: opacity 220ms ease;
+}
+
+.utilityDock button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  color: rgba(122, 132, 147, 0.64);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 6px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: rgba(7, 6, 8, 0.36);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.utilityDock button:hover,
+.utilityDock button:focus-visible {
+  color: rgba(222, 227, 234, 0.88);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(14, 10, 13, 0.72);
+  outline: none;
+}
+
+.utilityDock small {
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  color: rgba(243, 111, 126, 0.84);
+  font-size: 5.5px;
+  border-radius: 8px;
+  background: rgba(242, 56, 77, 0.09);
+}
+
+@keyframes topBarIn {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes captionIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gatewayIn {
+  from {
+    opacity: 0;
+    transform: translate(10px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (max-width: 1050px) {
+  .contextGateway {
+    right: 24px;
+    width: 238px;
+  }
+
+  .gatewayHeading h1 {
+    font-size: 27px;
+  }
+
+  .contextRoutes button {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 820px) {
+  .globeStage {
+    inset: -5% -14% 5%;
+  }
+
+  .leaderLayer {
+    display: none;
+  }
+
+  .contextGateway {
+    top: auto;
+    right: 20px;
+    bottom: 78px;
+    left: 20px;
+    width: auto;
+    padding: 16px;
+    transform: translateY(10px);
+    background: linear-gradient(145deg, rgba(10, 8, 10, 0.9), rgba(5, 5, 7, 0.8));
+    border-top: 1px solid rgba(213, 116, 63, 0.28);
+  }
+
+  .contextGateway[data-ready] {
+    transform: translateY(0);
+  }
+
+  .root[data-leaving] .contextGateway {
+    transform: translateY(6px);
+  }
+
+  .selectedPlaceCaption {
+    display: none;
+  }
+
+  .contextRoutes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .contextRoutes button:nth-child(odd) {
+    border-right: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  .orientation {
+    left: 22px;
+    bottom: 98px;
+  }
+
+  .globeGuide {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .topBar {
+    top: 17px;
+    left: 18px;
+    right: 18px;
+  }
+
+  .systemDetail,
+  .systemState > i,
+  .systemState small {
+    display: none;
+  }
+
+  .systemState strong {
+    font-size: 6px;
+  }
+
+  .contextGateway {
+    right: 10px;
+    bottom: 62px;
+    left: 10px;
+  }
+
+  .gatewayHeading h1 {
+    font-size: 23px;
+  }
+
+  .contextTitle {
+    margin-top: 14px;
+  }
+
+  .contextRoutes button > strong {
+    font-size: 6px;
+    letter-spacing: 0.1em;
+  }
+
+  .routeFooter {
+    display: none;
+  }
+
+  .utilityDock {
+    right: 14px;
+    bottom: 18px;
+  }
+
+  .utilityDock button span {
+    display: none;
+  }
+}
+
+@media (max-height: 700px) and (min-width: 821px) {
+  .contextGateway {
+    top: 51%;
+  }
+
+  .contextTitle {
+    margin-top: 15px;
+    padding-top: 9px;
+  }
+
+  .contextRoutes button {
+    min-height: 38px;
+  }
+
+  .selectedPlaceCaption {
+    bottom: 68px;
+  }
+
+  .orientation {
+    bottom: 74px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topBar,
+  .orientation,
+  .selectedPlaceCaption,
+  .contextGateway,
+  .systemDot,
+  .activityMeta i {
+    animation: none;
+  }
+
+  .leaderPath,
+  .contextRoutes button,
+  .surfaceLight,
+  .topBar,
+  .selectedPlaceCaption,
+  .contextGateway,
+  .globeGuide,
+  .utilityDock {
+    transition: none;
+  }
+
+}

@@ -62,7 +62,6 @@ export const ScreenGlobe = forwardRef<EchisGlobeHandle, ScreenGlobeProps>(
         <EchisGlobe
           ref={ref}
           size="hero"
-          centered
           markers={markers}
           selectedMarkerId={selectedMarkerId}
           onMarkerClick={onMarkerSelect}
